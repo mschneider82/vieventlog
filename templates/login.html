@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViEventLog - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        button {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.error {
+            background: #fed7d7;
+            color: #c53030;
+            display: block;
+        }
+
+        .message.success {
+            background: #c6f6d5;
+            color: #276749;
+            display: block;
+        }
+
+        .message.info {
+            background: #bee3f8;
+            color: #2c5282;
+            display: block;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .button-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stored-info {
+            background: #edf2f7;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        .stored-info .label {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>ViEventLog</h1>
+        <p class="subtitle">Anmeldung bei Viessmann API</p>
+
+        <div id="message" class="message"></div>
+
+        <div id="storedInfo" class="stored-info" style="display: none;">
+            <div class="label">Gespeicherte Anmeldedaten gefunden</div>
+            <div id="storedEmail"></div>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">E-Mail Adresse</label>
+                <input type="email" id="email" name="email" required placeholder="deine@email.de">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Passwort</label>
+                <input type="password" id="password" name="password" required placeholder="Dein Passwort">
+            </div>
+
+            <div class="form-group">
+                <label for="clientId">Client ID</label>
+                <input type="text" id="clientId" name="clientId" placeholder="z.B. ab123ef4567..." required>
+                <div class="hint">ViCare App Client-ID</div>
+            </div>
+
+            <button type="submit" id="submitBtn">
+                <span class="button-content">
+                    <span id="buttonText">Anmelden & Testen</span>
+                </span>
+            </button>
+        </form>
+
+        <div class="footer">
+            Deine Zugangsdaten werden sicher im System-Keyring gespeichert
+        </div>
+    </div>
+
+    <script>
+        let isLoading = false;
+
+        // Check for stored credentials on load
+        window.onload = async () => {
+            try {
+                const response = await fetch('/api/credentials/check');
+                const data = await response.json();
+
+                if (data.hasCredentials) {
+                    document.getElementById('storedInfo').style.display = 'block';
+                    document.getElementById('storedEmail').textContent = `E-Mail: ${data.email}`;
+                    document.getElementById('email').value = data.email;
+                    if (data.clientId) {
+                        document.getElementById('clientId').value = data.clientId;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking credentials:', error);
+            }
+        };
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (isLoading) return;
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const clientId = document.getElementById('clientId').value;
+
+            setLoading(true);
+            showMessage('Verbindung wird getestet...', 'info');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        clientId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showMessage('✓ Erfolgreich angemeldet! Weiterleitung...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    showMessage('✗ Fehler: ' + (data.error || 'Anmeldung fehlgeschlagen'), 'error');
+                }
+            } catch (error) {
+                showMessage('✗ Verbindungsfehler: ' + error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function setLoading(loading) {
+            isLoading = loading;
+            const btn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('buttonText');
+
+            btn.disabled = loading;
+
+            if (loading) {
+                btnText.innerHTML = '<span class="loading-spinner"></span>Wird getestet...';
+            } else {
+                btnText.textContent = 'Anmelden & Testen';
+            }
+        }
+
+        function showMessage(text, type) {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = text;
+            msgEl.className = 'message ' + type;
+            msgEl.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
