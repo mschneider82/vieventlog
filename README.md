@@ -63,7 +63,53 @@ Bevor Sie den Event Viewer nutzen können, müssen Sie einen API-Client im Viess
 
 ### Option 1: Binary herunterladen (empfohlen)
 
-Laden Sie die vorkompilierte Binary für Ihr Betriebssystem von den [GitHub Releases](https://github.com/mschneider82/vieventlog/releases) herunter.
+**Schritt 1: Download**
+
+Besuchen Sie die [Release-Seite](https://github.com/mschneider82/vieventlog/releases) und laden Sie die passende Version für Ihr Betriebssystem herunter:
+
+- **Windows (64-bit)**: `vieventlog_X.X.X_Windows_x86_64.zip`
+- **Windows (ARM64)**: `vieventlog_X.X.X_Windows_arm64.zip`
+- **macOS (Intel)**: `vieventlog_X.X.X_Darwin_x86_64.tar.gz`
+- **macOS (Apple Silicon)**: `vieventlog_X.X.X_Darwin_arm64.tar.gz`
+- **Linux (64-bit)**: `vieventlog_X.X.X_Linux_x86_64.tar.gz`
+- **Linux (ARM64)**: `vieventlog_X.X.X_Linux_arm64.tar.gz`
+
+**Schritt 2: Entpacken**
+
+**Windows:**
+```powershell
+# Mit Windows Explorer: Rechtsklick auf die .zip Datei → "Alle extrahieren..."
+# Oder mit PowerShell:
+Expand-Archive vieventlog_X.X.X_Windows_x86_64.zip -DestinationPath vieventlog
+cd vieventlog
+```
+
+**macOS / Linux:**
+```bash
+tar -xzf vieventlog_X.X.X_*.tar.gz
+cd vieventlog_X.X.X_*
+```
+
+**Schritt 3: Starten**
+
+**Windows:**
+```powershell
+.\vieventlog.exe
+```
+
+**macOS / Linux:**
+```bash
+./vieventlog
+```
+
+**macOS Hinweis:** Bei der ersten Ausführung erscheint möglicherweise eine Sicherheitswarnung. Öffnen Sie in diesem Fall die Systemeinstellungen → Sicherheit → "Dennoch öffnen".
+
+**Schritt 4: Browser öffnen**
+
+Nach dem Start öffnen Sie Ihren Browser und navigieren zu:
+```
+http://localhost:5000
+```
 
 ### Option 2: Aus Quellcode kompilieren
 
