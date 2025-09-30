@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViEventLog - Viessmann Event Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .header-link {
+            background: rgba(255,255,255,0.05);
+            color: #a0a0b0;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .header-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 24px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 14px;
+            color: #a0a0b0;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        label {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        select, input {
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 5px;
+            font-size: 14px;
+            background: rgba(255,255,255,0.05);
+            color: #e0e0e0;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255,255,255,0.08);
+        }
+
+        select option {
+            background: #1e1e2e;
+            color: #e0e0e0;
+        }
+
+        select optgroup {
+            background: #262637;
+            color: #fff;
+            font-weight: 600;
+            font-style: normal;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b41a0 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: rgba(255,255,255,0.1);
+            cursor: not-allowed;
+            border-color: rgba(255,255,255,0.1);
+            box-shadow: none;
+        }
+
+        .events-container {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .events-header {
+            background: rgba(0,0,0,0.2);
+            padding: 15px 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .events-header h2 {
+            color: #fff;
+        }
+
+        .event-count {
+            font-size: 14px;
+            color: #a0a0b0;
+        }
+
+        .events-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            padding: 15px 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .event-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .event-item.expanded {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .event-header {
+            display: grid;
+            grid-template-columns: 180px 1fr auto;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .event-time {
+            font-size: 13px;
+            color: #a0a0b0;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .event-type {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .event-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #edf2f7;
+            color: #4a5568;
+        }
+
+        .event-badge.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .event-badge.warning {
+            background: #feebc8;
+            color: #c05621;
+        }
+
+        .event-badge.info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .event-badge.status {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .event-badge.fault {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .code-description {
+            font-size: 13px;
+            color: #b0b0c0;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .device-info {
+            font-size: 12px;
+            color: #a0a0b0;
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+
+        .event-details {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 5px;
+            font-size: 13px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #b0b0c0;
+        }
+
+        .event-item.expanded .event-details {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #a0a0b0;
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(254, 215, 215, 0.1);
+            color: #ff6b6b;
+            border: 1px solid rgba(197, 48, 48, 0.3);
+            padding: 15px 30px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .filter-input {
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 5px;
+            font-size: 14px;
+            width: 200px;
+            background: rgba(255,255,255,0.05);
+            color: #e0e0e0;
+        }
+
+        .no-events {
+            text-align: center;
+            padding: 60px;
+            color: #a0a0b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>ViEventLog</h1>
+                <a href="/accounts" class="header-link">⚙️ Account-Verwaltung</a>
+            </div>
+            <div class="status">
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Verbinde...</span>
+                </div>
+                <div id="lastFetch"></div>
+                <div id="deviceInfo"></div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Zeitraum:</label>
+                <select id="daysSelect">
+                    <option value="1" selected>Letzte 24 Stunden</option>
+                    <option value="3">Letzte 3 Tage</option>
+                    <option value="7">Letzte 7 Tage</option>
+                    <option value="14">Letzte 14 Tage</option>
+                    <option value="30">Letzte 30 Tage</option>
+                    <option value="365">Alle</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Gerät:</label>
+                <select id="deviceSelect">
+                    <option value="all">Alle Geräte</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Filter:</label>
+                <input type="text" id="filterInput" class="filter-input" placeholder="Event-Typ oder Code filtern...">
+            </div>
+
+            <div class="control-group">
+                <label>Typ:</label>
+                <select id="typeFilter">
+                    <option value="all">Alle</option>
+                    <option value="status">Status (S-Codes)</option>
+                    <option value="fault">Fehler (F-Codes)</option>
+                    <option value="active">Aktive Events</option>
+                </select>
+            </div>
+
+            <button id="refreshBtn" onclick="loadEvents()">
+                Aktualisieren
+            </button>
+
+            <button id="autoRefreshBtn" onclick="toggleAutoRefresh()">
+                Auto-Refresh: Aus
+            </button>
+        </div>
+
+        <!-- Timeline Visualization -->
+        <div class="timeline-container" style="background: linear-gradient(to bottom, #1e1e2e 0%, #262637 100%); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); padding: 24px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 20px; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                        <span style="display: inline-block; width: 4px; height: 20px; background: linear-gradient(to bottom, #667eea, #764ba2); border-radius: 2px;"></span>
+                        Event Timeline
+                    </h2>
+                    <p style="margin: 5px 0 0 14px; font-size: 12px; color: #a0a0b0;">Visualisierung der Betriebszustände</p>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <div id="timelineControls" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <!-- Filter buttons will be added here -->
+                    </div>
+                </div>
+            </div>
+            <div id="timeline" style="width: 100%; height: 450px; overflow-x: auto; overflow-y: hidden; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;"></div>
+        </div>
+
+        <div class="events-container">
+            <div class="events-header">
+                <h2>Events</h2>
+                <div class="event-count" id="eventCount">0 Events</div>
+            </div>
+            <div class="events-list" id="eventsList">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <div>Lade Events...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state management
+        let allEvents = [];
+        let installations = {};
+        let autoRefreshInterval = null;
+        let autoRefreshEnabled = false;
+
+        // Centralized filter state
+        let globalFilters = {
+            // Zeitraum filter (determines API call AND display for both views)
+            days: 1, // Default: Last 24 hours (365, 30, 14, 7, 3, 1)
+
+            // Client-side filters (filter loaded events)
+            device: 'all',
+            type: 'all',
+            search: '',
+
+            // Timeline event type filters
+            timelineTypes: {
+                'S.123': true,  // Wärmepumpe Aus
+                'S.124': true,  // Wärmepumpe Vorlaufphase
+                'S.125': true,  // Wärmepumpe Heizen
+                'S.125-WARMWATER': true,  // Wärmepumpe Warmwasserbereitung
+                'S.129': true,  // Wärmepumpe Nachlaufphase
+                'S.115': true,  // 4/3-Wege Ventil Trinkwasser
+                'S.118': true,  // 4/3-Wege Ventil Pufferspeicher
+                'S.134': true,  // 4/3-Wege Ventil Leerlauf
+                'other': true
+            }
+        };
+
+        // ========================================
+        // HELPER FUNCTIONS
+        // ========================================
+
+        function categorizeEvent(event) {
+            // Use the category from backend if available
+            if (event.codeCategory === 'fault') return 'fault';
+            if (event.codeCategory === 'status') return 'status';
+
+            // Fallback to eventType-based categorization
+            const eventType = event.eventType || '';
+            const errorPatterns = ['error', 'fail', 'fault', 'critical'];
+            const warningPatterns = ['warning', 'warn', 'alert'];
+
+            const lowerType = eventType.toLowerCase();
+
+            if (errorPatterns.some(p => lowerType.includes(p))) {
+                return 'error';
+            } else if (warningPatterns.some(p => lowerType.includes(p))) {
+                return 'warning';
+            }
+            return 'info';
+        }
+
+        function formatEventBody(body) {
+            if (!body || Object.keys(body).length === 0) {
+                return 'Keine Details verfügbar';
+            }
+            return JSON.stringify(body, null, 2);
+        }
+
+        // ========================================
+        // FILTER FUNCTIONS
+        // ========================================
+
+        /**
+         * Apply all client-side filters to events
+         * Returns filtered events based on globalFilters state
+         */
+        function applyFilters(events) {
+            let filtered = [...events];
+
+            // Time range filter (apply the days filter client-side as well)
+            if (globalFilters.days < 365) {
+                const cutoffTime = new Date(Date.now() - globalFilters.days * 24 * 60 * 60 * 1000);
+                filtered = filtered.filter(event => {
+                    const eventTime = new Date(event.eventTimestamp || event.createdAt);
+                    return eventTime >= cutoffTime;
+                });
+            }
+
+            // Device filter
+            if (globalFilters.device !== 'all') {
+                filtered = filtered.filter(e => {
+                    const deviceKey = `${e.installationId}_${e.deviceId}_${e.modelId}`;
+                    return deviceKey === globalFilters.device;
+                });
+            }
+
+            // Type filter
+            if (globalFilters.type !== 'all') {
+                filtered = filtered.filter(e => {
+                    if (globalFilters.type === 'status') return e.codeCategory === 'status';
+                    if (globalFilters.type === 'fault') return e.codeCategory === 'fault';
+                    if (globalFilters.type === 'active') return e.active === true;
+                    return true;
+                });
+            }
+
+            // Search filter
+            if (globalFilters.search) {
+                const searchLower = globalFilters.search.toLowerCase();
+                filtered = filtered.filter(e =>
+                    e.eventType.toLowerCase().includes(searchLower) ||
+                    (e.errorCode && e.errorCode.toLowerCase().includes(searchLower)) ||
+                    (e.humanReadable && e.humanReadable.toLowerCase().includes(searchLower)) ||
+                    JSON.stringify(e.body).toLowerCase().includes(searchLower)
+                );
+            }
+
+            // Sort by time (newest first)
+            filtered.sort((a, b) => {
+                const timeA = new Date(a.eventTimestamp || a.createdAt);
+                const timeB = new Date(b.eventTimestamp || b.createdAt);
+                return timeB - timeA;
+            });
+
+            return filtered;
+        }
+
+        /**
+         * Update filter state from UI and refresh views
+         */
+        function updateFiltersFromUI() {
+            globalFilters.device = document.getElementById('deviceSelect').value;
+            globalFilters.type = document.getElementById('typeFilter').value;
+            globalFilters.search = document.getElementById('filterInput').value;
+            globalFilters.days = parseInt(document.getElementById('daysSelect').value);
+
+            // Refresh both views with current data
+            refreshViews();
+        }
+
+        /**
+         * Refresh event list and timeline with current filters
+         */
+        function refreshViews() {
+            const filteredEvents = applyFilters(allEvents);
+            renderEvents(filteredEvents);
+            renderTimeline(filteredEvents);
+        }
+
+        // ========================================
+        // RENDERING FUNCTIONS
+        // ========================================
+
+        /**
+         * Render filtered events in the event list
+         * Events are already filtered by applyFilters()
+         */
+        function renderEvents(filteredEvents) {
+            const container = document.getElementById('eventsList');
+
+            // Update count
+            document.getElementById('eventCount').textContent = `${filteredEvents.length} Events`;
+
+            if (filteredEvents.length === 0) {
+                container.innerHTML = '<div class="no-events">Keine Events gefunden</div>';
+                return;
+            }
+
+            // Render events
+            container.innerHTML = filteredEvents.map((event, index) => {
+                const category = categorizeEvent(event);
+                let statusIndicator = '';
+                if (event.active !== null && event.errorCode) {
+                    statusIndicator = event.active
+                        ? '<span style="color: #c53030;">● AKTIV</span>'
+                        : '<span style="color: #48bb78;">● BEENDET</span>';
+                }
+
+                const deviceInfo = `<span class="device-info">${event.modelId || 'Unknown'} - Device ${event.deviceId || '0'}</span>`;
+
+                // Get account info
+                let accountInfo = '';
+                if (event.accountName && event.accountName !== event.accountId) {
+                    accountInfo = `<span class="device-info" style="background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.3);">👤 ${event.accountName}</span>`;
+                }
+
+                // Get installation info
+                let installationInfo = '';
+                if (event.installationId && installations[event.installationId]) {
+                    const inst = installations[event.installationId];
+                    installationInfo = `<span class="device-info" style="background: rgba(102, 126, 234, 0.15); border-color: rgba(102, 126, 234, 0.3);">📍 ${inst.location}</span>`;
+                }
+
+                return `
+                    <div class="event-item" onclick="toggleEvent(${index})">
+                        <div class="event-header">
+                            <div class="event-time">${event.formatted_time}</div>
+                            <div class="event-type">
+                                ${event.errorCode ? `<strong>${event.errorCode}</strong>` : event.eventType}
+                                ${statusIndicator}
+                                ${deviceInfo}
+                                ${accountInfo}
+                                ${installationInfo}
+                                ${event.humanReadable ? `<div class="code-description">${event.humanReadable}</div>` : ''}
+                            </div>
+                            <div class="event-badge ${category}">${category.toUpperCase()}</div>
+                        </div>
+                        <div class="event-details" id="details-${index}">
+Event Type: ${event.eventType}
+${event.errorCode ? 'Error Code: ' + event.errorCode + '\n' : ''}
+${event.humanReadable ? 'Bedeutung: ' + event.humanReadable + '\n' : ''}
+${event.errorDescription ? 'System-Beschreibung: ' + event.errorDescription + '\n' : ''}
+Gerät: ${event.modelId || 'Unknown'} (ID: ${event.deviceId || '0'})
+Gateway Serial: ${event.gatewaySerial || 'N/A'}
+
+Rohdaten:
+${formatEventBody(event.body)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleEvent(index) {
+            const item = document.querySelectorAll('.event-item')[index];
+            item.classList.toggle('expanded');
+        }
+
+        // ========================================
+        // DATA LOADING
+        // ========================================
+
+        /**
+         * Load events from server based on globalFilters.days
+         * Then apply client-side filters and render
+         */
+        async function loadEvents() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = 'Lade...';
+
+            // Update filter state from UI before loading
+            updateFiltersFromUI();
+
+            try {
+                const response = await fetch(`/api/events?days=${globalFilters.days}`);
+                if (!response.ok) throw new Error('Fehler beim Laden der Events');
+
+                allEvents = await response.json();
+
+                // Load device list first to populate installations
+                await updateDeviceList();
+
+                // Apply filters and render both views
+                refreshViews();
+
+                // Update last fetch time
+                const now = new Date();
+                document.getElementById('lastFetch').textContent =
+                    `Letzte Aktualisierung: ${now.toLocaleTimeString()}`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('eventsList').innerHTML =
+                    `<div class="error-message">Fehler beim Laden der Events: ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Aktualisieren';
+            }
+        }
+
+        /**
+         * Update device dropdown and installations cache
+         * Preserves current selection from globalFilters
+         */
+        async function updateDeviceList() {
+            const deviceSelect = document.getElementById('deviceSelect');
+
+            try {
+                // Fetch devices grouped by installation from API
+                const response = await fetch('/api/devices');
+                const devicesByInstallation = await response.json();
+
+                // Store installation data for timeline use
+                installations = {};
+                devicesByInstallation.forEach(installation => {
+                    installations[installation.installationId] = {
+                        description: installation.description,
+                        location: installation.location
+                    };
+                });
+
+                // Update select options
+                deviceSelect.innerHTML = '<option value="all">Alle Geräte</option>';
+
+                // Add grouped options by installation
+                devicesByInstallation.forEach(installation => {
+                    // Create optgroup for installation
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = `📍 ${installation.description || installation.installationId} - ${installation.location}`;
+
+                    installation.devices.forEach(device => {
+                        const option = document.createElement('option');
+                        const key = `${installation.installationId}_${device.deviceId}_${device.modelId}`;
+                        option.value = key;
+                        option.textContent = `${device.modelId} (Device ${device.deviceId})`;
+                        optgroup.appendChild(option);
+                    });
+
+                    deviceSelect.appendChild(optgroup);
+                });
+
+                // Restore selection from globalFilters
+                const allOptions = deviceSelect.querySelectorAll('option');
+                const optionExists = Array.from(allOptions).some(opt => opt.value === globalFilters.device);
+                if (optionExists) {
+                    deviceSelect.value = globalFilters.device;
+                } else {
+                    // If previous selection doesn't exist anymore, reset to 'all'
+                    globalFilters.device = 'all';
+                    deviceSelect.value = 'all';
+                }
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                const info = document.getElementById('deviceInfo');
+
+                if (status.connected) {
+                    dot.classList.add('connected');
+                    text.textContent = 'Verbunden';
+                    info.textContent = `Device: ${status.device_id || 'Unknown'}`;
+                } else {
+                    dot.classList.remove('connected');
+                    text.textContent = 'Nicht verbunden';
+                    info.textContent = '';
+                }
+            } catch (error) {
+                console.error('Status error:', error);
+            }
+        }
+
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('autoRefreshBtn');
+            autoRefreshEnabled = !autoRefreshEnabled;
+
+            if (autoRefreshEnabled) {
+                btn.textContent = 'Auto-Refresh: An';
+                btn.style.background = '#10b981';
+                autoRefreshInterval = setInterval(loadEvents, 60000); // Every minute
+            } else {
+                btn.textContent = 'Auto-Refresh: Aus';
+                btn.style.background = '#667eea';
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+
+        // Filter input - update search filter and refresh views
+        document.getElementById('filterInput').addEventListener('input', () => {
+            globalFilters.search = document.getElementById('filterInput').value;
+            refreshViews();
+        });
+
+        // Device filter - update and refresh views
+        document.getElementById('deviceSelect').addEventListener('change', () => {
+            globalFilters.device = document.getElementById('deviceSelect').value;
+            refreshViews();
+        });
+
+        // Type filter - update and refresh views
+        document.getElementById('typeFilter').addEventListener('change', () => {
+            globalFilters.type = document.getElementById('typeFilter').value;
+            refreshViews();
+        });
+
+        // Days filter - reload from server
+        document.getElementById('daysSelect').addEventListener('change', () => {
+            globalFilters.days = parseInt(document.getElementById('daysSelect').value);
+            loadEvents();
+        });
+
+        // ========================================
+        // TIMELINE RENDERING
+        // ========================================
+
+        /**
+         * Render timeline with already filtered events
+         * Events are pre-filtered by applyFilters() (including time range)
+         * Timeline only applies event type filter (globalFilters.timelineTypes)
+         */
+        function renderTimeline(events) {
+            const container = document.getElementById('timeline');
+            const controlsContainer = document.getElementById('timelineControls');
+
+            if (!events || events.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Keine Events verfügbar</div>';
+                return;
+            }
+
+            // Apply timeline type filter (which event types to show)
+            const filteredEvents = events.filter(event => {
+                const code = event.errorCode || 'other';
+                return globalFilters.timelineTypes[code] !== false && globalFilters.timelineTypes['other'] !== false;
+            });
+
+            // Setup filter buttons
+            const eventTypes = {
+                'S.125': { label: 'Heizen', color: '#ef4444', gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', icon: '🔥' },
+                'S.125-WARMWATER': { label: 'WW-Bereitung', color: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', icon: '🚿' },
+                'S.123': { label: 'Aus', color: '#64748b', gradient: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', icon: '⏸️' },
+                'S.124': { label: 'Vorlauf', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⏫' },
+                'S.129': { label: 'Nachlauf', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '⏬' },
+                'S.115': { label: 'Ventil WW', color: '#a78bfa', gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', icon: '🔀' },
+                'S.118': { label: 'Ventil Puffer', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
+                'S.134': { label: 'Ventil Idle', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '⭕' }
+            };
+
+            controlsContainer.innerHTML = Object.entries(eventTypes).map(([code, info]) => {
+                const active = globalFilters.timelineTypes[code] !== false;
+                return `
+                    <button onclick="toggleTimelineFilter('${code}')"
+                            style="padding: 7px 13px; border: 1px solid ${active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'};
+                                   background: ${active ? info.gradient : 'rgba(255,255,255,0.05)'};
+                                   color: ${active ? 'white' : '#a0a0b0'};
+                                   border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
+                                   transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+                                   ${active ? 'box-shadow: 0 2px 8px ' + info.color + '40;' : ''}">
+                        <span style="font-size: 14px;">${info.icon}</span>
+                        ${info.label}
+                    </button>
+                `;
+            }).join('');
+
+            // Sort events by timestamp
+            const sortedEvents = [...filteredEvents].sort((a, b) => {
+                const aTime = new Date(a.eventTimestamp || a.createdAt);
+                const bTime = new Date(b.eventTimestamp || b.createdAt);
+                return aTime - bTime;
+            });
+
+            if (sortedEvents.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Keine Events nach Filterung</div>';
+                return;
+            }
+
+            // Calculate timeline dimensions
+            const width = Math.max(1400, sortedEvents.length * 6);
+            const height = 400;
+            const margin = { top: 30, right: 40, bottom: 70, left: 280 }; // Increased left margin for longer labels
+
+            // Clear container
+            container.innerHTML = '';
+
+            // Create SVG
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+            svg.style.display = 'block';
+            container.appendChild(svg);
+
+            // Parse timestamps
+            const timeExtent = [
+                new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt),
+                new Date(sortedEvents[sortedEvents.length - 1].eventTimestamp || sortedEvents[sortedEvents.length - 1].createdAt)
+            ];
+
+            // Create scale
+            const xScale = (date) => {
+                const t = (new Date(date) - timeExtent[0]) / (timeExtent[1] - timeExtent[0]);
+                return margin.left + t * (width - margin.left - margin.right);
+            };
+
+            // Group events by device and status code to create state spans
+            const lanes = {};
+            sortedEvents.forEach(event => {
+                const laneKey = `${event.installationId}_${event.modelId}_${event.deviceId}`;
+                if (!lanes[laneKey]) {
+                    const installation = event.installationId || 'Unknown';
+                    lanes[laneKey] = {
+                        name: `${event.modelId} (${event.deviceId})`,
+                        installationId: installation,
+                        events: []
+                    };
+                }
+                lanes[laneKey].events.push(event);
+            });
+
+            // Process each lane to create state spans with valve position awareness
+            Object.values(lanes).forEach(lane => {
+                lane.spans = [];
+                const activeStates = {}; // Track active states by error code
+                let currentValvePosition = null; // Track 4/3-way valve position
+
+                lane.events.forEach(event => {
+                    const code = event.errorCode;
+                    if (!code) return;
+
+                    // Handle valve position changes
+                    if (code === 'S.115') {
+                        if (event.active) {
+                            currentValvePosition = 'warmwater'; // Trinkwasser
+                        } else {
+                            // When S.115 ends, terminate any active S.125-WARMWATER spans
+                            if (activeStates['S.125-WARMWATER']) {
+                                lane.spans.push({
+                                    code: 'S.125-WARMWATER',
+                                    originalCode: 'S.125',
+                                    startTime: activeStates['S.125-WARMWATER'].startTime,
+                                    endTime: event.eventTimestamp || event.createdAt,
+                                    startEvent: activeStates['S.125-WARMWATER'].startEvent,
+                                    endEvent: event,
+                                    valvePosition: 'warmwater'
+                                });
+                                delete activeStates['S.125-WARMWATER'];
+                            }
+                            currentValvePosition = null;
+                        }
+                    } else if (code === 'S.118') {
+                        if (event.active) {
+                            currentValvePosition = 'heating'; // Heiz-/Kühl-Pufferspeicher
+                        } else {
+                            currentValvePosition = null;
+                        }
+                    } else if (code === 'S.134') {
+                        if (event.active) {
+                            currentValvePosition = 'idle'; // Leerlauf
+                        } else {
+                            currentValvePosition = null;
+                        }
+                    }
+
+                    // Map S.125 based on valve position
+                    let effectiveCode = code;
+                    if (code === 'S.125' && currentValvePosition === 'warmwater') {
+                        effectiveCode = 'S.125-WARMWATER'; // Virtual code for heating during hot water mode
+                    }
+
+                    if (event.active) {
+                        // Start of a new state
+                        activeStates[effectiveCode] = {
+                            startTime: event.eventTimestamp || event.createdAt,
+                            startEvent: event,
+                            originalCode: code,
+                            valvePosition: currentValvePosition
+                        };
+                    } else {
+                        // End of a state
+                        if (activeStates[effectiveCode]) {
+                            lane.spans.push({
+                                code: effectiveCode,
+                                originalCode: code,
+                                startTime: activeStates[effectiveCode].startTime,
+                                endTime: event.eventTimestamp || event.createdAt,
+                                startEvent: activeStates[effectiveCode].startEvent,
+                                endEvent: event,
+                                valvePosition: activeStates[effectiveCode].valvePosition
+                            });
+                            delete activeStates[effectiveCode];
+                        }
+                    }
+                });
+
+                // Add ongoing states (still active)
+                Object.entries(activeStates).forEach(([effectiveCode, state]) => {
+                    lane.spans.push({
+                        code: effectiveCode,
+                        originalCode: state.originalCode,
+                        startTime: state.startTime,
+                        endTime: new Date().toISOString(), // Current time
+                        startEvent: state.startEvent,
+                        endEvent: null,
+                        ongoing: true,
+                        valvePosition: state.valvePosition
+                    });
+                });
+            });
+
+            const laneArray = Object.values(lanes);
+            const laneHeight = (height - margin.top - margin.bottom) / Math.max(laneArray.length, 1);
+
+            // Draw grid and time axis with intelligent intervals
+            const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+            // Calculate appropriate interval based on time range
+            const timeRangeHours = (timeExtent[1] - timeExtent[0]) / (1000 * 60 * 60);
+            let hourInterval;
+            if (timeRangeHours <= 24) {
+                hourInterval = 1; // Every hour for <= 24h
+            } else if (timeRangeHours <= 48) {
+                hourInterval = 2; // Every 2 hours for <= 48h
+            } else if (timeRangeHours <= 96) {
+                hourInterval = 3; // Every 3 hours for <= 4 days
+            } else if (timeRangeHours <= 168) {
+                hourInterval = 6; // Every 6 hours for <= 7 days
+            } else if (timeRangeHours <= 336) {
+                hourInterval = 12; // Every 12 hours for <= 14 days
+            } else {
+                hourInterval = 24; // Every day for > 14 days
+            }
+
+            // Round start time to previous full hour
+            const startTime = new Date(timeExtent[0]);
+            startTime.setMinutes(0, 0, 0);
+
+            // Generate rounded hour marks
+            const timeMarks = [];
+            let currentTime = new Date(startTime);
+            while (currentTime <= timeExtent[1]) {
+                if (currentTime >= timeExtent[0]) {
+                    timeMarks.push(new Date(currentTime));
+                }
+                currentTime.setHours(currentTime.getHours() + hourInterval);
+            }
+
+            // Draw grid lines and labels for each time mark
+            timeMarks.forEach((markTime, index) => {
+                const x = xScale(markTime);
+                const isFirst = index === 0;
+                const isLast = index === timeMarks.length - 1;
+
+                // Grid line
+                const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                gridLine.setAttribute('x1', x);
+                gridLine.setAttribute('y1', margin.top);
+                gridLine.setAttribute('x2', x);
+                gridLine.setAttribute('y2', height - margin.bottom);
+                gridLine.setAttribute('stroke', 'rgba(255,255,255,0.05)');
+                gridLine.setAttribute('stroke-width', '1');
+                if (isFirst || isLast) {
+                    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+                    gridLine.setAttribute('stroke-width', '2');
+                }
+                axisGroup.appendChild(gridLine);
+
+                // Tick
+                const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                tick.setAttribute('x1', x);
+                tick.setAttribute('y1', height - margin.bottom);
+                tick.setAttribute('x2', x);
+                tick.setAttribute('y2', height - margin.bottom + 6);
+                tick.setAttribute('stroke', 'rgba(255,255,255,0.3)');
+                tick.setAttribute('stroke-width', '2');
+                axisGroup.appendChild(tick);
+
+                // Time label - show date and time for intervals >= 12h, otherwise just time
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', x);
+                label.setAttribute('y', height - margin.bottom + 22);
+                label.setAttribute('text-anchor', 'middle');
+                label.setAttribute('font-size', '11');
+                label.setAttribute('font-weight', '500');
+                label.setAttribute('fill', '#a0a0b0');
+
+                let labelText;
+                if (hourInterval >= 12) {
+                    // Show date and time for long intervals
+                    labelText = markTime.toLocaleString('de-DE', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } else {
+                    // Show only time for short intervals
+                    labelText = markTime.toLocaleString('de-DE', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+                label.textContent = labelText;
+                axisGroup.appendChild(label);
+
+                // Date label (only for intervals < 12h and on midnight or every 4th mark)
+                if (hourInterval < 12 && (markTime.getHours() === 0 || index % 4 === 0)) {
+                    const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    dateLabel.setAttribute('x', x);
+                    dateLabel.setAttribute('y', height - margin.bottom + 38);
+                    dateLabel.setAttribute('text-anchor', 'middle');
+                    dateLabel.setAttribute('font-size', '10');
+                    dateLabel.setAttribute('fill', '#707080');
+                    dateLabel.textContent = markTime.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' });
+                    axisGroup.appendChild(dateLabel);
+                }
+            });
+            svg.appendChild(axisGroup);
+
+            // Draw lanes and state spans
+            laneArray.forEach((lane, laneIdx) => {
+                const y = margin.top + laneIdx * laneHeight;
+
+                // Lane background with subtle gradient
+                const laneBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                laneBg.setAttribute('x', margin.left);
+                laneBg.setAttribute('y', y);
+                laneBg.setAttribute('width', width - margin.left - margin.right);
+                laneBg.setAttribute('height', laneHeight);
+                laneBg.setAttribute('fill', laneIdx % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.1)');
+                laneBg.setAttribute('rx', '4');
+                svg.appendChild(laneBg);
+
+                // Lane border
+                const laneBorder = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                laneBorder.setAttribute('x', margin.left);
+                laneBorder.setAttribute('y', y);
+                laneBorder.setAttribute('width', width - margin.left - margin.right);
+                laneBorder.setAttribute('height', laneHeight);
+                laneBorder.setAttribute('fill', 'none');
+                laneBorder.setAttribute('stroke', 'rgba(255,255,255,0.05)');
+                laneBorder.setAttribute('stroke-width', '1');
+                laneBorder.setAttribute('rx', '4');
+                svg.appendChild(laneBorder);
+
+                // Lane label background (taller for two lines)
+                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                labelBg.setAttribute('x', 10);
+                labelBg.setAttribute('y', y + laneHeight / 2 - 20);
+                labelBg.setAttribute('width', margin.left - 20);
+                labelBg.setAttribute('height', 40);
+                labelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
+                labelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+                labelBg.setAttribute('stroke-width', '1');
+                labelBg.setAttribute('rx', '6');
+                svg.appendChild(labelBg);
+
+                // Lane label with installation info - split into two lines
+                const laneLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                laneLabel.setAttribute('x', margin.left - 15);
+                laneLabel.setAttribute('y', y + laneHeight / 2);
+                laneLabel.setAttribute('text-anchor', 'end');
+                laneLabel.setAttribute('font-size', '11');
+                laneLabel.setAttribute('fill', '#e0e0e0');
+                laneLabel.setAttribute('font-weight', '600');
+
+                // Line 1: Device name
+                const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                line1.setAttribute('x', margin.left - 15);
+                line1.setAttribute('dy', '-0.6em');
+                line1.textContent = lane.name;
+                laneLabel.appendChild(line1);
+
+                // Line 2: Installation location
+                const installation = installations[lane.installationId];
+                if (installation && installation.location) {
+                    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                    line2.setAttribute('x', margin.left - 15);
+                    line2.setAttribute('dy', '1.2em');
+                    line2.setAttribute('font-size', '10');
+                    line2.setAttribute('fill', '#a0a0b0');
+                    line2.setAttribute('font-weight', '400');
+                    line2.textContent = `📍 ${installation.location}`;
+                    laneLabel.appendChild(line2);
+                }
+
+                svg.appendChild(laneLabel);
+
+                // Draw state spans (duration bars)
+                lane.spans.forEach((span, spanIdx) => {
+                    const x1 = xScale(span.startTime);
+                    const x2 = xScale(span.endTime);
+                    const spanWidth = Math.max(x2 - x1, 3);
+
+                    const eventInfo = eventTypes[span.code];
+                    const color = eventInfo?.color || '#6b7280';
+                    const gradient = eventInfo?.gradient || color;
+
+                    // Shadow/glow effect
+                    const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    shadow.setAttribute('x', x1 - 1);
+                    shadow.setAttribute('y', y + 13);
+                    shadow.setAttribute('width', spanWidth + 2);
+                    shadow.setAttribute('height', laneHeight - 26);
+                    shadow.setAttribute('fill', color);
+                    shadow.setAttribute('opacity', '0.2');
+                    shadow.setAttribute('rx', '6');
+                    shadow.setAttribute('filter', 'blur(4px)');
+                    svg.appendChild(shadow);
+
+                    // Create gradient definition
+                    const defs = svg.querySelector('defs') || document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                    if (!svg.querySelector('defs')) svg.appendChild(defs);
+
+                    const gradientId = `gradient-${laneIdx}-${spanIdx}`;
+                    const gradDef = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                    gradDef.setAttribute('id', gradientId);
+                    gradDef.setAttribute('x1', '0%');
+                    gradDef.setAttribute('y1', '0%');
+                    gradDef.setAttribute('x2', '0%');
+                    gradDef.setAttribute('y2', '100%');
+
+                    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                    stop1.setAttribute('offset', '0%');
+                    stop1.setAttribute('stop-color', color);
+                    stop1.setAttribute('stop-opacity', '0.95');
+
+                    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                    stop2.setAttribute('offset', '100%');
+                    stop2.setAttribute('stop-color', color);
+                    stop2.setAttribute('stop-opacity', '0.75');
+
+                    gradDef.appendChild(stop1);
+                    gradDef.appendChild(stop2);
+                    defs.appendChild(gradDef);
+
+                    // Main state span bar
+                    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    bar.setAttribute('x', x1);
+                    bar.setAttribute('y', y + 15);
+                    bar.setAttribute('width', spanWidth);
+                    bar.setAttribute('height', laneHeight - 30);
+                    bar.setAttribute('fill', `url(#${gradientId})`);
+                    bar.setAttribute('rx', '6');
+                    bar.style.cursor = 'pointer';
+                    bar.style.transition = 'all 0.2s';
+
+                    // Hover effect
+                    bar.addEventListener('mouseenter', function() {
+                        this.setAttribute('opacity', '1');
+                        this.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                        this.setAttribute('stroke-width', '2');
+                    });
+                    bar.addEventListener('mouseleave', function() {
+                        this.removeAttribute('opacity');
+                        this.removeAttribute('stroke');
+                        this.removeAttribute('stroke-width');
+                    });
+
+                    // Calculate duration
+                    const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
+                    const durationText = duration < 60
+                        ? `${Math.round(duration)}min`
+                        : `${(duration / 60).toFixed(1)}h`;
+
+                    // Tooltip with additional context for warmwater heating
+                    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                    const startTime = new Date(span.startTime).toLocaleString('de-DE');
+                    const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
+                    let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
+                    if (span.code === 'S.125-WARMWATER') {
+                        tooltipText += '\n(Wärmepumpe heizt bei Ventilstellung Warmwasser)';
+                    }
+                    tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
+                    title.textContent = tooltipText;
+                    bar.appendChild(title);
+
+                    svg.appendChild(bar);
+
+                    // Add icon and duration label if span is wide enough
+                    if (spanWidth > 60) {
+                        const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        iconLabel.setAttribute('x', x1 + 8);
+                        iconLabel.setAttribute('y', y + laneHeight / 2 - 6);
+                        iconLabel.setAttribute('font-size', '14');
+                        iconLabel.textContent = eventInfo?.icon || '';
+                        svg.appendChild(iconLabel);
+
+                        const durationLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        durationLabel.setAttribute('x', x1 + spanWidth / 2);
+                        durationLabel.setAttribute('y', y + laneHeight / 2);
+                        durationLabel.setAttribute('text-anchor', 'middle');
+                        durationLabel.setAttribute('dominant-baseline', 'middle');
+                        durationLabel.setAttribute('font-size', '11');
+                        durationLabel.setAttribute('fill', 'white');
+                        durationLabel.setAttribute('font-weight', '700');
+                        durationLabel.setAttribute('style', 'text-shadow: 0 1px 3px rgba(0,0,0,0.5);');
+                        durationLabel.textContent = durationText;
+                        svg.appendChild(durationLabel);
+                    } else if (spanWidth > 30) {
+                        const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        miniLabel.setAttribute('x', x1 + spanWidth / 2);
+                        miniLabel.setAttribute('y', y + laneHeight / 2);
+                        miniLabel.setAttribute('text-anchor', 'middle');
+                        miniLabel.setAttribute('dominant-baseline', 'middle');
+                        miniLabel.setAttribute('font-size', '9');
+                        miniLabel.setAttribute('fill', 'white');
+                        miniLabel.setAttribute('font-weight', '700');
+                        miniLabel.textContent = durationText;
+                        svg.appendChild(miniLabel);
+                    }
+
+                    // Shine effect on top
+                    const shine = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    shine.setAttribute('x', x1);
+                    shine.setAttribute('y', y + 15);
+                    shine.setAttribute('width', spanWidth);
+                    shine.setAttribute('height', (laneHeight - 30) / 3);
+                    shine.setAttribute('fill', 'rgba(255,255,255,0.15)');
+                    shine.setAttribute('rx', '6');
+                    svg.appendChild(shine);
+                });
+
+                // Draw event markers (circles at start/end) with glow
+                lane.events.forEach(event => {
+                    const eventTime = event.eventTimestamp || event.createdAt;
+                    const x = xScale(eventTime);
+                    const color = eventTypes[event.errorCode]?.color || '#6b7280';
+
+                    // Outer glow
+                    const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    glow.setAttribute('cx', x);
+                    glow.setAttribute('cy', y + laneHeight / 2);
+                    glow.setAttribute('r', 5);
+                    glow.setAttribute('fill', color);
+                    glow.setAttribute('opacity', '0.3');
+                    svg.appendChild(glow);
+
+                    // Main circle
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', x);
+                    circle.setAttribute('cy', y + laneHeight / 2);
+                    circle.setAttribute('r', 4);
+                    circle.setAttribute('fill', event.active ? color : 'rgba(30, 30, 46, 0.9)');
+                    circle.setAttribute('stroke', color);
+                    circle.setAttribute('stroke-width', event.active ? '2' : '2');
+                    svg.appendChild(circle);
+
+                    // Inner highlight
+                    if (event.active) {
+                        const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        highlight.setAttribute('cx', x - 1);
+                        highlight.setAttribute('cy', y + laneHeight / 2 - 1);
+                        highlight.setAttribute('r', 1.5);
+                        highlight.setAttribute('fill', 'rgba(255,255,255,0.6)');
+                        svg.appendChild(highlight);
+                    }
+                });
+            });
+        }
+
+        // ========================================
+        // TIMELINE CONTROLS
+        // ========================================
+
+        /**
+         * Toggle timeline event type filter
+         */
+        function toggleTimelineFilter(code) {
+            globalFilters.timelineTypes[code] = !globalFilters.timelineTypes[code];
+            // Only re-render timeline, not event list
+            const filteredEvents = applyFilters(allEvents);
+            renderTimeline(filteredEvents);
+        }
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        /**
+         * Initialize UI elements with globalFilters values
+         */
+        function initializeUI() {
+            document.getElementById('daysSelect').value = globalFilters.days;
+            document.getElementById('deviceSelect').value = globalFilters.device;
+            document.getElementById('typeFilter').value = globalFilters.type;
+            document.getElementById('filterInput').value = globalFilters.search;
+        }
+
+        // Initial load
+        window.onload = async () => {
+            initializeUI();
+            await loadStatus();
+            await loadEvents();
+        };
+    </script>
+</body>
+</html>

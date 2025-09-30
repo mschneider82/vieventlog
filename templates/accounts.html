@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account-Verwaltung - ViEventLog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 24px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-links a {
+            color: #a0a0b0;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .section {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            color: #fff;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            font-size: 14px;
+            background: rgba(255,255,255,0.05);
+            color: #e0e0e0;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255,255,255,0.08);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b41a0 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: rgba(255,255,255,0.1);
+            cursor: not-allowed;
+            border-color: rgba(255,255,255,0.1);
+            box-shadow: none;
+        }
+
+        .accounts-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .account-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .account-card.active {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .account-info {
+            flex: 1;
+        }
+
+        .account-name {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .account-email {
+            color: #a0a0b0;
+            font-size: 14px;
+        }
+
+        .account-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.2);
+            transition: .3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .btn-delete:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+
+        .message {
+            padding: 15px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .message.success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+
+        .message.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .no-accounts {
+            text-align: center;
+            padding: 40px;
+            color: #a0a0b0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Account-Verwaltung</h1>
+            <div class="nav-links">
+                <a href="/">← Zurück zur Übersicht</a>
+            </div>
+        </header>
+
+        <div id="messageContainer"></div>
+
+        <div class="section">
+            <h2>Neuen Account hinzufügen</h2>
+            <form id="addAccountForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Name (optional)</label>
+                        <input type="text" id="accountName" placeholder="z.B. Haupthaus">
+                    </div>
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" id="accountEmail" required placeholder="ihre-email@example.com">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Passwort *</label>
+                        <input type="password" id="accountPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Client ID *</label>
+                        <input type="text" id="accountClientId" placeholder="z.B. ab123ef4567..." required>
+                    </div>
+                </div>
+                <button type="submit" id="addButton">Account hinzufügen</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Gespeicherte Accounts</h2>
+            <div id="accountsList">
+                <div class="no-accounts">Lade Accounts...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAccounts() {
+            try {
+                const response = await fetch('/api/accounts');
+                if (!response.ok) throw new Error('Fehler beim Laden der Accounts');
+
+                const data = await response.json();
+                renderAccounts(data.accounts || []);
+            } catch (error) {
+                console.error('Error loading accounts:', error);
+                showMessage('Fehler beim Laden der Accounts: ' + error.message, 'error');
+            }
+        }
+
+        function renderAccounts(accounts) {
+            const container = document.getElementById('accountsList');
+
+            if (accounts.length === 0) {
+                container.innerHTML = '<div class="no-accounts">Keine Accounts gespeichert</div>';
+                return;
+            }
+
+            container.innerHTML = accounts.map(account => `
+                <div class="account-card ${account.active ? 'active' : ''}">
+                    <div class="account-info">
+                        <div class="account-name">${account.name || account.email}</div>
+                        <div class="account-email">${account.email}</div>
+                    </div>
+                    <div class="account-actions">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${account.active ? 'checked' : ''}
+                                   onchange="toggleAccount('${account.id}', this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn-delete" onclick="deleteAccount('${account.id}')">Löschen</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function toggleAccount(id, active) {
+            try {
+                const response = await fetch('/api/accounts/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, active })
+                });
+
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Fehler beim Aktivieren/Deaktivieren');
+
+                showMessage(`Account wurde ${active ? 'aktiviert' : 'deaktiviert'}`, 'success');
+                loadAccounts();
+            } catch (error) {
+                console.error('Error toggling account:', error);
+                showMessage('Fehler: ' + error.message, 'error');
+                loadAccounts(); // Reload to reset toggle state
+            }
+        }
+
+        async function deleteAccount(id) {
+            if (!confirm('Möchten Sie diesen Account wirklich löschen?')) return;
+
+            try {
+                const response = await fetch('/api/accounts/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Fehler beim Löschen');
+
+                showMessage('Account wurde gelöscht', 'success');
+                loadAccounts();
+            } catch (error) {
+                console.error('Error deleting account:', error);
+                showMessage('Fehler beim Löschen: ' + error.message, 'error');
+            }
+        }
+
+        document.getElementById('addAccountForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const button = document.getElementById('addButton');
+            button.disabled = true;
+            button.textContent = 'Füge hinzu...';
+
+            const accountData = {
+                name: document.getElementById('accountName').value,
+                email: document.getElementById('accountEmail').value,
+                password: document.getElementById('accountPassword').value,
+                clientId: document.getElementById('accountClientId').value,
+                active: true
+            };
+
+            try {
+                const response = await fetch('/api/accounts/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(accountData)
+                });
+
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Fehler beim Hinzufügen');
+
+                showMessage('Account wurde erfolgreich hinzugefügt!', 'success');
+                document.getElementById('addAccountForm').reset();
+                loadAccounts();
+            } catch (error) {
+                console.error('Error adding account:', error);
+                showMessage('Fehler beim Hinzufügen: ' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Account hinzufügen';
+            }
+        });
+
+        function showMessage(text, type) {
+            const container = document.getElementById('messageContainer');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = text;
+            container.innerHTML = '';
+            container.appendChild(message);
+
+            setTimeout(() => {
+                message.remove();
+            }, 5000);
+        }
+
+        // Initial load
+        loadAccounts();
+    </script>
+</body>
+</html>
