@@ -1,0 +1,50 @@
+# Build artifacts
+vieventlog
+vieventlog-container
+event_viewer
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+
+# Test files
+*_test.go
+testdata/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Goreleaser
+.goreleaser.yaml
+.goreleaser.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Config and credentials (never include in image)
+config/
+*.json
+credentials.go.old

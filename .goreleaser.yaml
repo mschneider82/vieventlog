@@ -5,8 +5,10 @@ before:
     - go mod tidy
 
 builds:
-  - env:
-      - CGO_ENABLED=0
+  # Desktop builds with keyring support (requires CGO on Linux)
+  - id: desktop
+    env:
+      - CGO_ENABLED=1
     goos:
       - linux
       - windows
@@ -18,9 +20,35 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     main: .
     binary: vieventlog
+    # Skip CGO cross-compilation issues
+    ignore:
+      - goos: linux
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+
+  # Container/Server builds without keyring (no CGO needed)
+  - id: container
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    tags:
+      - nokeyring
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    main: .
+    binary: vieventlog-container
 
 archives:
-  - format: tar.gz
+  # Desktop binaries
+  - id: desktop-archives
+    builds:
+      - desktop
+    format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -32,6 +60,23 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
+    files:
+      - README.md
+      - LICENSE
+
+  # Container binaries (separate archives)
+  - id: container-archives
+    builds:
+      - container
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-container_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     files:
       - README.md
       - LICENSE
