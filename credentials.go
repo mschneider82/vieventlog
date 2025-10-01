@@ -22,8 +22,8 @@ type Credentials struct {
 }
 
 type Account struct {
-	ID           string `json:"id"`           // Unique identifier (email)
-	Name         string `json:"name"`         // User-friendly name
+	ID           string `json:"id"`   // Unique identifier (email)
+	Name         string `json:"name"` // User-friendly name
 	Email        string `json:"email"`
 	Password     string `json:"password"`
 	ClientID     string `json:"clientId"`

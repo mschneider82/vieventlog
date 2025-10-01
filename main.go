@@ -26,9 +26,9 @@ var (
 	currentCreds *Credentials // Legacy support
 
 	// Multi-account support
-	accountStore   *AccountStore
-	accountTokens  map[string]*AccountToken // Account ID -> Token info
-	accountsMutex  sync.RWMutex
+	accountStore  *AccountStore
+	accountTokens map[string]*AccountToken // Account ID -> Token info
+	accountsMutex sync.RWMutex
 
 	// Cache
 	eventsCache     []Event
@@ -45,11 +45,11 @@ var (
 
 // AccountToken holds authentication tokens for a specific account
 type AccountToken struct {
-	AccessToken      string
-	RefreshToken     string
-	TokenExpiry      time.Time
-	InstallationIDs  []string
-	Installations    map[string]*Installation
+	AccessToken     string
+	RefreshToken    string
+	TokenExpiry     time.Time
+	InstallationIDs []string
+	Installations   map[string]*Installation
 }
 
 type Installation struct {
@@ -81,8 +81,8 @@ type Event struct {
 	FormattedTime    string                 `json:"formatted_time"`
 	Raw              string                 `json:"raw"`
 	InstallationID   string                 `json:"installationId"`
-	AccountID        string                 `json:"accountId"`        // Which account this event belongs to
-	AccountName      string                 `json:"accountName"`      // User-friendly account name
+	AccountID        string                 `json:"accountId"`   // Which account this event belongs to
+	AccountName      string                 `json:"accountName"` // User-friendly account name
 }
 
 type EventsResponse struct {
@@ -97,10 +97,10 @@ type Device struct {
 }
 
 type DevicesByInstallation struct {
-	InstallationID  string   `json:"installationId"`
-	Location        string   `json:"location"`
-	Description     string   `json:"description"`
-	Devices         []Device `json:"devices"`
+	InstallationID string   `json:"installationId"`
+	Location       string   `json:"location"`
+	Description    string   `json:"description"`
+	Devices        []Device `json:"devices"`
 }
 
 type StatusResponse struct {
@@ -140,12 +140,12 @@ type AccountRequest struct {
 }
 
 type AccountResponse struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	ClientID     string `json:"clientId"`
-	Active       bool   `json:"active"`
-	HasPassword  bool   `json:"hasPassword"` // Don't return actual password
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	ClientID    string `json:"clientId"`
+	Active      bool   `json:"active"`
+	HasPassword bool   `json:"hasPassword"` // Don't return actual password
 }
 
 type AccountsListResponse struct {
