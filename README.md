@@ -120,6 +120,31 @@ go build
 
 Nach erfolgreicher Kompilierung erhalten Sie eine ausführbare Datei `vieventlog`.
 
+### Option 3: Docker Container (für Server/NAS)
+
+**Schnellstart mit Docker:**
+
+```bash
+docker run -d \
+  --name vieventlog \
+  -p 5000:5000 \
+  -e VICARE_EMAIL=ihre@email.de \
+  -e VICARE_PASSWORD=ihr-passwort \
+  -e VICARE_CLIENT_ID=ihre-client-id \
+  -e BASIC_AUTH_USER=admin \
+  -e BASIC_AUTH_PASSWORD=geheim123 \
+  ghcr.io/mschneider82/vieventlog:latest
+```
+
+**Mit docker-compose (empfohlen):**
+
+```bash
+# docker-compose.yml erstellen (siehe Beispiel unten)
+docker-compose up -d
+```
+
+Siehe [Docker-Deployment](#docker-deployment) für Details.
+
 ## Verwendung
 
 ### Erste Schritte
@@ -150,6 +175,192 @@ Standardmäßig läuft ViEventLog auf Port 5000. Sie können einen anderen Port 
 
 ```bash
 PORT=8080 ./vieventlog
+```
+
+## Docker-Deployment
+
+### Verfügbare Container-Images
+
+Container-Images werden automatisch für `linux/amd64` und `linux/arm64` gebaut und sind verfügbar unter:
+
+```
+ghcr.io/mschneider82/vieventlog:latest
+ghcr.io/mschneider82/vieventlog:v1.2.3  # Spezifische Version
+```
+
+### Deployment-Optionen
+
+#### 1. Einzelner Account mit Environment Variables
+
+**Docker Run:**
+```bash
+docker run -d \
+  --name vieventlog \
+  -p 5000:5000 \
+  -e VICARE_EMAIL=ihre@email.de \
+  -e VICARE_PASSWORD=ihr-passwort \
+  -e VICARE_CLIENT_ID=ihre-client-id \
+  -e VICARE_ACCOUNT_NAME="Mein Haus" \
+  -e BASIC_AUTH_USER=admin \
+  -e BASIC_AUTH_PASSWORD=geheim123 \
+  --restart unless-stopped \
+  ghcr.io/mschneider82/vieventlog:latest
+```
+
+**docker-compose.yml:**
+```yaml
+version: '3.8'
+
+services:
+  vieventlog:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog
+    ports:
+      - "5000:5000"
+    environment:
+      - VICARE_EMAIL=ihre@email.de
+      - VICARE_PASSWORD=ihr-passwort
+      - VICARE_CLIENT_ID=ihre-client-id
+      - VICARE_ACCOUNT_NAME=Mein Haus
+      - BASIC_AUTH_USER=admin
+      - BASIC_AUTH_PASSWORD=geheim123
+    restart: unless-stopped
+```
+
+#### 2. Multi-Account mit Config-File
+
+**docker-compose.yml:**
+```yaml
+version: '3.8'
+
+services:
+  vieventlog:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./config:/config
+    environment:
+      - VICARE_CONFIG_DIR=/config
+      - BASIC_AUTH_USER=admin
+      - BASIC_AUTH_PASSWORD=geheim123
+    restart: unless-stopped
+```
+
+**Config-File erstellen (`./config/accounts.json`):**
+```json
+{
+  "accounts": {
+    "user1@example.com": {
+      "id": "user1@example.com",
+      "name": "Haupthaus",
+      "email": "user1@example.com",
+      "password": "passwort1",
+      "clientId": "client-id-1",
+      "clientSecret": "8ad97aceb92c5892e102b093c7c083fa",
+      "active": true
+    },
+    "user2@example.com": {
+      "id": "user2@example.com",
+      "name": "Ferienhaus",
+      "email": "user2@example.com",
+      "password": "passwort2",
+      "clientId": "client-id-2",
+      "clientSecret": "8ad97aceb92c5892e102b093c7c083fa",
+      "active": true
+    }
+  }
+}
+```
+
+**Wichtig:** Schützen Sie die `accounts.json` Datei:
+```bash
+chmod 600 ./config/accounts.json
+```
+
+#### 3. Hinter Reverse Proxy (z.B. Nginx, Traefik)
+
+Wenn Sie bereits einen Reverse Proxy mit Authentifizierung verwenden:
+
+```yaml
+version: '3.8'
+
+services:
+  vieventlog:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog
+    ports:
+      - "127.0.0.1:5000:5000"  # Nur localhost
+    environment:
+      - VICARE_EMAIL=ihre@email.de
+      - VICARE_PASSWORD=ihr-passwort
+      - VICARE_CLIENT_ID=ihre-client-id
+      # Kein BASIC_AUTH nötig - Reverse Proxy übernimmt
+    restart: unless-stopped
+```
+
+### Environment Variables (Container)
+
+| Variable | Beschreibung | Beispiel | Standard |
+|----------|--------------|----------|----------|
+| `BIND_ADDRESS` | Bind-Adresse und Port | `0.0.0.0:5000` | `0.0.0.0:5000` |
+| `VICARE_EMAIL` | ViCare Account E-Mail | `user@example.com` | - |
+| `VICARE_PASSWORD` | ViCare Account Passwort | `geheim123` | - |
+| `VICARE_CLIENT_ID` | Developer Portal Client ID | `ab741319...` | - |
+| `VICARE_ACCOUNT_NAME` | Anzeigename für Account | `Mein Haus` | E-Mail |
+| `VICARE_CONFIG_DIR` | Config-Verzeichnis für accounts.json | `/config` | `/config` |
+| `VICARE_ACCOUNTS` | Multi-Account als JSON | `{"accounts":{...}}` | - |
+| `BASIC_AUTH_USER` | Basic Auth Benutzername | `admin` | - |
+| `BASIC_AUTH_PASSWORD` | Basic Auth Passwort | `geheim123` | - |
+
+**Hinweis:** Im Container wird **kein** System-Keyring verwendet. Credentials müssen über ENV-Vars oder Config-File bereitgestellt werden.
+
+### Sicherheitshinweise für Container
+
+1. **Basic Auth aktivieren:** Wenn der Container aus dem Internet erreichbar ist:
+   ```yaml
+   environment:
+     - BASIC_AUTH_USER=admin
+     - BASIC_AUTH_PASSWORD=ein-sicheres-passwort
+   ```
+
+2. **Secrets Management:** Verwenden Sie Docker Secrets oder externe Secret-Manager:
+   ```yaml
+   services:
+     vieventlog:
+       secrets:
+         - vicare_password
+       environment:
+         - VICARE_PASSWORD_FILE=/run/secrets/vicare_password
+   ```
+
+3. **Config-File Permissions:**
+   ```bash
+   chmod 600 config/accounts.json
+   chown 1000:1000 config/accounts.json
+   ```
+
+4. **Reverse Proxy verwenden:** Für zusätzliche Sicherheit (TLS, Rate-Limiting, etc.)
+
+### Logs anzeigen
+
+```bash
+# Docker
+docker logs vieventlog
+
+# Docker Compose
+docker-compose logs -f
+```
+
+### Container aktualisieren
+
+```bash
+# Neues Image holen
+docker pull ghcr.io/mschneider82/vieventlog:latest
+
+# Container neu starten
+docker-compose down && docker-compose up -d
 ```
 
 ## Features
@@ -304,6 +515,33 @@ sudo apt-get install gnome-keyring libsecret-1-0
 
 # Fedora/RHEL
 sudo dnf install gnome-keyring libsecret
+```
+
+### Container startet nicht / keine Credentials
+
+**Problem:** Container läuft, aber zeigt "no credentials configured"
+
+**Lösung:**
+- Prüfen Sie die Environment Variables mit `docker inspect vieventlog`
+- Stellen Sie sicher, dass mindestens `VICARE_EMAIL`, `VICARE_PASSWORD` und `VICARE_CLIENT_ID` gesetzt sind
+- Logs prüfen: `docker logs vieventlog`
+
+**Problem:** "Authentication failed" beim Start
+
+**Lösung:**
+- Verifizieren Sie Ihre Credentials in der ViCare App
+- Prüfen Sie die Client ID im Developer Portal
+- Stellen Sie sicher, dass die Redirect URI korrekt ist: `vicare://oauth-callback/everest`
+
+### Container-Image nicht gefunden
+
+Stellen Sie sicher, dass Sie den korrekten Image-Namen verwenden:
+```bash
+# Richtig
+docker pull ghcr.io/mschneider82/vieventlog:latest
+
+# Falsch (ohne ghcr.io)
+docker pull mschneider82/vieventlog:latest
 ```
 
 ## Entwicklung

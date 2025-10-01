@@ -186,9 +186,19 @@ func main() {
 	http.HandleFunc("/api/status", statusHandler)
 	http.HandleFunc("/api/devices", devicesHandler)
 
-	port := getEnv("PORT", "5000")
-	log.Printf("Starting Event Viewer on http://localhost:%s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	// Get bind address from environment, with backward compatibility for PORT
+	bindAddress := os.Getenv("BIND_ADDRESS")
+	if bindAddress == "" {
+		port := getEnv("PORT", "5000")
+		bindAddress = "0.0.0.0:" + port
+	}
+
+	log.Printf("Starting Event Viewer on %s\n", bindAddress)
+
+	// Wrap with Basic Auth middleware if configured
+	handler := BasicAuthMiddleware(http.DefaultServeMux)
+
+	log.Fatal(http.ListenAndServe(bindAddress, handler))
 }
 
 func loadStoredCredentials() {

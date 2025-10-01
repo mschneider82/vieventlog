@@ -1,0 +1,95 @@
+# Docker Compose configuration for ViEventLog
+# Multiple example configurations provided
+
+version: '3.8'
+
+services:
+  # Example 1: Using environment variables for single account
+  vieventlog-env:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog-env
+    ports:
+      - "5000:5000"
+    environment:
+      # Bind address (default: 0.0.0.0:5000)
+      - BIND_ADDRESS=0.0.0.0:5000
+
+      # Viessmann credentials (single account)
+      - VICARE_EMAIL=ihre@email.de
+      - VICARE_PASSWORD=ihr-passwort
+      - VICARE_CLIENT_ID=ihre-client-id
+      - VICARE_ACCOUNT_NAME=Haupthaus
+
+      # Optional: Basic Auth protection
+      - BASIC_AUTH_USER=admin
+      - BASIC_AUTH_PASSWORD=geheim123
+    restart: unless-stopped
+    profiles:
+      - env
+
+  # Example 2: Using file storage for multi-account setup
+  vieventlog-file:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog-file
+    ports:
+      - "5001:5000"
+    volumes:
+      # Mount config directory for accounts.json
+      - ./config:/config
+    environment:
+      - BIND_ADDRESS=0.0.0.0:5000
+      - VICARE_CONFIG_DIR=/config
+
+      # Optional: Basic Auth
+      # - BASIC_AUTH_USER=admin
+      # - BASIC_AUTH_PASSWORD=geheim123
+    restart: unless-stopped
+    profiles:
+      - file
+
+  # Example 3: Multi-account via JSON environment variable
+  vieventlog-json:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog-json
+    ports:
+      - "5002:5000"
+    environment:
+      - BIND_ADDRESS=0.0.0.0:5000
+
+      # Multi-account configuration as JSON
+      # Format: {"accounts": {"email1": {...}, "email2": {...}}}
+      - VICARE_ACCOUNTS={"accounts":{"user1@example.com":{"id":"user1@example.com","name":"Haus 1","email":"user1@example.com","password":"pass1","clientId":"client1","clientSecret":"8ad97aceb92c5892e102b093c7c083fa","active":true},"user2@example.com":{"id":"user2@example.com","name":"Haus 2","email":"user2@example.com","password":"pass2","clientId":"client2","clientSecret":"8ad97aceb92c5892e102b093c7c083fa","active":true}}}
+
+      # Optional: Basic Auth
+      - BASIC_AUTH_USER=admin
+      - BASIC_AUTH_PASSWORD=geheim123
+    restart: unless-stopped
+    profiles:
+      - json
+
+  # Example 4: Behind reverse proxy (bind to localhost only)
+  vieventlog-proxy:
+    image: ghcr.io/mschneider82/vieventlog:latest
+    container_name: vieventlog-proxy
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      - BIND_ADDRESS=0.0.0.0:5000
+      - VICARE_EMAIL=ihre@email.de
+      - VICARE_PASSWORD=ihr-passwort
+      - VICARE_CLIENT_ID=ihre-client-id
+
+      # No Basic Auth needed if reverse proxy handles authentication
+    restart: unless-stopped
+    profiles:
+      - proxy
+
+# Usage:
+# Start specific example:
+#   docker-compose --profile env up -d
+#   docker-compose --profile file up -d
+#   docker-compose --profile json up -d
+#   docker-compose --profile proxy up -d
+#
+# Stop:
+#   docker-compose --profile env down

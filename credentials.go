@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-
-	"github.com/zalando/go-keyring"
 )
 
 const (
@@ -13,6 +10,21 @@ const (
 	accountsKey    = "accounts"        // New key for multiple accounts
 	activeAcctsKey = "active-accounts" // New key for active account IDs
 )
+
+// CredentialStorage is the interface for credential persistence
+type CredentialStorage interface {
+	SaveCredentials(creds Credentials) error
+	LoadCredentials() (*Credentials, error)
+	DeleteCredentials() error
+	SaveAccounts(store *AccountStore) error
+	LoadAccounts() (*AccountStore, error)
+}
+
+var storage CredentialStorage
+
+func init() {
+	storage = newCredentialStorage()
+}
 
 type Credentials struct {
 	Email        string `json:"email"`
@@ -35,47 +47,19 @@ type AccountStore struct {
 	Accounts map[string]*Account `json:"accounts"` // Key is account ID
 }
 
-// SaveCredentials stores credentials securely in the system keyring
+// SaveCredentials stores credentials using the configured storage backend
 func SaveCredentials(creds Credentials) error {
-	data, err := json.Marshal(creds)
-	if err != nil {
-		return fmt.Errorf("failed to marshal credentials: %w", err)
-	}
-
-	err = keyring.Set(serviceName, credKey, string(data))
-	if err != nil {
-		return fmt.Errorf("failed to save credentials to keyring: %w", err)
-	}
-
-	return nil
+	return storage.SaveCredentials(creds)
 }
 
-// LoadCredentials retrieves credentials from the system keyring
+// LoadCredentials retrieves credentials from the configured storage backend
 func LoadCredentials() (*Credentials, error) {
-	data, err := keyring.Get(serviceName, credKey)
-	if err != nil {
-		if err == keyring.ErrNotFound {
-			return nil, nil // No credentials stored
-		}
-		return nil, fmt.Errorf("failed to load credentials from keyring: %w", err)
-	}
-
-	var creds Credentials
-	err = json.Unmarshal([]byte(data), &creds)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal credentials: %w", err)
-	}
-
-	return &creds, nil
+	return storage.LoadCredentials()
 }
 
-// DeleteCredentials removes credentials from the system keyring
+// DeleteCredentials removes credentials from the configured storage backend
 func DeleteCredentials() error {
-	err := keyring.Delete(serviceName, credKey)
-	if err != nil && err != keyring.ErrNotFound {
-		return fmt.Errorf("failed to delete credentials from keyring: %w", err)
-	}
-	return nil
+	return storage.DeleteCredentials()
 }
 
 // HasStoredCredentials checks if credentials are stored
@@ -86,63 +70,14 @@ func HasStoredCredentials() bool {
 
 // --- New Multi-Account Functions ---
 
-// LoadAccounts retrieves all accounts from the keyring
+// LoadAccounts retrieves all accounts from the configured storage backend
 func LoadAccounts() (*AccountStore, error) {
-	data, err := keyring.Get(serviceName, accountsKey)
-	if err != nil {
-		if err == keyring.ErrNotFound {
-			// Try migrating old single credential
-			oldCred, err := LoadCredentials()
-			if err == nil && oldCred != nil && oldCred.Email != "" {
-				// Migrate to new system
-				store := &AccountStore{
-					Accounts: make(map[string]*Account),
-				}
-				account := &Account{
-					ID:           oldCred.Email,
-					Name:         oldCred.Email,
-					Email:        oldCred.Email,
-					Password:     oldCred.Password,
-					ClientID:     oldCred.ClientID,
-					ClientSecret: oldCred.ClientSecret,
-					Active:       true,
-				}
-				store.Accounts[account.ID] = account
-				SaveAccounts(store)
-				return store, nil
-			}
-			// No accounts stored
-			return &AccountStore{Accounts: make(map[string]*Account)}, nil
-		}
-		return nil, fmt.Errorf("failed to load accounts from keyring: %w", err)
-	}
-
-	var store AccountStore
-	err = json.Unmarshal([]byte(data), &store)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal accounts: %w", err)
-	}
-
-	if store.Accounts == nil {
-		store.Accounts = make(map[string]*Account)
-	}
-
-	return &store, nil
+	return storage.LoadAccounts()
 }
 
-// SaveAccounts stores all accounts in the keyring
+// SaveAccounts stores all accounts using the configured storage backend
 func SaveAccounts(store *AccountStore) error {
-	data, err := json.Marshal(store)
-	if err != nil {
-		return fmt.Errorf("failed to marshal accounts: %w", err)
-	}
-
-	err = keyring.Set(serviceName, accountsKey, string(data))
-	if err != nil {
-		return fmt.Errorf("failed to save accounts to keyring: %w", err)
-	}
-
-	return nil
+	return storage.SaveAccounts(store)
 }
 
 // AddAccount adds a new account to the store
