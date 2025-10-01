@@ -5,10 +5,10 @@ before:
     - go mod tidy
 
 builds:
-  # Desktop builds with keyring support (requires CGO on Linux)
+  # Desktop builds with keyring support (CGO_ENABLED=0 works with go-keyring!)
   - id: desktop
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - linux
       - windows
@@ -20,14 +20,8 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     main: .
     binary: vieventlog
-    # Skip CGO cross-compilation issues
-    ignore:
-      - goos: linux
-        goarch: arm64
-      - goos: windows
-        goarch: arm64
 
-  # Container/Server builds without keyring (no CGO needed)
+  # Linux container builds without keyring
   - id: container
     env:
       - CGO_ENABLED=0
