@@ -494,6 +494,27 @@
         // HELPER FUNCTIONS
         // ========================================
 
+        /**
+         * Format timestamp to local timezone
+         * Converts RFC3339/ISO timestamp to browser's local time
+         */
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString('de-DE', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            } catch (e) {
+                return timestamp;
+            }
+        }
+
         function categorizeEvent(event) {
             // Use the category from backend if available
             if (event.codeCategory === 'fault') return 'fault';
@@ -649,7 +670,7 @@
                 return `
                     <div class="event-item" onclick="toggleEvent(${index})">
                         <div class="event-header">
-                            <div class="event-time">${event.formatted_time}</div>
+                            <div class="event-time">${formatTimestamp(event.eventTimestamp || event.createdAt)}</div>
                             <div class="event-type">
                                 ${event.errorCode ? `<strong>${event.errorCode}</strong>` : event.eventType}
                                 ${statusIndicator}
