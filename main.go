@@ -866,14 +866,8 @@ func processEvent(raw map[string]interface{}) Event {
 		timestamp = event.CreatedAt
 	}
 
-	// Parse timestamp and convert to local time
-	if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
-		// Convert UTC to local timezone
-		localTime := t.Local()
-		event.FormattedTime = localTime.Format("2006-01-02 15:04:05")
-	} else {
-		event.FormattedTime = timestamp
-	}
+	// Keep timestamp in RFC3339 format for browser-side timezone conversion
+	event.FormattedTime = timestamp
 
 	// Extract body
 	if body, ok := raw["body"].(map[string]interface{}); ok {
