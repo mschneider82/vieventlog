@@ -113,12 +113,21 @@ http://localhost:5000
 
 ### Option 2: Aus Quellcode kompilieren
 
+**Mit Keyring-Support (empfohlen für Desktop):**
 ```bash
 go mod download
-go build
+go build  # Baut mit Keyring-Support
+```
+
+**Ohne Keyring (für Server/Container):**
+```bash
+go mod download
+go build -tags nokeyring  # Baut ohne Keyring, nutzt ENV/File-Storage
 ```
 
 Nach erfolgreicher Kompilierung erhalten Sie eine ausführbare Datei `vieventlog`.
+
+**Hinweis:** Die vorkompilierten Binaries von GitHub Releases verwenden **keine Keyring-Integration** (um Cross-Platform-Builds zu ermöglichen). Sie nutzen automatisch Environment Variables oder File-Storage für Credentials. Wenn Sie Keyring-Support benötigen, kompilieren Sie bitte lokal aus dem Quellcode.
 
 ### Option 3: Docker Container (für Server/NAS)
 
