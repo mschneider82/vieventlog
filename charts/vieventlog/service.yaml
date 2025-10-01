@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vieventlog
+  labels:
+    app: vieventlog
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: vieventlog

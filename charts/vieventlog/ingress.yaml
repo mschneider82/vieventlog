@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vieventlog
+  labels:
+    app: vieventlog
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Optional: Add custom Traefik middlewares
+    # traefik.ingress.kubernetes.io/router.middlewares: default-ratelimit@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - vieventlog.example.com
+    secretName: vieventlog-tls
+  rules:
+  - host: vieventlog.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vieventlog
+            port:
+              name: http
