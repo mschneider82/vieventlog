@@ -376,6 +376,7 @@
             <div class="control-group">
                 <label>Zeitraum:</label>
                 <select id="daysSelect">
+                    <option value="0.25">Letzte 6 Stunden</option>
                     <option value="1" selected>Letzte 24 Stunden</option>
                     <option value="3">Letzte 3 Tage</option>
                     <option value="7">Letzte 7 Tage</option>
@@ -472,10 +473,19 @@
                 'S.124': true,  // Wärmepumpe Vorlaufphase
                 'S.125': true,  // Wärmepumpe Heizen
                 'S.125-WARMWATER': true,  // Wärmepumpe Warmwasserbereitung
+                'S.126': true,  // Wärmepumpe Kühlen
+                'S.128': true,  // Wärmepumpe Abtauen
                 'S.129': true,  // Wärmepumpe Nachlaufphase
-                'S.115': true,  // 4/3-Wege Ventil Trinkwasser
-                'S.118': true,  // 4/3-Wege Ventil Pufferspeicher
+                'S.112': true,  // Initialisierung 4/3-Wege-Ventil
+                'S.113': true,  // 4/3-Wege-Ventil schaltet -> Trinkwasser
+                'S.114': true,  // 4/3-Wege-Ventil schaltet -> Heiz-/Kühlkreis 1
+                'S.115': true,  // 4/3-Wege Ventil Position Trinkwasser
+                'S.116': true,  // 4/3-Wege Ventil Position Heiz-/Kühlkreis 1
+                'S.117': true,  // 4/3-Wege Ventil Position Heiz-/Kühlkreis 2
+                'S.118': true,  // 4/3-Wege Ventil Position Pufferspeicher
                 'S.134': true,  // 4/3-Wege Ventil Leerlauf
+                'S.135': true,  // 4/3-Wege Ventil Abtauen
+                'S.136': true,  // 4/3-Wege Ventil Raumbeheizung/Raumkühlung
                 'other': true
             }
         };
@@ -577,7 +587,7 @@
             globalFilters.device = document.getElementById('deviceSelect').value;
             globalFilters.type = document.getElementById('typeFilter').value;
             globalFilters.search = document.getElementById('filterInput').value;
-            globalFilters.days = parseInt(document.getElementById('daysSelect').value);
+            globalFilters.days = parseFloat(document.getElementById('daysSelect').value);
 
             // Refresh both views with current data
             refreshViews();
@@ -835,7 +845,7 @@ ${formatEventBody(event.body)}
 
         // Days filter - reload from server
         document.getElementById('daysSelect').addEventListener('change', () => {
-            globalFilters.days = parseInt(document.getElementById('daysSelect').value);
+            globalFilters.days = parseFloat(document.getElementById('daysSelect').value);
             loadEvents();
         });
 
@@ -865,20 +875,33 @@ ${formatEventBody(event.body)}
 
             // Setup filter buttons
             const eventTypes = {
-                'S.125': { label: 'Heizen', color: '#ef4444', gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', icon: '🔥' },
-                'S.125-WARMWATER': { label: 'WW-Bereitung', color: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', icon: '🚿' },
-                'S.123': { label: 'Aus', color: '#64748b', gradient: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', icon: '⏸️' },
-                'S.124': { label: 'Vorlauf', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⏫' },
-                'S.129': { label: 'Nachlauf', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '⏬' },
-                'S.115': { label: 'Ventil WW', color: '#a78bfa', gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', icon: '🔀' },
-                'S.118': { label: 'Ventil Puffer', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
-                'S.134': { label: 'Ventil Idle', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '⭕' }
+                // Wärmepumpen-Status
+                'S.125': { label: 'Heizen', description: 'Wärmepumpe im Heizbetrieb', color: '#ef4444', gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', icon: '🔥' },
+                'S.125-WARMWATER': { label: 'WW-Bereitung', description: 'Warmwasserbereitung aktiv', color: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', icon: '🚿' },
+                'S.126': { label: 'Kühlen', description: 'Wärmepumpe im Kühlbetrieb', color: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', icon: '❄️' },
+                'S.128': { label: 'Abtauen', description: 'Wärmepumpe im Abtaubetrieb', color: '#14b8a6', gradient: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)', icon: '💧' },
+                'S.123': { label: 'Aus', description: 'Wärmepumpe ausgeschaltet', color: '#64748b', gradient: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', icon: '⏸' },
+                'S.124': { label: 'Vorlauf', description: 'Wärmepumpe Vorlaufphase', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⏫' },
+                'S.129': { label: 'Nachlauf', description: 'Wärmepumpe Nachlaufphase', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '⏬' },
+
+                // Ventil-Positionen
+                'S.112': { label: 'V-Init', description: 'Ventil initialisiert', color: '#94a3b8', gradient: 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', icon: '🔧' },
+                'S.113': { label: 'V schaltet→WW', description: 'Ventil schaltet zu Warmwasser', color: '#c084fc', gradient: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)', icon: '→' },
+                'S.114': { label: 'V schaltet→HK1', description: 'Ventil schaltet zu Heizkreis 1', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '→' },
+                'S.115': { label: 'V-Position WW', description: 'Ventil in Warmwasser-Position', color: '#a78bfa', gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', icon: '🔀' },
+                'S.116': { label: 'V-Position HK1', description: 'Ventil in Heizkreis 1 Position', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔀' },
+                'S.117': { label: 'V-Position HK2', description: 'Ventil in Heizkreis 2 Position', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '🔀' },
+                'S.118': { label: 'V-Position Puffer', description: 'Ventil in Pufferspeicher-Position', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
+                'S.134': { label: 'V-Leerlauf', description: 'Ventil im Leerlauf', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '⭕' },
+                'S.135': { label: 'V-Abtauen', description: 'Ventil in Abtau-Position', color: '#22d3ee', gradient: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)', icon: '🔀' },
+                'S.136': { label: 'V-Raumheizung', description: 'Ventil in Raumheizungs-Position', color: '#84cc16', gradient: 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)', icon: '🏠' }
             };
 
             controlsContainer.innerHTML = Object.entries(eventTypes).map(([code, info]) => {
                 const active = globalFilters.timelineTypes[code] !== false;
                 return `
                     <button onclick="toggleTimelineFilter('${code}')"
+                            title="${info.description}"
                             style="padding: 7px 13px; border: 1px solid ${active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'};
                                    background: ${active ? info.gradient : 'rgba(255,255,255,0.05)'};
                                    color: ${active ? 'white' : '#a0a0b0'};
@@ -955,13 +978,26 @@ ${formatEventBody(event.body)}
                     const code = event.errorCode;
                     if (!code) return;
 
-                    // Handle valve position changes
-                    if (code === 'S.115') {
+                    // Handle valve position changes (all valve-related codes)
+                    const valvePositionMap = {
+                        'S.112': 'init',        // Initialisierung
+                        'S.113': 'switching-ww', // Schaltet -> Trinkwasser
+                        'S.114': 'switching-hk1', // Schaltet -> Heiz-/Kühlkreis 1
+                        'S.115': 'warmwater',   // Position Trinkwasser
+                        'S.116': 'heating-hk1', // Position Heiz-/Kühlkreis 1
+                        'S.117': 'heating-hk2', // Position Heiz-/Kühlkreis 2
+                        'S.118': 'buffer',      // Position Pufferspeicher
+                        'S.134': 'idle',        // Leerlauf
+                        'S.135': 'defrost',     // Abtauen
+                        'S.136': 'room'         // Raumbeheizung/Raumkühlung
+                    };
+
+                    if (valvePositionMap[code]) {
                         if (event.active) {
-                            currentValvePosition = 'warmwater'; // Trinkwasser
+                            currentValvePosition = valvePositionMap[code];
                         } else {
-                            // When S.115 ends, terminate any active S.125-WARMWATER spans
-                            if (activeStates['S.125-WARMWATER']) {
+                            // When valve position ends, terminate any active S.125-WARMWATER spans
+                            if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
@@ -973,18 +1009,6 @@ ${formatEventBody(event.body)}
                                 });
                                 delete activeStates['S.125-WARMWATER'];
                             }
-                            currentValvePosition = null;
-                        }
-                    } else if (code === 'S.118') {
-                        if (event.active) {
-                            currentValvePosition = 'heating'; // Heiz-/Kühl-Pufferspeicher
-                        } else {
-                            currentValvePosition = null;
-                        }
-                    } else if (code === 'S.134') {
-                        if (event.active) {
-                            currentValvePosition = 'idle'; // Leerlauf
-                        } else {
                             currentValvePosition = null;
                         }
                     }
