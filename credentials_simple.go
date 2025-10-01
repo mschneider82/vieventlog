@@ -71,7 +71,32 @@ func (s *SimpleStorage) SaveAccounts(store *AccountStore) error {
 }
 
 func (s *SimpleStorage) LoadAccounts() (*AccountStore, error) {
-	// Try VICARE_ACCOUNTS environment variable first (JSON format)
+	// Try file storage first - if it exists, use ONLY the file (ignore ENV)
+	configPath := getConfigPath()
+	filePath := filepath.Join(configPath, "accounts.json")
+
+	data, err := os.ReadFile(filePath)
+	if err == nil {
+		// File exists - use it exclusively
+		var store AccountStore
+		if err := json.Unmarshal(data, &store); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal accounts file: %w", err)
+		}
+
+		if store.Accounts == nil {
+			store.Accounts = make(map[string]*Account)
+		}
+
+		return &store, nil
+	}
+
+	// File doesn't exist - try environment variables as fallback
+	if !os.IsNotExist(err) {
+		// File exists but couldn't be read - this is an error
+		return nil, fmt.Errorf("failed to read accounts file: %w", err)
+	}
+
+	// Try VICARE_ACCOUNTS environment variable (JSON format)
 	if accountsJSON := os.Getenv("VICARE_ACCOUNTS"); accountsJSON != "" {
 		var store AccountStore
 		if err := json.Unmarshal([]byte(accountsJSON), &store); err != nil {
@@ -104,28 +129,8 @@ func (s *SimpleStorage) LoadAccounts() (*AccountStore, error) {
 		return store, nil
 	}
 
-	// Try file storage
-	configPath := getConfigPath()
-	filePath := filepath.Join(configPath, "accounts.json")
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &AccountStore{Accounts: make(map[string]*Account)}, nil
-		}
-		return nil, fmt.Errorf("failed to read accounts file: %w", err)
-	}
-
-	var store AccountStore
-	if err := json.Unmarshal(data, &store); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal accounts: %w", err)
-	}
-
-	if store.Accounts == nil {
-		store.Accounts = make(map[string]*Account)
-	}
-
-	return &store, nil
+	// No accounts configured
+	return &AccountStore{Accounts: make(map[string]*Account)}, nil
 }
 
 func getConfigPath() string {
