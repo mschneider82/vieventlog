@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vieventlog
+  labels:
+    app: vieventlog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vieventlog
+  template:
+    metadata:
+      labels:
+        app: vieventlog
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: vieventlog
+        image: ghcr.io/mschneider82/vieventlog:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        env:
+        - name: BIND_ADDRESS
+          value: "0.0.0.0:5000"
+        - name: VICARE_CONFIG_DIR
+          value: "/config"
+        # Credentials from Secret
+        - name: VICARE_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: vicare-email
+        - name: VICARE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: vicare-password
+        - name: VICARE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: vicare-client-id
+        - name: VICARE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: vicare-account-name
+              optional: true
+        # Optional: Basic Auth
+        - name: BASIC_AUTH_USER
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: basic-auth-user
+              optional: true
+        - name: BASIC_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: vieventlog-secrets
+              key: basic-auth-password
+              optional: true
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: vieventlog-pvc
