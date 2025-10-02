@@ -389,6 +389,23 @@ Der Event Viewer unterstützt mehrere Viessmann-Accounts gleichzeitig. Dies ist 
 - Events von allen aktiven Accounts werden kombiniert angezeigt
 - Jedes Event zeigt den zugehörigen Account und Standort
 
+### Dashboard-Ansicht
+
+Das Dashboard bietet eine übersichtliche Echtzeitansicht aller wichtigen Parameter Ihrer Heizungsanlage:
+
+- Live-Anzeige von Temperaturen: Außentemperatur, Vorlauf, Rücklauf, Puffer, Primär- und Sekundärkreis
+- Kompressor-Status bei Wärmepumpen: Drehzahl, Leistung, Ein-/Auslasstemperatur
+- Brenner-Status bei Gasheizungen: Modulation, Betriebszustand
+- Warmwasser-Informationen: Ist- und Soll-Temperatur, Betriebsmodus
+- Heizkreis-Status: Betriebsmodus, Betriebsprogramm
+- Heizkurve: Steigung und Verschiebung
+- Zusätzliche Sensoren: Volumenstrom, Druck, interne Pumpe, Lüfter
+- Effizienz-Kennzahlen: SCOP/SPF für Heizung und Warmwasser
+- Unterstützung mehrerer Geräte pro Installation (z.B. Wärmepumpe + Gasheizung)
+- Automatische Anpassung der Anzeige je nach Gerätetyp (Vitocal, Vitodens, etc.)
+
+Das Dashboard ist über den entsprechenden Button in der Hauptansicht erreichbar und aktualisiert sich automatisch.
+
 ### Timeline-Visualisierung
 
 Die Timeline zeigt grafisch die Betriebszustände Ihrer Heizungsanlage über die Zeit:
@@ -435,6 +452,7 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
 - `GET /` - Web UI (Event-Viewer)
 - `GET /login` - Login-Seite
 - `GET /accounts` - Account-Verwaltung
+- `GET /dashboard` - Dashboard-Ansicht mit Live-Daten
 
 ### API
 
@@ -442,6 +460,7 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
 - `GET /api/events?days=7` - Events abrufen (Parameter: 1, 7, 14, 30 oder 365 für "Alle")
 - `GET /api/status` - Verbindungsstatus und Account-Info
 - `GET /api/devices` - Geräteliste gruppiert nach Installation
+- `GET /api/features?installationId=XXX&gatewaySerial=YYY&deviceId=0&refresh=true` - Feature-Daten für Dashboard
 
 #### Account-Verwaltung
 - `GET /api/accounts` - Liste aller gespeicherten Accounts
