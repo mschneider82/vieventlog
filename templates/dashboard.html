@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Dashboard - ViEventLog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e0e0e0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 24px;
+        }
+
+        .breadcrumb {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 14px;
+            color: #a0a0b0;
+            margin-top: 10px;
+        }
+
+        .breadcrumb a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* Controls */
+        .controls {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .install-select {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        select {
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            font-size: 14px;
+            background: rgba(30, 30, 46, 0.9);
+            color: #ffffff;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        select:hover {
+            border-color: rgba(255,255,255,0.5);
+            background: rgba(30, 30, 46, 1);
+        }
+
+        select option {
+            background: #1e1e2e;
+            color: #ffffff;
+            padding: 8px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b41a0 100%);
+            transform: translateY(-1px);
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card.wide {
+            grid-column: span 2;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-header h2 {
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        /* Temperature Display */
+        .temp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .temp-item {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+        }
+
+        .temp-label {
+            font-size: 11px;
+            color: #a0a0b0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .temp-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .temp-unit {
+            font-size: 20px;
+            color: #a0a0b0;
+            margin-left: 2px;
+        }
+
+        /* Large temp display for main values */
+        .temp-display-large {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .temp-display-large .temp-item {
+            flex: 1;
+            padding: 30px 20px;
+        }
+
+        .temp-display-large .temp-value {
+            font-size: 48px;
+        }
+
+        /* Status Items */
+        .status-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+
+        .status-label {
+            color: #a0a0b0;
+            font-size: 14px;
+        }
+
+        .status-value {
+            color: #fff;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        /* Mode Selector */
+        .mode-display {
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .mode-display .mode-label {
+            font-size: 12px;
+            color: #a0a0b0;
+            margin-bottom: 8px;
+        }
+
+        .mode-display .mode-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #a0a0b0;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Error */
+        .error {
+            background: rgba(220, 38, 38, 0.1);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            color: #fca5a5;
+            margin-bottom: 20px;
+        }
+
+        /* Last Update */
+        .last-update {
+            font-size: 12px;
+            color: #a0a0b0;
+            text-align: right;
+        }
+
+        /* Feature List */
+        .feature-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .feature-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .feature-name {
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .feature-value {
+            color: #e0e0e0;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>Device Dashboard</h1>
+                    <div class="breadcrumb">
+                        <a href="/">← Events</a>
+                        <span>/</span>
+                        <span id="currentInstallation">Loading...</span>
+                    </div>
+                </div>
+                <div class="last-update">
+                    Letzte Aktualisierung: <span id="lastUpdate">-</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="install-select">
+                <label>Installation:</label>
+                <select id="installationSelect">
+                    <option>Lade...</option>
+                </select>
+                <label>Gerät:</label>
+                <select id="deviceSelect">
+                    <option value="0">Device 0 (Standard)</option>
+                </select>
+            </div>
+            <button id="refreshBtn">🔄 Aktualisieren</button>
+        </div>
+
+        <div id="errorContainer"></div>
+        <div id="dashboardContent" class="loading">
+            <div class="spinner"></div>
+            <p>Lade Dashboard-Daten...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentInstallationId = null;
+        let currentDeviceId = '0';
+        let currentGatewaySerial = '';
+        let installations = [];
+        let autoRefreshInterval = null;
+
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('installationId')) {
+            currentInstallationId = urlParams.get('installationId');
+        }
+        if (urlParams.has('deviceId')) {
+            currentDeviceId = urlParams.get('deviceId');
+        }
+        if (urlParams.has('gatewaySerial')) {
+            currentGatewaySerial = urlParams.get('gatewaySerial');
+        }
+
+        async function init() {
+            await loadDevices();
+            if (currentInstallationId) {
+                await loadDashboard();
+                startAutoRefresh();
+            }
+        }
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const devicesByInstall = await response.json();
+                installations = devicesByInstall;
+
+                const installSelect = document.getElementById('installationSelect');
+                installSelect.innerHTML = '';
+
+                devicesByInstall.forEach(install => {
+                    const option = document.createElement('option');
+                    option.value = install.installationId;
+                    option.textContent = `${install.description || install.installationId} - ${install.location}`;
+                    if (install.installationId === currentInstallationId) {
+                        option.selected = true;
+                    }
+                    installSelect.appendChild(option);
+                });
+
+                // Set first installation if none selected
+                if (!currentInstallationId && devicesByInstall.length > 0) {
+                    currentInstallationId = devicesByInstall[0].installationId;
+                    installSelect.value = currentInstallationId;
+                }
+
+                // If gatewaySerial not set yet, get it from first device BEFORE updating dropdown
+                if (!currentGatewaySerial && currentInstallationId) {
+                    const currentInstall = devicesByInstall.find(i => i.installationId === currentInstallationId);
+                    if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
+                        // Just take the first device and initialize both deviceId AND gatewaySerial
+                        const firstDevice = currentInstall.devices[0];
+                        currentDeviceId = firstDevice.deviceId;
+                        currentGatewaySerial = firstDevice.gatewaySerial || '';
+                        console.log('Initialized with first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                    }
+                }
+
+                // Update device dropdown for selected installation (after initializing currentDeviceId and currentGatewaySerial)
+                updateDeviceDropdown();
+
+                // Update current installation display
+                const selectedInstall = devicesByInstall.find(i => i.installationId === currentInstallationId);
+                if (selectedInstall) {
+                    document.getElementById('currentInstallation').textContent =
+                        selectedInstall.description || selectedInstall.installationId;
+                }
+
+            } catch (error) {
+                showError('Fehler beim Laden der Geräte: ' + error.message);
+            }
+        }
+
+        function updateDeviceDropdown() {
+            const deviceSelect = document.getElementById('deviceSelect');
+            deviceSelect.innerHTML = '';
+
+            // Find current installation
+            const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+
+            console.log('updateDeviceDropdown - currentInstall:', currentInstall);
+
+            if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
+                console.log('Found', currentInstall.devices.length, 'devices:', currentInstall.devices);
+
+                currentInstall.devices.forEach(device => {
+                    const option = document.createElement('option');
+                    // Create a unique value from gatewaySerial and deviceId
+                    const uniqueKey = `${device.gatewaySerial}_${device.deviceId}`;
+                    option.value = uniqueKey;
+                    option.dataset.gatewaySerial = device.gatewaySerial || '';
+                    option.dataset.deviceId = device.deviceId;
+                    option.textContent = device.displayName || `${device.modelId} (Device ${device.deviceId})`;
+
+                    // Check if this is the currently selected device
+                    const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
+                    if (uniqueKey === currentKey) {
+                        option.selected = true;
+                    }
+                    deviceSelect.appendChild(option);
+                    console.log('Added device option:', uniqueKey, device.modelId, 'Gateway:', device.gatewaySerial);
+                });
+
+                // If current device not in list, select first
+                const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
+                const deviceExists = currentInstall.devices.some(d => `${d.gatewaySerial}_${d.deviceId}` === currentKey);
+                if (!deviceExists && currentInstall.devices.length > 0) {
+                    const firstDevice = currentInstall.devices[0];
+                    currentDeviceId = firstDevice.deviceId;
+                    currentGatewaySerial = firstDevice.gatewaySerial;
+                    deviceSelect.value = `${currentGatewaySerial}_${currentDeviceId}`;
+                    console.log('Selected first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                }
+            } else {
+                console.log('No devices found, using fallback Device 0');
+                // Fallback to Device 0
+                const option = document.createElement('option');
+                option.value = '0';
+                option.textContent = 'Device 0 (Standard)';
+                deviceSelect.appendChild(option);
+                currentDeviceId = '0';
+            }
+
+            console.log('Final currentDeviceId:', currentDeviceId);
+        }
+
+        async function loadDashboard(forceRefresh = false) {
+            const contentDiv = document.getElementById('dashboardContent');
+            contentDiv.className = 'loading';
+            contentDiv.innerHTML = '<div class="spinner"></div><p>Lade Dashboard-Daten...</p>';
+
+            try {
+                // Get current device to extract gateway serial
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                // Find device by BOTH gatewaySerial AND deviceId (because multiple devices can have the same deviceId!)
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    console.error('Device not found!', {
+                        currentDeviceId,
+                        currentGatewaySerial,
+                        availableDevices: currentInstall.devices
+                    });
+                    throw new Error(`Gerät nicht gefunden: ${currentDeviceId} @ ${currentGatewaySerial}`);
+                }
+
+                const gatewaySerial = currentDevice.gatewaySerial || '';
+
+                console.log('Selected device:', currentDevice);
+                const refreshParam = forceRefresh ? '&refresh=true' : '';
+
+                console.log('Fetching features for:', {
+                    installationId: currentInstallationId,
+                    gatewaySerial: gatewaySerial,
+                    deviceId: currentDeviceId,
+                    forceRefresh: forceRefresh
+                });
+
+                const response = await fetch(`/api/features?installationId=${currentInstallationId}&gatewaySerial=${gatewaySerial}&deviceId=${currentDeviceId}${refreshParam}`);
+                if (!response.ok) {
+                    throw new Error('API Fehler: ' + response.status);
+                }
+
+                const features = await response.json();
+
+                // Add device info to features for display
+                features.deviceInfo = currentDevice;
+
+                renderDashboard(features);
+                updateLastUpdate();
+
+            } catch (error) {
+                showError('Fehler beim Laden der Features: ' + error.message);
+                contentDiv.innerHTML = '<div class="error">Fehler beim Laden der Daten: ' + error.message + '</div>';
+            }
+        }
+
+        function renderDashboard(features) {
+            const contentDiv = document.getElementById('dashboardContent');
+            contentDiv.className = 'dashboard-grid';
+
+            // Extract key features
+            const keyFeatures = extractKeyFeatures(features);
+
+            // Build dashboard HTML
+            let html = '';
+
+            // Device info header (if available)
+            if (features.deviceInfo) {
+                html += `
+                    <div class="card wide">
+                        <div class="card-header">
+                            <h2>🔧 ${features.deviceInfo.modelId || features.deviceInfo.displayName}</h2>
+                            <span class="badge badge-info">Device ${features.deviceInfo.deviceId}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Main temperature displays (outside, supply)
+            html += renderMainTemperatures(keyFeatures);
+
+            // Compressor/Burner status (Vitocal/Vitodens)
+            html += renderCompressorBurner(keyFeatures);
+
+            // Heating circuit card
+            html += renderHeatingCircuit(keyFeatures);
+
+            // Hot water card
+            html += renderHotWater(keyFeatures);
+
+            // Heating curve & settings
+            html += renderHeatingCurve(keyFeatures);
+
+            // Consumption
+            html += renderConsumption(keyFeatures);
+
+            // Additional sensors & pumps
+            html += renderAdditionalSensors(keyFeatures);
+
+            // Refrigerant circuit (heat pump only)
+            html += renderRefrigerantCircuit(keyFeatures);
+
+            // System status
+            html += renderSystemStatus(keyFeatures);
+
+            // Device information
+            html += renderDeviceInfo(keyFeatures);
+
+            contentDiv.innerHTML = html;
+        }
+
+        function extractKeyFeatures(features) {
+            // Find features by exact name first, then by pattern
+            const find = (exactNames, patterns = []) => {
+                if (!Array.isArray(exactNames)) exactNames = [exactNames];
+                if (!Array.isArray(patterns)) patterns = patterns ? [patterns] : [];
+
+                // Try exact matches first
+                for (const exactName of exactNames) {
+                    for (const category of [features.temperatures, features.dhw, features.circuits,
+                                           features.operatingModes, features.other]) {
+                        if (category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
+                            return category[exactName];
+                        }
+                    }
+                }
+
+                // Fall back to pattern matching
+                for (const pattern of patterns) {
+                    for (const category of [features.temperatures, features.dhw, features.circuits,
+                                           features.operatingModes, features.other]) {
+                        for (const [key, value] of Object.entries(category)) {
+                            if (key.toLowerCase().includes(pattern.toLowerCase()) &&
+                                value.value !== null && value.value !== undefined) {
+                                return value;
+                            }
+                        }
+                    }
+                }
+                return null;
+            };
+
+            const findAll = (pattern) => {
+                const results = [];
+                for (const category of [features.temperatures, features.dhw, features.circuits,
+                                       features.operatingModes, features.other]) {
+                    for (const [key, value] of Object.entries(category)) {
+                        if (key.toLowerCase().includes(pattern.toLowerCase()) &&
+                            value.value !== null && value.value !== undefined) {
+                            results.push({ name: key, value: value });
+                        }
+                    }
+                }
+                return results;
+            };
+
+            return {
+                // Temperatures
+                outsideTemp: find(['heating.sensors.temperature.outside'], ['outside']),
+                calculatedOutsideTemp: find(['heating.calculated.temperature.outside']),
+                supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']),
+                returnTemp: find(['heating.sensors.temperature.return']),
+                primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),
+                secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),
+                bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
+                boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
+                roomTemp: find(['heating.circuits.0.sensors.temperature.room']),
+                circuitTemp: find(['heating.circuits.0.temperature']),
+
+                // DHW
+                dhwTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage', 'heating.dhw.sensors.temperature.dhwCylinder']),
+                dhwTarget: find(['heating.dhw.temperature.main']),
+                dhwStatus: find(['heating.dhw.operating.modes.active']),
+                dhwHysteresis: find(['heating.dhw.temperature.hysteresis']),
+
+                // Heating curve - these need to be fetched from circuits category
+                heatingCurveSlope: find(['heating.circuits.0.heating.curve.slope']),
+                heatingCurveShift: find(['heating.circuits.0.heating.curve.shift']),
+
+                // Operating mode
+                operatingMode: find(['heating.circuits.0.operating.modes.active']),
+                operatingProgram: find(['heating.circuits.0.operating.programs.active']),
+
+                // Compressor (heat pump - Vitocal)
+                compressorSpeed: find(['heating.compressors.0.speed.current']),
+                compressorPower: find(['heating.inverters.0.sensors.power.output']),
+                compressorCurrent: find(['heating.inverters.0.sensors.power.current']),
+                compressorInletTemp: find(['heating.compressors.0.sensors.temperature.inlet']),
+                compressorOutletTemp: find(['heating.compressors.0.sensors.temperature.outlet']),
+                compressorOilTemp: find(['heating.compressors.0.sensors.temperature.oil']),
+                compressorMotorTemp: find(['heating.compressors.0.sensors.temperature.motorChamber']),
+                compressorPressure: find(['heating.compressors.0.sensors.pressure.inlet']),
+
+                // Burner (gas heating - Vitodens)
+                burnerModulation: find(['heating.burners.0.modulation']),
+
+                // Additional sensors
+                volumetricFlow: find(['heating.sensors.volumetricFlow.allengra']),
+                pressure: find(['heating.sensors.pressure.supply']),
+                pumpInternal: find(['heating.boiler.pumps.internal.current']),
+                fan0: find(['heating.primaryCircuit.fans.0.current']),
+                fan1: find(['heating.primaryCircuit.fans.1.current']),
+
+                // Efficiency
+                scop: find(['heating.scop.total', 'heating.spf.total']),
+                scopHeating: find(['heating.scop.heating', 'heating.spf.heating']),
+                scopDhw: find(['heating.scop.dhw', 'heating.spf.dhw']),
+
+                // Valves and auxiliary systems
+                fourWayValve: find(['heating.valves.fourThreeWay.position']),
+                secondaryHeater: find(['heating.secondaryHeatGenerator.state', 'heating.secondaryHeatGenerator.status']),
+
+                // Refrigerant circuit (heat pump specific)
+                evaporatorTemp: find(['heating.evaporators.0.sensors.temperature.liquid']),
+                evaporatorOverheat: find(['heating.evaporators.0.sensors.temperature.overheat']),
+                condensorTemp: find(['heating.condensors.0.sensors.temperature.liquid']),
+                economizerTemp: find(['heating.economizers.0.sensors.temperature.liquid']),
+                inverterTemp: find(['heating.inverters.0.sensors.temperature.powerModule']),
+
+                // Device information
+                deviceSerial: find(['device.serial']),
+                deviceType: find(['device.type']),
+                deviceVariant: find(['device.variant', 'heating.device.variant']),
+
+            };
+        }
+
+        function renderMainTemperatures(kf) {
+            let temps = '';
+            if (kf.outsideTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.outsideTemp.value)}</span>
+                            <span class="temp-unit">${kf.outsideTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.calculatedOutsideTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemp. (ged.)</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.calculatedOutsideTemp.value)}</span>
+                            <span class="temp-unit">${kf.calculatedOutsideTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.supplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Vorlauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.supplyTemp.value)}</span>
+                            <span class="temp-unit">${kf.supplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.returnTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Rücklauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.returnTemp.value)}</span>
+                            <span class="temp-unit">${kf.returnTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.boilerTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Kesseltemperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.boilerTemp.value)}</span>
+                            <span class="temp-unit">${kf.boilerTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.bufferTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.bufferTemp.value)}</span>
+                            <span class="temp-unit">${kf.bufferTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.primarySupplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Primärkreis-Vorlauf</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.primarySupplyTemp.value)}</span>
+                            <span class="temp-unit">${kf.primarySupplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.secondarySupplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Sekundärkreis-Vorlauf</span>
+                        <div>
+                            <span class="temp-value">${formatNum(kf.secondarySupplyTemp.value)}</span>
+                            <span class="temp-unit">${kf.secondarySupplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (!temps) return '';
+
+            return `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>🌡️ Temperaturen</h2>
+                    </div>
+                    <div class="temp-grid">
+                        ${temps}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCompressorBurner(kf) {
+            // Check if we have compressor (heat pump) or burner (gas)
+            const hasCompressor = kf.compressorSpeed || kf.compressorPower;
+            const hasBurner = kf.burnerModulation;
+
+            if (!hasCompressor && !hasBurner) return '';
+
+            let content = '';
+            let title = '';
+
+            if (hasCompressor) {
+                title = '⚙️ Kompressor';
+                const isRunning = kf.compressorSpeed && kf.compressorSpeed.value > 0;
+
+                content = `
+                    <div class="status-item">
+                        <span class="status-label">Status</span>
+                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                    </div>
+                    ${kf.compressorSpeed ? `
+                        <div class="status-item">
+                            <span class="status-label">Drehzahl</span>
+                            <span class="status-value">${formatNum(kf.compressorSpeed.value)} ${kf.compressorSpeed.unit || 'Hz'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorPower ? `
+                        <div class="status-item">
+                            <span class="status-label">Leistung</span>
+                            <span class="status-value">${formatNum(kf.compressorPower.value)} ${kf.compressorPower.unit || 'W'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorCurrent ? `
+                        <div class="status-item">
+                            <span class="status-label">Stromaufnahme</span>
+                            <span class="status-value">${formatNum(kf.compressorCurrent.value)} ${kf.compressorCurrent.unit || 'A'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorPressure ? `
+                        <div class="status-item">
+                            <span class="status-label">Einlassdruck</span>
+                            <span class="status-value">${formatNum(kf.compressorPressure.value)} ${kf.compressorPressure.unit || 'bar'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorOilTemp ? `
+                        <div class="status-item">
+                            <span class="status-label">Öltemperatur</span>
+                            <span class="status-value">${formatNum(kf.compressorOilTemp.value)} ${kf.compressorOilTemp.unit || '°C'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorMotorTemp ? `
+                        <div class="status-item">
+                            <span class="status-label">Motorraumtemperatur</span>
+                            <span class="status-value">${formatNum(kf.compressorMotorTemp.value)} ${kf.compressorMotorTemp.unit || '°C'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorInletTemp ? `
+                        <div class="status-item">
+                            <span class="status-label">Einlasstemperatur</span>
+                            <span class="status-value">${formatNum(kf.compressorInletTemp.value)} ${kf.compressorInletTemp.unit || '°C'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorOutletTemp ? `
+                        <div class="status-item">
+                            <span class="status-label">Auslasstemperatur</span>
+                            <span class="status-value">${formatNum(kf.compressorOutletTemp.value)} ${kf.compressorOutletTemp.unit || '°C'}</span>
+                        </div>
+                    ` : ''}
+                `;
+            } else if (hasBurner) {
+                title = '🔥 Brenner';
+                const modulation = kf.burnerModulation ? kf.burnerModulation.value : 0;
+                const isRunning = modulation > 0;
+
+                content = `
+                    <div class="status-item">
+                        <span class="status-label">Status</span>
+                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Modulation</span>
+                        <span class="status-value">${formatNum(modulation)} ${kf.burnerModulation.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>${title}</h2>
+                    </div>
+                    <div class="status-list">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHeatingCircuit(kf) {
+            if (!kf.operatingMode && !kf.operatingProgram && !kf.circuitTemp) return '';
+
+            const mode = kf.operatingMode ? kf.operatingMode.value : 'unknown';
+            const program = kf.operatingProgram ? kf.operatingProgram.value : '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏠 Heizkreis</h2>
+                        ${mode ? `<span class="badge badge-info">${mode}</span>` : ''}
+                    </div>
+                    <div class="status-list">
+                        ${kf.operatingProgram ? `
+                            <div class="status-item">
+                                <span class="status-label">Betriebsprogramm</span>
+                                <span class="status-value">${program}</span>
+                            </div>
+                        ` : ''}
+                        ${kf.circuitTemp ? `
+                            <div class="status-item">
+                                <span class="status-label">Kreistemperatur</span>
+                                <span class="status-value">${formatNum(kf.circuitTemp.value)} ${kf.circuitTemp.unit || '°C'}</span>
+                            </div>
+                        ` : ''}
+                        ${kf.roomTemp ? `
+                            <div class="status-item">
+                                <span class="status-label">Raumtemperatur</span>
+                                <span class="status-value">${formatNum(kf.roomTemp.value)} ${kf.roomTemp.unit || '°C'}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHotWater(kf) {
+            if (!kf.dhwTemp && !kf.dhwTarget && !kf.dhwStatus) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>💧 Warmwasser</h2>
+                        ${kf.dhwStatus ? `<span class="badge badge-info">${kf.dhwStatus.value}</span>` : ''}
+                    </div>
+                    <div class="status-list">
+                        ${kf.dhwTemp ? `
+                            <div class="status-item">
+                                <span class="status-label">Ist-Temperatur</span>
+                                <span class="status-value">${formatNum(kf.dhwTemp.value)} ${kf.dhwTemp.unit || '°C'}</span>
+                            </div>
+                        ` : ''}
+                        ${kf.dhwTarget ? `
+                            <div class="status-item">
+                                <span class="status-label">Soll-Temperatur</span>
+                                <span class="status-value">${formatNum(kf.dhwTarget.value)} ${kf.dhwTarget.unit || '°C'}</span>
+                            </div>
+                        ` : ''}
+                        ${kf.dhwHysteresis ? `
+                            <div class="status-item">
+                                <span class="status-label">Hysterese</span>
+                                <span class="status-value">${formatNum(kf.dhwHysteresis.value)} ${kf.dhwHysteresis.unit || 'K'}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHeatingCurve(kf) {
+            let settings = '';
+
+            if (kf.heatingCurveSlope) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Steigung der Heizkurve</span>
+                        <span class="status-value">${formatValue(kf.heatingCurveSlope)}</span>
+                    </div>
+                `;
+            }
+            if (kf.heatingCurveShift) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Verschiebung der Heizkurve</span>
+                        <span class="status-value">${formatValue(kf.heatingCurveShift)}</span>
+                    </div>
+                `;
+            }
+            if (kf.comfortTemp) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Komforttemperatur</span>
+                        <span class="status-value">${formatValue(kf.comfortTemp)}</span>
+                    </div>
+                `;
+            }
+            if (kf.normalTemp) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Normaltemperatur</span>
+                        <span class="status-value">${formatValue(kf.normalTemp)}</span>
+                    </div>
+                `;
+            }
+            if (kf.reducedTemp) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Reduzierte Temperatur</span>
+                        <span class="status-value">${formatValue(kf.reducedTemp)}</span>
+                    </div>
+                `;
+            }
+
+            if (!settings) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📐 Heizkurve & Einstellungen</h2>
+                    </div>
+                    <div class="status-list">
+                        ${settings}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderConsumption(kf) {
+            let consumption = '';
+
+            // Power consumption
+            if (kf.powerConsumptionToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.powerConsumptionHeatingToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Heizung-Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionHeatingToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.powerConsumptionDhwToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">WW-Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionDhwToday)}</span>
+                    </div>
+                `;
+            }
+
+            // Gas consumption
+            if (kf.gasConsumptionToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.gasConsumptionHeatingToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Heizung-Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionHeatingToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.gasConsumptionDhwToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">WW-Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionDhwToday)}</span>
+                    </div>
+                `;
+            }
+
+            if (!consumption) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📊 Verbrauch heute</h2>
+                    </div>
+                    <div class="status-list">
+                        ${consumption}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdditionalSensors(kf) {
+            let sensors = '';
+
+            if (kf.volumetricFlow) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Volumenstrom</span>
+                        <span class="status-value">${formatNum(kf.volumetricFlow.value)} ${kf.volumetricFlow.unit || 'l/h'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.pressure) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Druck</span>
+                        <span class="status-value">${formatNum(kf.pressure.value)} ${kf.pressure.unit || 'bar'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.pumpInternal) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Interne Pumpe</span>
+                        <span class="status-value">${formatNum(kf.pumpInternal.value)} ${kf.pumpInternal.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fan0) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Lüfter 1</span>
+                        <span class="status-value">${formatNum(kf.fan0.value)} ${kf.fan0.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fan1) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Lüfter 2</span>
+                        <span class="status-value">${formatNum(kf.fan1.value)} ${kf.fan1.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            // Efficiency (SCOP/SPF)
+            if (kf.scop) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">SCOP/SPF Gesamt</span>
+                        <span class="status-value">${formatNum(kf.scop.value)}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.scopHeating) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">SCOP/SPF Heizung</span>
+                        <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.scopDhw) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">SCOP/SPF Warmwasser</span>
+                        <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
+                    </div>
+                `;
+            }
+
+            // 4-Way Valve Position
+            if (kf.fourWayValve) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">4-Wege-Ventil</span>
+                        <span class="status-value">${kf.fourWayValve.value}</span>
+                    </div>
+                `;
+            }
+
+            // Secondary Heater
+            if (kf.secondaryHeater) {
+                const heaterStatus = kf.secondaryHeater.value;
+                const isActive = heaterStatus !== 'off' && heaterStatus !== 'standby';
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Zusatzheizung</span>
+                        <span class="status-value">${isActive ? '🟢' : '⚪'} ${heaterStatus}</span>
+                    </div>
+                `;
+            }
+
+            if (!sensors) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔧 Weitere Komponenten</h2>
+                    </div>
+                    <div class="status-list">
+                        ${sensors}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRefrigerantCircuit(kf) {
+            // Only for heat pumps
+            if (!kf.evaporatorTemp && !kf.condensorTemp && !kf.inverterTemp) return '';
+
+            let circuit = '';
+
+            if (kf.evaporatorTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verdampfer</span>
+                        <span class="status-value">${formatNum(kf.evaporatorTemp.value)} ${kf.evaporatorTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.evaporatorOverheat) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verdampfer Überhitzung</span>
+                        <span class="status-value">${formatNum(kf.evaporatorOverheat.value)} ${kf.evaporatorOverheat.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.condensorTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verflüssiger</span>
+                        <span class="status-value">${formatNum(kf.condensorTemp.value)} ${kf.condensorTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.economizerTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Economizer</span>
+                        <span class="status-value">${formatNum(kf.economizerTemp.value)} ${kf.economizerTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.inverterTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Wechselrichter</span>
+                        <span class="status-value">${formatNum(kf.inverterTemp.value)} ${kf.inverterTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔧 Kältekreislauf</h2>
+                    </div>
+                    <div class="status-list">
+                        ${circuit}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSystemStatus(kf) {
+            let status = '';
+
+            if (kf.operatingMode) {
+                const mode = translateMode(kf.operatingMode.value);
+                status += `
+                    <div class="status-item">
+                        <span class="status-label">Betriebsmodus</span>
+                        <span class="status-value">${mode}</span>
+                    </div>
+                `;
+            }
+
+            if (!status) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚙️ Systemstatus</h2>
+                        <span class="badge badge-success">Normal</span>
+                    </div>
+                    <div class="status-list">
+                        ${status}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDeviceInfo(kf) {
+            if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant) return '';
+
+            let info = '';
+
+            if (kf.deviceVariant) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Modell</span>
+                        <span class="status-value">${kf.deviceVariant.value}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceType) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Typ</span>
+                        <span class="status-value">${kf.deviceType.value}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceSerial) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Seriennummer</span>
+                        <span class="status-value" style="font-family: monospace;">${kf.deviceSerial.value}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>ℹ️ Geräteinformationen</h2>
+                    </div>
+                    <div class="status-list">
+                        ${info}
+                    </div>
+                </div>
+            `;
+        }
+
+        function translateMode(mode) {
+            const modes = {
+                'standby': 'Standby',
+                'dhw': 'Warmwasser',
+                'dhwAndHeating': 'Heizen + Warmwasser',
+                'forcedReduced': 'Reduziert',
+                'forcedNormal': 'Normal',
+                'normal': 'Normal'
+            };
+            return modes[mode] || mode;
+        }
+
+        function formatNum(val) {
+            if (val === null || val === undefined) return '--';
+            if (typeof val === 'number') {
+                return val.toFixed(1);
+            }
+            return val;
+        }
+
+        function extractFeatureValue(properties) {
+            if (properties && properties.value) {
+                return properties.value;
+            }
+            return { value: '--' };
+        }
+
+        function formatValue(featureValue) {
+            if (!featureValue || featureValue.value === undefined) {
+                return '--';
+            }
+            let val = featureValue.value;
+            if (typeof val === 'number') {
+                val = val.toFixed(1);
+            }
+            return val + (featureValue.unit ? ' ' + featureValue.unit : '');
+        }
+
+        function findFeature(features, keyword) {
+            for (const [key, value] of Object.entries(features)) {
+                if (key.toLowerCase().includes(keyword.toLowerCase())) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorContainer');
+            errorDiv.innerHTML = `<div class="error">${message}</div>`;
+            setTimeout(() => {
+                errorDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('de-DE');
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(() => {
+                loadDashboard();
+            }, 60000); // Every minute
+        }
+
+        // Event Listeners
+        document.getElementById('installationSelect').addEventListener('change', (e) => {
+            currentInstallationId = e.target.value;
+
+            // Get first device of new installation and set currentDeviceId + currentGatewaySerial
+            const selectedInstall = installations.find(i => i.installationId === currentInstallationId);
+            if (selectedInstall && selectedInstall.devices && selectedInstall.devices.length > 0) {
+                const firstDevice = selectedInstall.devices[0];
+                currentDeviceId = firstDevice.deviceId;
+                currentGatewaySerial = firstDevice.gatewaySerial || '';
+                console.log('Installation changed - selected first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+            }
+
+            // Update device dropdown for new installation (will select the device we just set)
+            updateDeviceDropdown();
+
+            // Update installation name in breadcrumb
+            if (selectedInstall) {
+                document.getElementById('currentInstallation').textContent =
+                    selectedInstall.description || selectedInstall.installationId;
+            }
+
+            // Reload dashboard with first device of new installation (use cache)
+            loadDashboard(false); // Use cache when switching installations
+        });
+
+        document.getElementById('deviceSelect').addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            currentGatewaySerial = selectedOption.dataset.gatewaySerial || '';
+            currentDeviceId = selectedOption.dataset.deviceId || '0';
+            console.log('Device changed to:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+            loadDashboard(false); // Use cache when switching devices
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            console.log('Manual refresh triggered');
+            loadDashboard(true); // Force refresh only on manual refresh button
+        });
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
