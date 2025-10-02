@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -62,6 +64,19 @@ type Installation struct {
 		City        string `json:"city"`
 		Country     string `json:"country"`
 	} `json:"address"`
+	Gateways []Gateway `json:"gateways,omitempty"`
+}
+
+type GatewayDevice struct {
+	DeviceID   string `json:"deviceId"`
+	DeviceType string `json:"deviceType"`
+	ModelID    string `json:"modelId"`
+}
+
+type Gateway struct {
+	Serial  string           `json:"serial"`
+	Version string           `json:"version,omitempty"`
+	Devices []GatewayDevice  `json:"devices,omitempty"`
 }
 
 type Event struct {
@@ -94,6 +109,7 @@ type Device struct {
 	ModelID        string `json:"modelId"`
 	DisplayName    string `json:"displayName"`
 	InstallationID string `json:"installationId"`
+	GatewaySerial  string `json:"gatewaySerial"`
 }
 
 type DevicesByInstallation struct {
@@ -157,6 +173,47 @@ type AccountActionResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// Feature represents a single feature from the Viessmann API
+type Feature struct {
+	Feature    string                 `json:"feature"`
+	Properties map[string]interface{} `json:"properties"`
+	GatewayID  string                 `json:"gatewayId,omitempty"`
+	DeviceID   string                 `json:"deviceId,omitempty"`
+	Timestamp  string                 `json:"timestamp,omitempty"`
+}
+
+// FeatureValue represents the parsed value of a feature
+type FeatureValue struct {
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
+	Unit  string      `json:"unit,omitempty"`
+}
+
+// FeaturesResponse represents the API response for features
+type FeaturesResponse struct {
+	Data []Feature `json:"data"`
+}
+
+// DeviceFeatures groups features by category for easier display
+type DeviceFeatures struct {
+	InstallationID string                  `json:"installationId"`
+	GatewayID      string                  `json:"gatewayId"`
+	DeviceID       string                  `json:"deviceId"`
+	Temperatures   map[string]FeatureValue `json:"temperatures"`
+	OperatingModes map[string]FeatureValue `json:"operatingModes"`
+	DHW            map[string]FeatureValue `json:"dhw"` // Domestic Hot Water
+	Circuits       map[string]FeatureValue `json:"circuits"`
+	Other          map[string]FeatureValue `json:"other"`
+	RawFeatures    []Feature               `json:"rawFeatures"`
+	LastUpdate     time.Time               `json:"lastUpdate"`
+}
+
+var (
+	// Features cache
+	featuresCache      = make(map[string]*DeviceFeatures) // key: installationID:gatewayID:deviceID
+	featuresCacheMutex sync.RWMutex
+)
+
 func main() {
 	// Initialize account management
 	accountTokens = make(map[string]*AccountToken)
@@ -168,6 +225,7 @@ func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/login", loginPageHandler)
 	http.HandleFunc("/accounts", accountsPageHandler)
+	http.HandleFunc("/dashboard", dashboardPageHandler)
 
 	// Legacy API endpoints
 	http.HandleFunc("/api/login", loginHandler)
@@ -185,6 +243,7 @@ func main() {
 	http.HandleFunc("/api/events", eventsHandler)
 	http.HandleFunc("/api/status", statusHandler)
 	http.HandleFunc("/api/devices", devicesHandler)
+	http.HandleFunc("/api/features", featuresHandler)
 
 	// Get bind address from environment, with backward compatibility for PORT
 	bindAddress := os.Getenv("BIND_ADDRESS")
@@ -230,6 +289,15 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 func loginPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFS(templatesFS, "templates/login.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, nil)
+}
+
+func dashboardPageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFS(templatesFS, "templates/dashboard.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -498,23 +566,33 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Group devices by installation
+	// Group devices by installation - use gateway data (not events!)
 	devicesByInstallation := make(map[string]map[string]Device)
 
-	for _, event := range events {
-		installID := getInstallationForEvent(event)
-
+	// Build device list from installations' gateway data
+	for installID, installation := range allInstallations {
 		if _, exists := devicesByInstallation[installID]; !exists {
 			devicesByInstallation[installID] = make(map[string]Device)
 		}
 
-		key := event.DeviceID + "_" + event.ModelID
-		if _, exists := devicesByInstallation[installID][key]; !exists {
-			devicesByInstallation[installID][key] = Device{
-				DeviceID:       event.DeviceID,
-				ModelID:        event.ModelID,
-				DisplayName:    fmt.Sprintf("%s (Device %s)", event.ModelID, event.DeviceID),
-				InstallationID: installID,
+		// Iterate through gateways and their devices
+		for _, gateway := range installation.Gateways {
+			for _, gwDevice := range gateway.Devices {
+				// Only include heating devices
+				if gwDevice.DeviceType != "heating" {
+					continue
+				}
+
+				key := fmt.Sprintf("%s_%s", gateway.Serial, gwDevice.DeviceID)
+				devicesByInstallation[installID][key] = Device{
+					DeviceID:       gwDevice.DeviceID,
+					ModelID:        gwDevice.ModelID,
+					DisplayName:    fmt.Sprintf("%s (Gateway %s)", gwDevice.ModelID, gateway.Serial),
+					InstallationID: installID,
+					GatewaySerial:  gateway.Serial,
+				}
+				log.Printf("Registered heating device in installation %s: %s (Gateway %s, Device %s)\n",
+					installID, gwDevice.ModelID, gateway.Serial, gwDevice.DeviceID)
 			}
 		}
 	}
@@ -561,6 +639,153 @@ func getInstallationForEvent(event Event) string {
 		return event.InstallationID
 	}
 	return "unknown"
+}
+
+// findModelIDForDevice finds the model ID for a specific device from events
+func findModelIDForDevice(installationID, deviceID string, events []Event) string {
+	for _, event := range events {
+		if event.InstallationID == installationID && event.DeviceID == deviceID && event.ModelID != "" {
+			return event.ModelID
+		}
+	}
+	return ""
+}
+
+// getGatewayFromEvents extracts gateway serial from cached events for a given installation
+func getGatewayFromEvents(installationID string) string {
+	fetchMutex.Lock()
+	defer fetchMutex.Unlock()
+
+	// Look through cached events to find gateway serial
+	for _, event := range eventsCache {
+		if event.InstallationID == installationID && event.GatewaySerial != "" {
+			log.Printf("Found gateway %s for installation %s from events cache\n", event.GatewaySerial, installationID)
+			return event.GatewaySerial
+		}
+	}
+
+	return ""
+}
+
+func featuresHandler(w http.ResponseWriter, r *http.Request) {
+	// Get query parameters
+	installationID := r.URL.Query().Get("installationId")
+	gatewaySerial := r.URL.Query().Get("gatewaySerial")
+	deviceID := r.URL.Query().Get("deviceId")
+	forceRefresh := r.URL.Query().Get("refresh") == "true"
+
+	if installationID == "" {
+		http.Error(w, "installationId parameter required", http.StatusBadRequest)
+		return
+	}
+
+	if deviceID == "" {
+		deviceID = "0" // Default device
+	}
+
+	log.Printf("Features request: installation=%s, gateway=%s, device=%s, forceRefresh=%v\n", installationID, gatewaySerial, deviceID, forceRefresh)
+
+	// Get active accounts to find the right token
+	activeAccounts, err := GetActiveAccounts()
+	var accessToken string
+	var gatewayID string
+
+	// Use provided gateway serial if available
+	if gatewaySerial != "" {
+		gatewayID = gatewaySerial
+	}
+
+	if err == nil && len(activeAccounts) > 0 {
+		// Try to find the account that owns this installation
+		for _, account := range activeAccounts {
+			token, err := ensureAccountAuthenticated(account)
+			if err != nil {
+				continue
+			}
+
+			// Check if this account has this installation
+			for _, instID := range token.InstallationIDs {
+				if instID == installationID {
+					accessToken = token.AccessToken
+
+					// Only try to get gateway from installation if not provided
+					if gatewayID == "" {
+						if installation, ok := token.Installations[installationID]; ok {
+							if len(installation.Gateways) > 0 {
+								gatewayID = installation.Gateways[0].Serial
+							}
+						}
+					}
+					break
+				}
+			}
+			if accessToken != "" {
+				break
+			}
+		}
+	}
+
+	// Fallback to legacy single account if no token found
+	if accessToken == "" {
+		if err := ensureAuthenticated(); err != nil {
+			http.Error(w, "Authentication failed: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+		// Use the global access token from legacy system
+		accessToken = getGlobalAccessToken()
+		// Only try to get gateway from installations if not provided
+		if gatewayID == "" {
+			if installation, ok := installations[installationID]; ok {
+				if len(installation.Gateways) > 0 {
+					gatewayID = installation.Gateways[0].Serial
+				}
+			}
+		}
+	}
+
+	if accessToken == "" {
+		http.Error(w, "No access token available for this installation", http.StatusUnauthorized)
+		return
+	}
+
+	if gatewayID == "" {
+		// Try to get gateway from cached events (they contain gatewaySerial)
+		gatewayID = getGatewayFromEvents(installationID)
+
+		if gatewayID == "" {
+			// Last resort: try to fetch from API
+			gatewayID, err = fetchGatewayIDForInstallation(installationID, accessToken)
+			if err != nil {
+				http.Error(w, "Failed to determine gateway ID: "+err.Error()+". Tip: Load events first to populate gateway information.", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	// Fetch features with caching (or force refresh)
+	var features *DeviceFeatures
+	if forceRefresh {
+		log.Printf("Force refresh - bypassing cache for %s:%s:%s\n", installationID, gatewayID, deviceID)
+		features, err = fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken)
+		if err != nil {
+			http.Error(w, "Failed to fetch features: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Update cache with fresh data
+		cacheKey := fmt.Sprintf("%s:%s:%s", installationID, gatewayID, deviceID)
+		featuresCacheMutex.Lock()
+		featuresCache[cacheKey] = features
+		featuresCacheMutex.Unlock()
+	} else {
+		features, err = fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken)
+		if err != nil {
+			http.Error(w, "Failed to fetch features: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(features)
 }
 
 func fetchEvents(daysBack int) ([]Event, error) {
@@ -774,7 +999,8 @@ func ensureAccountAuthenticated(account *Account) (*AccountToken, error) {
 
 // fetchInstallationIDsForAccount fetches installation IDs for a specific account
 func fetchInstallationIDsForAccount(accessToken string) ([]string, map[string]*Installation, error) {
-	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations", nil)
+	// Use includeGateways=true to get gateway and device info (like PyViCare does)
+	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations?includeGateways=true", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -844,11 +1070,86 @@ func fetchInstallationIDsForAccount(accessToken string) ([]string, map[string]*I
 			}
 		}
 
+		// Extract gateway information (with includeGateways=true, we get full device info)
+		if gateways, ok := rawInstall["gateways"].([]interface{}); ok {
+			for _, gw := range gateways {
+				if gwMap, ok := gw.(map[string]interface{}); ok {
+					gateway := Gateway{}
+					if serial, ok := gwMap["serial"].(string); ok {
+						gateway.Serial = serial
+					}
+					if version, ok := gwMap["version"].(string); ok {
+						gateway.Version = version
+					}
+					// Extract device information from devices array (PyViCare style)
+					if devices, ok := gwMap["devices"].([]interface{}); ok {
+						for _, dev := range devices {
+							if devMap, ok := dev.(map[string]interface{}); ok {
+								var devID string
+								var devType string
+								var modelID string
+
+								// Get device ID
+								if id, ok := devMap["id"].(string); ok {
+									devID = id
+									// Handle special cases like PyViCare does
+									if id == "gateway" && devMap["deviceType"] == "vitoconnect" {
+										devID = "0"
+									} else if id == "gateway" && devMap["deviceType"] == "tcu" {
+										devID = "0"
+									} else if id == "HEMS" && devMap["deviceType"] == "hems" {
+										devID = "0"
+									} else if id == "EEBUS" && devMap["deviceType"] == "EEBus" {
+										devID = "0"
+									}
+								} else if id, ok := devMap["id"].(float64); ok {
+									devID = fmt.Sprintf("%.0f", id)
+								}
+
+								// Get device type
+								if dt, ok := devMap["deviceType"].(string); ok {
+									devType = dt
+								}
+
+								// Get model ID
+								if mid, ok := devMap["modelId"].(string); ok {
+									modelID = mid
+								}
+
+								if devID != "" {
+									gateway.Devices = append(gateway.Devices, GatewayDevice{
+										DeviceID:   devID,
+										DeviceType: devType,
+										ModelID:    modelID,
+									})
+									log.Printf("Found device in gateway %s: ID=%s, Type=%s, Model=%s\n",
+										gateway.Serial, devID, devType, modelID)
+								}
+							}
+						}
+					}
+					installation.Gateways = append(installation.Gateways, gateway)
+				}
+			}
+		}
+
 		installations[idStr] = installation
 		installationIDs = append(installationIDs, idStr)
+
+		// Note: Gateway info is not available from /iot/v1/equipment/installations API
+		// We extract it from events instead (see getGatewayFromEvents)
+		log.Printf("Loaded installation %s: %s\n", idStr, installation.Description)
 	}
 
 	return installationIDs, installations, nil
+}
+
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func processEvent(raw map[string]interface{}) Event {
@@ -889,7 +1190,19 @@ func processEvent(raw map[string]interface{}) Event {
 		} else if deviceID, ok := body["deviceId"].(float64); ok {
 			event.DeviceID = fmt.Sprintf("%.0f", deviceID)
 		} else {
-			event.DeviceID = "0"
+			// Try to get deviceId from top-level
+			if deviceID, ok := raw["deviceId"].(string); ok {
+				event.DeviceID = deviceID
+			} else if deviceID, ok := raw["deviceId"].(float64); ok {
+				event.DeviceID = fmt.Sprintf("%.0f", deviceID)
+			} else {
+				event.DeviceID = "0"
+				// Debug: log event structure to see where deviceId is
+				if event.ModelID != "" {
+					log.Printf("DEBUG: Event has no deviceId - EventType: %s, ModelID: %s, Body keys: %v\n",
+						event.EventType, event.ModelID, getMapKeys(body))
+				}
+			}
 		}
 
 		if modelID, ok := body["modelId"].(string); ok {
@@ -1031,6 +1344,69 @@ func fetchInstallationIDs() error {
 			}
 			if country, ok := addr["country"].(string); ok {
 				installation.Address.Country = country
+			}
+		}
+
+		// Extract gateway information (with includeGateways=true, we get full device info)
+		if gateways, ok := rawInstall["gateways"].([]interface{}); ok {
+			for _, gw := range gateways {
+				if gwMap, ok := gw.(map[string]interface{}); ok {
+					gateway := Gateway{}
+					if serial, ok := gwMap["serial"].(string); ok {
+						gateway.Serial = serial
+					}
+					if version, ok := gwMap["version"].(string); ok {
+						gateway.Version = version
+					}
+					// Extract device information from devices array (PyViCare style)
+					if devices, ok := gwMap["devices"].([]interface{}); ok {
+						for _, dev := range devices {
+							if devMap, ok := dev.(map[string]interface{}); ok {
+								var devID string
+								var devType string
+								var modelID string
+
+								// Get device ID
+								if id, ok := devMap["id"].(string); ok {
+									devID = id
+									// Handle special cases like PyViCare does
+									if id == "gateway" && devMap["deviceType"] == "vitoconnect" {
+										devID = "0"
+									} else if id == "gateway" && devMap["deviceType"] == "tcu" {
+										devID = "0"
+									} else if id == "HEMS" && devMap["deviceType"] == "hems" {
+										devID = "0"
+									} else if id == "EEBUS" && devMap["deviceType"] == "EEBus" {
+										devID = "0"
+									}
+								} else if id, ok := devMap["id"].(float64); ok {
+									devID = fmt.Sprintf("%.0f", id)
+								}
+
+								// Get device type
+								if dt, ok := devMap["deviceType"].(string); ok {
+									devType = dt
+								}
+
+								// Get model ID
+								if mid, ok := devMap["modelId"].(string); ok {
+									modelID = mid
+								}
+
+								if devID != "" {
+									gateway.Devices = append(gateway.Devices, GatewayDevice{
+										DeviceID:   devID,
+										DeviceType: devType,
+										ModelID:    modelID,
+									})
+									log.Printf("Found device in gateway %s: ID=%s, Type=%s, Model=%s\n",
+										gateway.Serial, devID, devType, modelID)
+								}
+							}
+						}
+					}
+					installation.Gateways = append(installation.Gateways, gateway)
+				}
 			}
 		}
 
@@ -1317,4 +1693,201 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// --- Features API Functions ---
+
+// fetchFeaturesForDevice fetches features for a specific installation/gateway/device
+func fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
+	// Build API URL
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features",
+		installationID, gatewayID, deviceID)
+
+	log.Printf("Fetching features from API: %s\n", url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("ERROR: API returned status %d for %s\nResponse: %s\n", resp.StatusCode, url, string(bodyBytes))
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var featuresResp FeaturesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&featuresResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Parse and categorize features
+	deviceFeatures := parseFeatures(featuresResp.Data, installationID, gatewayID, deviceID)
+	return deviceFeatures, nil
+}
+
+// parseFeatures categorizes features into logical groups
+func parseFeatures(features []Feature, installationID, gatewayID, deviceID string) *DeviceFeatures {
+	df := &DeviceFeatures{
+		InstallationID: installationID,
+		GatewayID:      gatewayID,
+		DeviceID:       deviceID,
+		Temperatures:   make(map[string]FeatureValue),
+		OperatingModes: make(map[string]FeatureValue),
+		DHW:            make(map[string]FeatureValue),
+		Circuits:       make(map[string]FeatureValue),
+		Other:          make(map[string]FeatureValue),
+		RawFeatures:    features,
+		LastUpdate:     time.Now(),
+	}
+
+	for _, feature := range features {
+		// Extract value from properties
+		value := extractFeatureValue(feature.Properties)
+		featureName := feature.Feature
+
+		// Categorize by feature name
+		if strings.Contains(featureName, "temperature") {
+			df.Temperatures[featureName] = value
+		} else if strings.Contains(featureName, "dhw") || strings.Contains(featureName, "hotwater") {
+			df.DHW[featureName] = value
+		} else if strings.Contains(featureName, "operating") || strings.Contains(featureName, "mode") || strings.Contains(featureName, "program") {
+			df.OperatingModes[featureName] = value
+		} else if strings.Contains(featureName, "circuit") {
+			df.Circuits[featureName] = value
+		} else {
+			df.Other[featureName] = value
+		}
+	}
+
+	return df
+}
+
+// extractFeatureValue extracts the value from feature properties
+func extractFeatureValue(properties map[string]interface{}) FeatureValue {
+	fv := FeatureValue{}
+
+	// Try to extract value object
+	if valueObj, ok := properties["value"].(map[string]interface{}); ok {
+		if typ, ok := valueObj["type"].(string); ok {
+			fv.Type = typ
+		}
+		if val, ok := valueObj["value"]; ok {
+			fv.Value = val
+		}
+		if unit, ok := valueObj["unit"].(string); ok {
+			fv.Unit = unit
+		}
+	}
+
+	return fv
+}
+
+// fetchFeaturesWithCache fetches features with caching support
+func fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
+	cacheKey := fmt.Sprintf("%s:%s:%s", installationID, gatewayID, deviceID)
+
+	// Check cache first
+	featuresCacheMutex.RLock()
+	if cached, exists := featuresCache[cacheKey]; exists {
+		// Cache valid for 5 minutes
+		if time.Since(cached.LastUpdate) < 5*time.Minute {
+			featuresCacheMutex.RUnlock()
+			return cached, nil
+		}
+	}
+	featuresCacheMutex.RUnlock()
+
+	// Fetch fresh data
+	features, err := fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken)
+	if err != nil {
+		// Return stale cache if available
+		featuresCacheMutex.RLock()
+		if cached, exists := featuresCache[cacheKey]; exists {
+			featuresCacheMutex.RUnlock()
+			log.Printf("Warning: Using stale cache due to fetch error: %v\n", err)
+			return cached, nil
+		}
+		featuresCacheMutex.RUnlock()
+		return nil, err
+	}
+
+	// Update cache
+	featuresCacheMutex.Lock()
+	featuresCache[cacheKey] = features
+	featuresCacheMutex.Unlock()
+
+	return features, nil
+}
+
+// getGlobalAccessToken returns the global access token (for legacy support)
+func getGlobalAccessToken() string {
+	return accessToken
+}
+
+// fetchGatewayIDForInstallation fetches the gateway ID for an installation
+func fetchGatewayIDForInstallation(installationID, accessToken string) (string, error) {
+	// Fetch all installations to get gateway info
+	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations", nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	// Find the installation we're looking for
+	for _, rawInstall := range result.Data {
+		var idStr string
+		if id, ok := rawInstall["id"]; ok {
+			switch v := id.(type) {
+			case float64:
+				idStr = fmt.Sprintf("%.0f", v)
+			case string:
+				idStr = v
+			default:
+				idStr = fmt.Sprintf("%v", v)
+			}
+		}
+
+		if idStr == installationID {
+			// Extract gateway from this installation
+			if gateways, ok := rawInstall["gateways"].([]interface{}); ok && len(gateways) > 0 {
+				if gwMap, ok := gateways[0].(map[string]interface{}); ok {
+					if serial, ok := gwMap["serial"].(string); ok {
+						log.Printf("Found gateway %s for installation %s\n", serial, installationID)
+						return serial, nil
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no gateways found for installation %s (checked %d installations)", installationID, len(result.Data))
 }
