@@ -194,6 +194,55 @@ var maintenanceCodes = map[string]string{
 	"P.34": "Wartung Heizwasserfilter",
 }
 
+// Alert codes (A-codes) - warning messages
+var alertCodes = map[string]string{
+	"A.2":   "Frostschutzgrenze unterschritten",
+	"A.11":  "Anlagendruck zu niedrig",
+	"A.12":  "Batterie im Elektronikmodul HPMU",
+	"A.16":  "Mindestvolumenstrom unterschritten",
+	"A.17":  "Erhöhte Trinkwasserhygiene",
+	"A.19":  "Temperaturwächter hat ausgelöst",
+	"A.21":  "Hydraulischer Anlagendruck",
+	"A.62":  "PWM-Signal Heizkreispumpe Heiz-/Kühlkreis 1",
+	"A.63":  "PWM-Signal Heizkreispumpe Heiz-/Kühlkreis 2",
+	"A.65":  "Heizkreispumpe Heiz-/Kühlkreis 2 läuft trocken",
+	"A.66":  "Heizkreispumpe Heiz-/Kühlkreis 1 läuft nicht",
+	"A.68":  "Heizkreispumpe Heiz-/Kühlkreis 2 läuft nicht",
+	"A.70":  "Filter im Kugelhahn Außeneinheit",
+	"A.71":  "Überstrom am Verdichter",
+	"A.72":  "Strom Leistungsfaktor-Korrekturfilter",
+	"A.73":  "Frequenzabweichung Verdichterdrehzahl",
+	"A.74":  "Druckverlust im Sekundärkreis",
+	"A.75":  "Druckspitzen im Sekundärkreis",
+	"A.80":  "Ventilator blockiert",
+	"A.81":  "Unzureichende Wärmeübertragung Verdampfer",
+	"A.82":  "Fehler Drucksensor CAN-BUS-Teilnehmer",
+	"A.83":  "Signal Speichertemperatursensor fehlerhaft",
+	"A.84":  "Signal Rücklauftemperatursensor Sekundärkreis",
+	"A.85":  "Signal Vorlauftemperatursensor Sekundärkreis",
+	"A.86":  "Signal Vorlauftemperatursensor Heiz-/Kühlkreis 1",
+	"A.87":  "Signal Vorlauftemperatursensor Heiz-/Kühlkreis 2",
+	"A.91":  "Kältekreis vorübergehend aus",
+	"A.93":  "Heißgasdruck nicht plausibel",
+	"A.94":  "Sauggasdruck nicht plausibel",
+	"A.96":  "Luft im Sekundärkreis",
+	"A.99":  "Vorlauftemperatur Sekundärkreis zu niedrig",
+	"A.100": "Einstellungen gelöscht",
+	"A.101": "Heißgastemperatur nicht plausibel",
+	"A.102": "Sauggastemperatur nicht plausibel",
+	"A.109": "Kesseltemperatur-Istwert zu niedrig",
+	"A.110": "Temperatur externer Wärmeerzeuger 1",
+	"A.111": "Temperatur externer Wärmeerzeuger 2",
+	"A.130": "Warnschwelle Einsatzgrenzen für Kühlbetrieb unterschritten",
+	"A.152": "Überlastschutz Wallbox nicht aktiv",
+	"A.153": "Kein PV-optimiertes Laden",
+	"A.159": "Werkseitige Einstellung Inverter",
+	"A.162": "Inverter Überspannung Zwischenkreis",
+	"A.163": "Überspannung im Zwischenkreis Inverter",
+	"A.164": "Gleichspannung im Zwischenkreis Inverter",
+	"A.174": "Innenraumtemperatur zu hoch",
+}
+
 // Information codes (I-codes) - informational messages
 var informationCodes = map[string]string{
 	"I.9":   "Estrichtrocknung aktiv",
@@ -353,6 +402,13 @@ func getErrorDescription(code string) string {
 		return code + " - Unbekannter Informationscode"
 	}
 
+	if strings.HasPrefix(code, "A.") {
+		if desc, ok := alertCodes[code]; ok {
+			return desc
+		}
+		return code + " - Unbekannter Alarmcode"
+	}
+
 	return code
 }
 
@@ -367,6 +423,8 @@ func getCodeCategory(code string) string {
 		return "maintenance"
 	} else if strings.HasPrefix(code, "I.") {
 		return "information"
+	} else if strings.HasPrefix(code, "A.") {
+		return "alert"
 	}
 	return "unknown"
 }
@@ -398,6 +456,11 @@ func getSeverity(code string) string {
 	if strings.HasPrefix(code, "I.") {
 		// Information codes are informational
 		return "info"
+	}
+
+	if strings.HasPrefix(code, "A.") {
+		// Alert codes are warnings
+		return "warning"
 	}
 
 	return "unknown"
