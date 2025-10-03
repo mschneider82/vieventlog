@@ -733,19 +733,33 @@
             // Extract key features
             const keyFeatures = extractKeyFeatures(features);
 
+            // Debug: Log features with specific keywords
+            if (features.rawFeatures) {
+                const volumeFlowFeatures = features.rawFeatures.filter(f =>
+                    f.feature && (
+                        f.feature.toLowerCase().includes('volume') ||
+                        f.feature.toLowerCase().includes('flow') ||
+                        f.feature.toLowerCase().includes('fan')
+                    )
+                );
+                if (volumeFlowFeatures.length > 0) {
+                    console.log('🔍 Features mit volume/flow/fan:', volumeFlowFeatures);
+                }
+
+                const statsFeatures = features.rawFeatures.filter(f =>
+                    f.feature && f.feature.toLowerCase().includes('statistic')
+                );
+                if (statsFeatures.length > 0) {
+                    console.log('📊 Statistics Features:', statsFeatures);
+                }
+            }
+
             // Build dashboard HTML
             let html = '';
 
             // Device info header (if available)
             if (features.deviceInfo) {
-                html += `
-                    <div class="card wide">
-                        <div class="card-header">
-                            <h2>🔧 ${features.deviceInfo.modelId || features.deviceInfo.displayName}</h2>
-                            <span class="badge badge-info">Device ${features.deviceInfo.deviceId}</span>
-                        </div>
-                    </div>
-                `;
+                html += renderDeviceHeader(features.deviceInfo, keyFeatures);
             }
 
             // Main temperature displays (outside, supply)
@@ -877,6 +891,7 @@
                 scop: find(['heating.scop.total', 'heating.spf.total']),
                 scopHeating: find(['heating.scop.heating', 'heating.spf.heating']),
                 scopDhw: find(['heating.scop.dhw', 'heating.spf.dhw']),
+                seerCooling: find(['heating.seer.cooling']),
 
                 // Valves and auxiliary systems
                 fourWayValve: find(['heating.valves.fourThreeWay.position']),
@@ -894,7 +909,21 @@
                 deviceType: find(['device.type']),
                 deviceVariant: find(['device.variant', 'heating.device.variant']),
 
+                // Compressor statistics (load classes)
+                compressorStats: find(['heating.compressors.0.statistics']),
+
             };
+        }
+
+        function renderDeviceHeader(deviceInfo, kf) {
+            return `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>🔧 ${deviceInfo.modelId || deviceInfo.displayName}</h2>
+                        <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
+                    </div>
+                </div>
+            `;
         }
 
         function renderMainTemperatures(kf) {
@@ -1343,34 +1372,6 @@
                 `;
             }
 
-            // Efficiency (SCOP/SPF)
-            if (kf.scop) {
-                sensors += `
-                    <div class="status-item">
-                        <span class="status-label">SCOP/SPF Gesamt</span>
-                        <span class="status-value">${formatNum(kf.scop.value)}</span>
-                    </div>
-                `;
-            }
-
-            if (kf.scopHeating) {
-                sensors += `
-                    <div class="status-item">
-                        <span class="status-label">SCOP/SPF Heizung</span>
-                        <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
-                    </div>
-                `;
-            }
-
-            if (kf.scopDhw) {
-                sensors += `
-                    <div class="status-item">
-                        <span class="status-label">SCOP/SPF Warmwasser</span>
-                        <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
-                    </div>
-                `;
-            }
-
             // 4-Way Valve Position
             if (kf.fourWayValve) {
                 sensors += `
@@ -1499,10 +1500,11 @@
         }
 
         function renderDeviceInfo(kf) {
-            if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant) return '';
+            if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant && !kf.scop && !kf.compressorStats) return '';
 
             let info = '';
 
+            // Basic device info
             if (kf.deviceVariant) {
                 info += `
                     <div class="status-item">
@@ -1528,6 +1530,100 @@
                         <span class="status-value" style="font-family: monospace;">${kf.deviceSerial.value}</span>
                     </div>
                 `;
+            }
+
+            // JAZ / SCOP / SPF values (Coefficient of Performance)
+            if (kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
+                info += `
+                    <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
+                        <span class="status-label" style="font-weight: 600; color: #667eea;">Coefficient of Performance (JAZ)</span>
+                    </div>
+                `;
+
+                if (kf.scop) {
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">JAZ Gesamt</span>
+                            <span class="status-value">${formatNum(kf.scop.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.scopHeating) {
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">JAZ Heizen</span>
+                            <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.scopDhw) {
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">JAZ Warmwasser</span>
+                            <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.seerCooling) {
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">JAZ Kühlen (SEER)</span>
+                            <span class="status-value">${formatNum(kf.seerCooling.value)}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Compressor statistics (Lastklassen / Load classes)
+            if (kf.compressorStats) {
+                const stats = kf.compressorStats.value;
+
+                // Debug: Log the statistics structure
+                console.log('📊 Compressor Statistics:', stats);
+
+                if (stats && typeof stats === 'object') {
+                    info += `
+                        <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
+                            <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf 1 - Betriebsstunden</span>
+                        </div>
+                    `;
+
+                    // Try different property name patterns for load classes
+                    const loadClassPatterns = [
+                        ['hoursLoadClassOne', 'hoursLoadClassTwo', 'hoursLoadClassThree', 'hoursLoadClassFour', 'hoursLoadClassFive'],
+                        ['loadClassOne', 'loadClassTwo', 'loadClassThree', 'loadClassFour', 'loadClassFive'],
+                        ['hoursLoadClass1', 'hoursLoadClass2', 'hoursLoadClass3', 'hoursLoadClass4', 'hoursLoadClass5'],
+                        ['class1', 'class2', 'class3', 'class4', 'class5'],
+                        ['one', 'two', 'three', 'four', 'five']
+                    ];
+
+                    let foundPattern = null;
+                    for (const pattern of loadClassPatterns) {
+                        if (stats[pattern[0]] !== undefined) {
+                            foundPattern = pattern;
+                            break;
+                        }
+                    }
+
+                    if (foundPattern) {
+                        foundPattern.forEach((key, index) => {
+                            if (stats[key] !== undefined) {
+                                info += `
+                                    <div class="status-item">
+                                        <span class="status-label">Stunden Lastklasse ${['eins', 'zwei', 'drei', 'vier', 'fünf'][index]}</span>
+                                        <span class="status-value">${stats[key]} h</span>
+                                    </div>
+                                `;
+                            }
+                        });
+                    } else {
+                        // If no known pattern, show all properties
+                        console.warn('⚠️ Unknown compressor statistics structure:', stats);
+                    }
+                }
             }
 
             return `
