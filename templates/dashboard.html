@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Device Dashboard - ViEventLog</title>
+    <script src="/static/js/d3.v7.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -765,6 +766,16 @@
             // Main temperature displays (outside, supply)
             html += renderMainTemperatures(keyFeatures);
 
+            // Store heating curve data for later rendering
+            window.heatingCurveData = {
+                slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
+                shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
+                currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
+                currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
+                maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
+                minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
+            };
+
             // Compressor/Burner status (Vitocal/Vitodens)
             html += renderCompressorBurner(keyFeatures);
 
@@ -793,6 +804,11 @@
             html += renderDeviceInfo(keyFeatures);
 
             contentDiv.innerHTML = html;
+
+            // Render D3 chart after DOM is updated
+            if (window.heatingCurveData && (window.heatingCurveData.slope !== null || window.heatingCurveData.shift !== null)) {
+                setTimeout(() => renderHeatingCurveChart(), 100);
+            }
         }
 
         function extractKeyFeatures(features) {
@@ -804,9 +820,9 @@
                 // Try exact matches first
                 for (const exactName of exactNames) {
                     for (const category of [features.temperatures, features.dhw, features.circuits,
-                                           features.operatingModes, features.other]) {
+                           features.operatingModes, features.other]) {
                         if (category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
-                            return category[exactName];
+            return category[exactName];
                         }
                     }
                 }
@@ -814,12 +830,34 @@
                 // Fall back to pattern matching
                 for (const pattern of patterns) {
                     for (const category of [features.temperatures, features.dhw, features.circuits,
-                                           features.operatingModes, features.other]) {
+                           features.operatingModes, features.other]) {
                         for (const [key, value] of Object.entries(category)) {
-                            if (key.toLowerCase().includes(pattern.toLowerCase()) &&
-                                value.value !== null && value.value !== undefined) {
-                                return value;
-                            }
+            if (key.toLowerCase().includes(pattern.toLowerCase()) &&
+                value.value !== null && value.value !== undefined) {
+                return value;
+            }
+                        }
+                    }
+                }
+                return null;
+            };
+
+            // Special find for nested properties (e.g., heating.curve has slope and shift as properties)
+            const findNested = (featureName, propertyName) => {
+                for (const category of [features.temperatures, features.dhw, features.circuits,
+                       features.operatingModes, features.other]) {
+                    if (category[featureName]) {
+                        const feature = category[featureName];
+                        // Check if it has nested properties (Go now returns type="object" with nested FeatureValues)
+                        if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
+            const nestedValue = feature.value[propertyName];
+            if (nestedValue && nestedValue.value !== undefined) {
+                return {
+                    type: nestedValue.type || 'number',
+                    value: nestedValue.value,
+                    unit: nestedValue.unit || ''
+                };
+            }
                         }
                     }
                 }
@@ -829,11 +867,11 @@
             const findAll = (pattern) => {
                 const results = [];
                 for (const category of [features.temperatures, features.dhw, features.circuits,
-                                       features.operatingModes, features.other]) {
+                       features.operatingModes, features.other]) {
                     for (const [key, value] of Object.entries(category)) {
                         if (key.toLowerCase().includes(pattern.toLowerCase()) &&
-                            value.value !== null && value.value !== undefined) {
-                            results.push({ name: key, value: value });
+            value.value !== null && value.value !== undefined) {
+            results.push({ name: key, value: value });
                         }
                     }
                 }
@@ -860,8 +898,10 @@
                 dhwHysteresis: find(['heating.dhw.temperature.hysteresis']),
 
                 // Heating curve - these need to be fetched from circuits category
-                heatingCurveSlope: find(['heating.circuits.0.heating.curve.slope']),
-                heatingCurveShift: find(['heating.circuits.0.heating.curve.shift']),
+                heatingCurveSlope: findNested('heating.circuits.0.heating.curve', 'slope'),
+                heatingCurveShift: findNested('heating.circuits.0.heating.curve', 'shift'),
+                supplyTempMax: findNested('heating.circuits.0.temperature.levels', 'max'),
+                supplyTempMin: findNested('heating.circuits.0.temperature.levels', 'min'),
 
                 // Operating mode
                 operatingMode: find(['heating.circuits.0.operating.modes.active']),
@@ -933,8 +973,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Außentemperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.outsideTemp.value)}</span>
-                            <span class="temp-unit">${kf.outsideTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.outsideTemp.value)}</span>
+            <span class="temp-unit">${kf.outsideTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -944,8 +984,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Außentemp. (ged.)</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.calculatedOutsideTemp.value)}</span>
-                            <span class="temp-unit">${kf.calculatedOutsideTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.calculatedOutsideTemp.value)}</span>
+            <span class="temp-unit">${kf.calculatedOutsideTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -955,8 +995,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Vorlauftemperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.supplyTemp.value)}</span>
-                            <span class="temp-unit">${kf.supplyTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.supplyTemp.value)}</span>
+            <span class="temp-unit">${kf.supplyTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -966,8 +1006,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Rücklauftemperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.returnTemp.value)}</span>
-                            <span class="temp-unit">${kf.returnTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.returnTemp.value)}</span>
+            <span class="temp-unit">${kf.returnTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -977,8 +1017,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Kesseltemperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.boilerTemp.value)}</span>
-                            <span class="temp-unit">${kf.boilerTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.boilerTemp.value)}</span>
+            <span class="temp-unit">${kf.boilerTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -988,8 +1028,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Puffertemperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.bufferTemp.value)}</span>
-                            <span class="temp-unit">${kf.bufferTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.bufferTemp.value)}</span>
+            <span class="temp-unit">${kf.bufferTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -999,8 +1039,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Primärkreis-Vorlauf</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.primarySupplyTemp.value)}</span>
-                            <span class="temp-unit">${kf.primarySupplyTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.primarySupplyTemp.value)}</span>
+            <span class="temp-unit">${kf.primarySupplyTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -1010,8 +1050,8 @@
                     <div class="temp-item">
                         <span class="temp-label">Sekundärkreis-Vorlauf</span>
                         <div>
-                            <span class="temp-value">${formatNum(kf.secondarySupplyTemp.value)}</span>
-                            <span class="temp-unit">${kf.secondarySupplyTemp.unit || '°C'}</span>
+            <span class="temp-value">${formatNum(kf.secondarySupplyTemp.value)}</span>
+            <span class="temp-unit">${kf.secondarySupplyTemp.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
@@ -1079,68 +1119,68 @@
                     </div>
                     ${kf.compressorSpeed ? `
                         <div class="status-item">
-                            <span class="status-label">Drehzahl</span>
-                            <span class="status-value">${formatNum(speedValue)} ${speedUnit}</span>
+            <span class="status-label">Drehzahl</span>
+            <span class="status-value">${formatNum(speedValue)} ${speedUnit}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPower ? `
                         <div class="status-item">
-                            <span class="status-label">Leistung</span>
-                            <span class="status-value">${formatNum(kf.compressorPower.value)} ${kf.compressorPower.unit || 'W'}</span>
+            <span class="status-label">Leistung</span>
+            <span class="status-value">${formatNum(kf.compressorPower.value)} ${kf.compressorPower.unit || 'W'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
                         <div class="status-item">
-                            <span class="status-label">Stromaufnahme</span>
-                            <span class="status-value">${formatNum(kf.compressorCurrent.value)} ${kf.compressorCurrent.unit || 'A'}</span>
+            <span class="status-label">Stromaufnahme</span>
+            <span class="status-value">${formatNum(kf.compressorCurrent.value)} ${kf.compressorCurrent.unit || 'A'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
-                            <span class="status-label">Einlassdruck</span>
-                            <span class="status-value">${formatNum(kf.compressorPressure.value)} ${kf.compressorPressure.unit || 'bar'}</span>
+            <span class="status-label">Einlassdruck</span>
+            <span class="status-value">${formatNum(kf.compressorPressure.value)} ${kf.compressorPressure.unit || 'bar'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOilTemp ? `
                         <div class="status-item">
-                            <span class="status-label">Öltemperatur</span>
-                            <span class="status-value">${formatNum(kf.compressorOilTemp.value)} ${kf.compressorOilTemp.unit || '°C'}</span>
+            <span class="status-label">Öltemperatur</span>
+            <span class="status-value">${formatNum(kf.compressorOilTemp.value)} ${kf.compressorOilTemp.unit || '°C'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorMotorTemp ? `
                         <div class="status-item">
-                            <span class="status-label">Motorraumtemperatur</span>
-                            <span class="status-value">${formatNum(kf.compressorMotorTemp.value)} ${kf.compressorMotorTemp.unit || '°C'}</span>
+            <span class="status-label">Motorraumtemperatur</span>
+            <span class="status-value">${formatNum(kf.compressorMotorTemp.value)} ${kf.compressorMotorTemp.unit || '°C'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorInletTemp ? `
                         <div class="status-item">
-                            <span class="status-label">Einlasstemperatur</span>
-                            <span class="status-value">${formatNum(kf.compressorInletTemp.value)} ${kf.compressorInletTemp.unit || '°C'}</span>
+            <span class="status-label">Einlasstemperatur</span>
+            <span class="status-value">${formatNum(kf.compressorInletTemp.value)} ${kf.compressorInletTemp.unit || '°C'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOutletTemp ? `
                         <div class="status-item">
-                            <span class="status-label">Auslasstemperatur</span>
-                            <span class="status-value">${formatNum(kf.compressorOutletTemp.value)} ${kf.compressorOutletTemp.unit || '°C'}</span>
+            <span class="status-label">Auslasstemperatur</span>
+            <span class="status-value">${formatNum(kf.compressorOutletTemp.value)} ${kf.compressorOutletTemp.unit || '°C'}</span>
                         </div>
                     ` : ''}
                     ${compressorHours > 0 ? `
                         <div class="status-item">
-                            <span class="status-label">Betriebsstunden Verdichter</span>
-                            <span class="status-value">${compressorHours} h</span>
+            <span class="status-label">Betriebsstunden Verdichter</span>
+            <span class="status-value">${compressorHours} h</span>
                         </div>
                     ` : ''}
                     ${compressorStarts > 0 ? `
                         <div class="status-item">
-                            <span class="status-label">Anzahl Verdichterstarts</span>
-                            <span class="status-value">${compressorStarts}</span>
+            <span class="status-label">Anzahl Verdichterstarts</span>
+            <span class="status-value">${compressorStarts}</span>
                         </div>
                     ` : ''}
                     ${avgRuntime > 0 ? `
                         <div class="status-item">
-                            <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
-                            <span class="status-value">${formatNum(avgRuntime)} h</span>
+            <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
+            <span class="status-value">${formatNum(avgRuntime)} h</span>
                         </div>
                     ` : ''}
                 `;
@@ -1187,22 +1227,22 @@
                     </div>
                     <div class="status-list">
                         ${kf.operatingProgram ? `
-                            <div class="status-item">
-                                <span class="status-label">Betriebsprogramm</span>
-                                <span class="status-value">${program}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Betriebsprogramm</span>
+                <span class="status-value">${program}</span>
+            </div>
                         ` : ''}
                         ${kf.circuitTemp ? `
-                            <div class="status-item">
-                                <span class="status-label">Kreistemperatur</span>
-                                <span class="status-value">${formatNum(kf.circuitTemp.value)} ${kf.circuitTemp.unit || '°C'}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Kreistemperatur</span>
+                <span class="status-value">${formatNum(kf.circuitTemp.value)} ${kf.circuitTemp.unit || '°C'}</span>
+            </div>
                         ` : ''}
                         ${kf.roomTemp ? `
-                            <div class="status-item">
-                                <span class="status-label">Raumtemperatur</span>
-                                <span class="status-value">${formatNum(kf.roomTemp.value)} ${kf.roomTemp.unit || '°C'}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Raumtemperatur</span>
+                <span class="status-value">${formatNum(kf.roomTemp.value)} ${kf.roomTemp.unit || '°C'}</span>
+            </div>
                         ` : ''}
                     </div>
                 </div>
@@ -1220,22 +1260,22 @@
                     </div>
                     <div class="status-list">
                         ${kf.dhwTemp ? `
-                            <div class="status-item">
-                                <span class="status-label">Ist-Temperatur</span>
-                                <span class="status-value">${formatNum(kf.dhwTemp.value)} ${kf.dhwTemp.unit || '°C'}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Ist-Temperatur</span>
+                <span class="status-value">${formatNum(kf.dhwTemp.value)} ${kf.dhwTemp.unit || '°C'}</span>
+            </div>
                         ` : ''}
                         ${kf.dhwTarget ? `
-                            <div class="status-item">
-                                <span class="status-label">Soll-Temperatur</span>
-                                <span class="status-value">${formatNum(kf.dhwTarget.value)} ${kf.dhwTarget.unit || '°C'}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Soll-Temperatur</span>
+                <span class="status-value">${formatNum(kf.dhwTarget.value)} ${kf.dhwTarget.unit || '°C'}</span>
+            </div>
                         ` : ''}
                         ${kf.dhwHysteresis ? `
-                            <div class="status-item">
-                                <span class="status-label">Hysterese</span>
-                                <span class="status-value">${formatNum(kf.dhwHysteresis.value)} ${kf.dhwHysteresis.unit || 'K'}</span>
-                            </div>
+            <div class="status-item">
+                <span class="status-label">Hysterese</span>
+                <span class="status-value">${formatNum(kf.dhwHysteresis.value)} ${kf.dhwHysteresis.unit || 'K'}</span>
+            </div>
                         ` : ''}
                     </div>
                 </div>
@@ -1243,12 +1283,29 @@
         }
 
         function renderHeatingCurve(kf) {
-            let settings = '';
+            console.log('🔍 renderHeatingCurve called');
+            console.log('heatingCurveSlope:', kf.heatingCurveSlope);
+            console.log('heatingCurveShift:', kf.heatingCurveShift);
 
+            if (!kf.heatingCurveSlope && !kf.heatingCurveShift) {
+                console.warn('⚠️ No heating curve data available');
+                return '';
+            }
+
+            const slope = kf.heatingCurveSlope ? kf.heatingCurveSlope.value : 1.0;
+            const shift = kf.heatingCurveShift ? kf.heatingCurveShift.value : 0;
+
+            console.log('✅ Heating curve values - slope:', slope, 'shift:', shift);
+            const currentOutsideTemp = kf.outsideTemp ? kf.outsideTemp.value : null;
+            const currentSupplyTemp = kf.supplyTemp ? kf.supplyTemp.value : null;
+            const maxSupplyTemp = kf.supplyTempMax ? kf.supplyTempMax.value : null;
+            const minSupplyTemp = kf.supplyTempMin ? kf.supplyTempMin.value : null;
+
+            let settings = '';
             if (kf.heatingCurveSlope) {
                 settings += `
                     <div class="status-item">
-                        <span class="status-label">Steigung der Heizkurve</span>
+                        <span class="status-label">Neigung</span>
                         <span class="status-value">${formatValue(kf.heatingCurveSlope)}</span>
                     </div>
                 `;
@@ -1256,48 +1313,307 @@
             if (kf.heatingCurveShift) {
                 settings += `
                     <div class="status-item">
-                        <span class="status-label">Verschiebung der Heizkurve</span>
+                        <span class="status-label">Niveau (Verschiebung)</span>
                         <span class="status-value">${formatValue(kf.heatingCurveShift)}</span>
                     </div>
                 `;
             }
-            if (kf.comfortTemp) {
+            if (kf.supplyTempMax) {
                 settings += `
                     <div class="status-item">
-                        <span class="status-label">Komforttemperatur</span>
-                        <span class="status-value">${formatValue(kf.comfortTemp)}</span>
+                        <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
+                        <span class="status-value">${formatValue(kf.supplyTempMax)}</span>
                     </div>
                 `;
             }
-            if (kf.normalTemp) {
+            if (kf.supplyTempMin) {
                 settings += `
                     <div class="status-item">
-                        <span class="status-label">Normaltemperatur</span>
-                        <span class="status-value">${formatValue(kf.normalTemp)}</span>
+                        <span class="status-label">Vorlauftemperatur (min)</span>
+                        <span class="status-value">${formatValue(kf.supplyTempMin)}</span>
                     </div>
                 `;
             }
-            if (kf.reducedTemp) {
-                settings += `
-                    <div class="status-item">
-                        <span class="status-label">Reduzierte Temperatur</span>
-                        <span class="status-value">${formatValue(kf.reducedTemp)}</span>
-                    </div>
-                `;
-            }
-
-            if (!settings) return '';
 
             return `
-                <div class="card">
+                <div class="card wide">
                     <div class="card-header">
-                        <h2>📐 Heizkurve & Einstellungen</h2>
+                        <h2>📐 Heizkurve</h2>
                     </div>
-                    <div class="status-list">
+                    <div class="status-list" style="margin-bottom: 15px;">
                         ${settings}
                     </div>
+                    <div id="heatingCurveChart" style="width: 100%; height: 400px;"></div>
                 </div>
             `;
+        }
+
+        function renderHeatingCurveChart() {
+            console.log('📈 Starting to render heating curve chart...');
+
+            const chartId = 'heatingCurveChart';
+            const chartElement = document.getElementById(chartId);
+
+            if (!chartElement) {
+                console.error('❌ Chart element not found:', chartId);
+                return;
+            }
+
+            // Check if D3 is loaded
+            if (typeof d3 === 'undefined') {
+                console.error('❌ D3.js is not loaded');
+                chartElement.innerHTML = '<div style="color: #ef4444; padding: 20px; text-align: center;">D3.js konnte nicht geladen werden.</div>';
+                return;
+            }
+            console.log('✅ D3.js is loaded, version:', d3.version);
+
+            const data = window.heatingCurveData;
+            if (!data) {
+                console.error('❌ No heating curve data available');
+                return;
+            }
+
+            const {slope, shift, currentOutside, currentSupply, maxSupply, minSupply} = data;
+            console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply});
+
+            // Clear any existing content
+            chartElement.innerHTML = '';
+
+            // Calculate heating curve: VL = 20 + slope × (20 - AT) + shift
+            function calculateSupplyTemp(outsideTemp) {
+                return 20 + slope * (20 - outsideTemp) + shift;
+            }
+
+            // Setup dimensions
+            const margin = {top: 20, right: 30, bottom: 50, left: 60};
+            const width = chartElement.clientWidth - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            // Create SVG
+            const svg = d3.select('#' + chartId)
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+            // Scales (X-axis reversed: 20°C left, -20°C right)
+            const xScale = d3.scaleLinear()
+                .domain([20, -20])
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([20, 70])
+                .range([height, 0]);
+
+            // Grid lines
+            svg.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .call(d3.axisLeft(yScale)
+                    .tickSize(-width)
+                    .tickFormat(''));
+
+            svg.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(xScale)
+                    .tickSize(-height)
+                    .tickFormat(''));
+
+            // Generate curve data
+            const curveData = [];
+            for (let temp = -20; temp <= 20; temp += 0.5) {
+                curveData.push({
+                    outside: temp,
+                    supply: calculateSupplyTemp(temp)
+                });
+            }
+
+            // Line generator
+            const line = d3.line()
+                .x(d => xScale(d.outside))
+                .y(d => yScale(d.supply))
+                .curve(d3.curveMonotoneX);
+
+            // Draw the curve
+            svg.append('path')
+                .datum(curveData)
+                .attr('fill', 'none')
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 3)
+                .attr('d', line);
+
+            // Draw max supply temp reference line
+            if (maxSupply !== null) {
+                svg.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', width)
+                    .attr('y1', yScale(maxSupply))
+                    .attr('y2', yScale(maxSupply))
+                    .attr('stroke', '#ef4444')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('opacity', 0.7);
+
+                svg.append('text')
+                    .attr('x', width - 5)
+                    .attr('y', yScale(maxSupply) - 5)
+                    .attr('text-anchor', 'end')
+                    .attr('fill', '#ef4444')
+                    .attr('font-size', '11px')
+                    .attr('font-weight', 'bold')
+                    .text('Max: ' + maxSupply + '°C');
+            }
+
+            // Draw min supply temp reference line
+            if (minSupply !== null) {
+                svg.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', width)
+                    .attr('y1', yScale(minSupply))
+                    .attr('y2', yScale(minSupply))
+                    .attr('stroke', '#3b82f6')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('opacity', 0.7);
+
+                svg.append('text')
+                    .attr('x', width - 5)
+                    .attr('y', yScale(minSupply) + 15)
+                    .attr('text-anchor', 'end')
+                    .attr('fill', '#3b82f6')
+                    .attr('font-size', '11px')
+                    .attr('font-weight', 'bold')
+                    .text('Min: ' + minSupply + '°C');
+            }
+
+            // Draw current point if available
+            if (currentOutside !== null && currentSupply !== null) {
+                svg.append('circle')
+                    .attr('cx', xScale(currentOutside))
+                    .attr('cy', yScale(currentSupply))
+                    .attr('r', 6)
+                    .attr('fill', '#f59e0b')
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', 2);
+
+                svg.append('text')
+                    .attr('x', xScale(currentOutside) + 10)
+                    .attr('y', yScale(currentSupply) - 10)
+                    .attr('fill', '#f59e0b')
+                    .attr('font-size', '12px')
+                    .attr('font-weight', 'bold')
+                    .text('Aktuell: ' + currentOutside.toFixed(1) + '°C / ' + currentSupply.toFixed(1) + '°C');
+            }
+
+            // X-Axis
+            svg.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(xScale).ticks(10))
+                .attr('color', '#a0a0b0');
+
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', height + 40)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-size', '14px')
+                .text('Außentemperatur (°C)');
+
+            // Y-Axis
+            svg.append('g')
+                .call(d3.axisLeft(yScale).ticks(10))
+                .attr('color', '#a0a0b0');
+
+            svg.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -height / 2)
+                .attr('y', -45)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-size', '14px')
+                .text('Vorlauftemperatur (°C)');
+
+            // Formula text
+            svg.append('text')
+                .attr('x', 10)
+                .attr('y', 15)
+                .attr('fill', '#667eea')
+                .attr('font-size', '12px')
+                .attr('font-family', 'monospace')
+                .text('VL = 20 + ' + slope.toFixed(1) + ' × (20 - AT) + ' + shift);
+
+            // Add hover functionality
+            // Create tooltip
+            const tooltip = d3.select('body')
+                .append('div')
+                .style('position', 'absolute')
+                .style('background', 'rgba(0, 0, 0, 0.8)')
+                .style('color', '#fff')
+                .style('padding', '8px 12px')
+                .style('border-radius', '4px')
+                .style('font-size', '12px')
+                .style('pointer-events', 'none')
+                .style('opacity', 0)
+                .style('z-index', 1000);
+
+            // Create hover line and circle
+            const hoverLine = svg.append('line')
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 1)
+                .attr('stroke-dasharray', '3,3')
+                .style('opacity', 0);
+
+            const hoverCircle = svg.append('circle')
+                .attr('r', 5)
+                .attr('fill', '#667eea')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .style('opacity', 0);
+
+            // Invisible overlay to capture mouse events
+            svg.append('rect')
+                .attr('width', width)
+                .attr('height', height)
+                .style('fill', 'none')
+                .style('pointer-events', 'all')
+                .on('mousemove', function(event) {
+                    const [mouseX] = d3.pointer(event);
+                    const outsideTemp = xScale.invert(mouseX);
+                    const supplyTemp = calculateSupplyTemp(outsideTemp);
+
+                    // Update hover elements
+                    hoverLine
+                        .attr('x1', mouseX)
+                        .attr('x2', mouseX)
+                        .attr('y1', 0)
+                        .attr('y2', height)
+                        .style('opacity', 1);
+
+                    hoverCircle
+                        .attr('cx', xScale(outsideTemp))
+                        .attr('cy', yScale(supplyTemp))
+                        .style('opacity', 1);
+
+                    // Update tooltip
+                    tooltip
+                        .style('opacity', 1)
+                        .html(`
+                            <strong>Außentemperatur:</strong> ${outsideTemp.toFixed(1)}°C<br>
+                            <strong>Vorlauftemperatur:</strong> ${supplyTemp.toFixed(1)}°C
+                        `)
+                        .style('left', (event.pageX + 15) + 'px')
+                        .style('top', (event.pageY - 15) + 'px');
+                })
+                .on('mouseout', function() {
+                    hoverLine.style('opacity', 0);
+                    hoverCircle.style('opacity', 0);
+                    tooltip.style('opacity', 0);
+                });
+
+            console.log('✅ Heating curve chart rendered successfully');
         }
 
         function renderConsumption(kf) {
@@ -1588,8 +1904,8 @@
                 if (kf.scop) {
                     info += `
                         <div class="status-item">
-                            <span class="status-label">JAZ Gesamt</span>
-                            <span class="status-value">${formatNum(kf.scop.value)}</span>
+            <span class="status-label">JAZ Gesamt</span>
+            <span class="status-value">${formatNum(kf.scop.value)}</span>
                         </div>
                     `;
                 }
@@ -1597,8 +1913,8 @@
                 if (kf.scopHeating) {
                     info += `
                         <div class="status-item">
-                            <span class="status-label">JAZ Heizen</span>
-                            <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
+            <span class="status-label">JAZ Heizen</span>
+            <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
                         </div>
                     `;
                 }
@@ -1606,8 +1922,8 @@
                 if (kf.scopDhw) {
                     info += `
                         <div class="status-item">
-                            <span class="status-label">JAZ Warmwasser</span>
-                            <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
+            <span class="status-label">JAZ Warmwasser</span>
+            <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
                         </div>
                     `;
                 }
@@ -1615,8 +1931,8 @@
                 if (kf.seerCooling) {
                     info += `
                         <div class="status-item">
-                            <span class="status-label">JAZ Kühlen (SEER)</span>
-                            <span class="status-value">${formatNum(kf.seerCooling.value)}</span>
+            <span class="status-label">JAZ Kühlen (SEER)</span>
+            <span class="status-value">${formatNum(kf.seerCooling.value)}</span>
                         </div>
                     `;
                 }
@@ -1630,43 +1946,62 @@
                 console.log('📊 Compressor Statistics:', stats);
 
                 if (stats && typeof stats === 'object') {
+                    // Check if this has the nested structure (hours/starts from heating.compressors.0.statistics)
+                    // These are shown in the Kompressor card, so skip them here
+                    const hasHoursStarts = stats.hours && stats.hours.value !== undefined;
+
+                    if (!hasHoursStarts) {
+                        // This is the load class data (heating.compressors.0.statistics with loadClassOne, etc.)
+                        info += `
+            <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
+                <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf 1 - Betriebsstunden</span>
+            </div>
+                        `;
+
+                        // Try different property name patterns for load classes
+                        const loadClassPatterns = [
+            ['hoursLoadClassOne', 'hoursLoadClassTwo', 'hoursLoadClassThree', 'hoursLoadClassFour', 'hoursLoadClassFive'],
+            ['loadClassOne', 'loadClassTwo', 'loadClassThree', 'loadClassFour', 'loadClassFive'],
+            ['hoursLoadClass1', 'hoursLoadClass2', 'hoursLoadClass3', 'hoursLoadClass4', 'hoursLoadClass5'],
+            ['class1', 'class2', 'class3', 'class4', 'class5'],
+            ['one', 'two', 'three', 'four', 'five']
+                        ];
+
+                        let foundPattern = null;
+                        for (const pattern of loadClassPatterns) {
+            // Check both direct values and nested structure
+            if (stats[pattern[0]] !== undefined) {
+                foundPattern = pattern;
+                break;
+            }
+            if (stats[pattern[0]] && stats[pattern[0]].value !== undefined) {
+                foundPattern = pattern;
+                break;
+            }
+                        }
+
+                        if (foundPattern) {
+            foundPattern.forEach((key, index) => {
+                let value = null;
+                // Handle both direct values and nested structure
+                if (stats[key] !== undefined) {
+                    if (typeof stats[key] === 'object' && stats[key].value !== undefined) {
+                        value = stats[key].value;
+                    } else {
+                        value = stats[key];
+                    }
+                }
+
+                if (value !== null) {
                     info += `
-                        <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
-                            <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf 1 - Betriebsstunden</span>
+                        <div class="status-item">
+                            <span class="status-label">Stunden Lastklasse ${['eins', 'zwei', 'drei', 'vier', 'fünf'][index]}</span>
+                            <span class="status-value">${value} h</span>
                         </div>
                     `;
-
-                    // Try different property name patterns for load classes
-                    const loadClassPatterns = [
-                        ['hoursLoadClassOne', 'hoursLoadClassTwo', 'hoursLoadClassThree', 'hoursLoadClassFour', 'hoursLoadClassFive'],
-                        ['loadClassOne', 'loadClassTwo', 'loadClassThree', 'loadClassFour', 'loadClassFive'],
-                        ['hoursLoadClass1', 'hoursLoadClass2', 'hoursLoadClass3', 'hoursLoadClass4', 'hoursLoadClass5'],
-                        ['class1', 'class2', 'class3', 'class4', 'class5'],
-                        ['one', 'two', 'three', 'four', 'five']
-                    ];
-
-                    let foundPattern = null;
-                    for (const pattern of loadClassPatterns) {
-                        if (stats[pattern[0]] !== undefined) {
-                            foundPattern = pattern;
-                            break;
+                }
+            });
                         }
-                    }
-
-                    if (foundPattern) {
-                        foundPattern.forEach((key, index) => {
-                            if (stats[key] !== undefined) {
-                                info += `
-                                    <div class="status-item">
-                                        <span class="status-label">Stunden Lastklasse ${['eins', 'zwei', 'drei', 'vier', 'fünf'][index]}</span>
-                                        <span class="status-value">${stats[key]} h</span>
-                                    </div>
-                                `;
-                            }
-                        });
-                    } else {
-                        // If no known pattern, show all properties
-                        console.warn('⚠️ Unknown compressor statistics structure:', stats);
                     }
                 }
             }
@@ -1836,33 +2171,33 @@
                 if (hasFeatures) {
                     if (hasFeatures.error) {
                         featuresHtml = `
-                            <div style="margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 4px; color: #fca5a5;">
-                                ❌ Fehler beim Laden der Features: ${hasFeatures.error}
-                            </div>
+            <div style="margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 4px; color: #fca5a5;">
+                ❌ Fehler beim Laden der Features: ${hasFeatures.error}
+            </div>
                         `;
                     } else if (hasFeatures.features && hasFeatures.features.length > 0) {
                         featuresHtml = `
-                            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
-                                <div style="color: #667eea; font-weight: 600; margin-bottom: 8px;">📊 Features (${hasFeatures.features.length}):</div>
-                                <div style="max-height: 200px; overflow-y: auto; font-size: 11px;">
-                                    ${hasFeatures.features.map(f => `
-                                        <div style="margin-bottom: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 3px;">
-                                            <div style="color: #fbbf24;">${f.feature}</div>
-                                            ${f.properties && f.properties.value ? `
-                                                <div style="color: #a0a0b0; margin-left: 10px;">
-                                                    ${JSON.stringify(f.properties.value).substring(0, 100)}${JSON.stringify(f.properties.value).length > 100 ? '...' : ''}
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
+                <div style="color: #667eea; font-weight: 600; margin-bottom: 8px;">📊 Features (${hasFeatures.features.length}):</div>
+                <div style="max-height: 200px; overflow-y: auto; font-size: 11px;">
+                    ${hasFeatures.features.map(f => `
+                        <div style="margin-bottom: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 3px;">
+                            <div style="color: #fbbf24;">${f.feature}</div>
+                            ${f.properties && f.properties.value ? `
+                                <div style="color: #a0a0b0; margin-left: 10px;">
+                                    ${JSON.stringify(f.properties.value).substring(0, 100)}${JSON.stringify(f.properties.value).length > 100 ? '...' : ''}
                                 </div>
-                            </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
                         `;
                     } else {
                         featuresHtml = `
-                            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; color: #a0a0b0; font-style: italic;">
-                                Keine Features gefunden
-                            </div>
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; color: #a0a0b0; font-style: italic;">
+                Keine Features gefunden
+            </div>
                         `;
                     }
                 }
@@ -1870,41 +2205,41 @@
                 devicesHtml += `
                     <div class="debug-device">
                         <div class="debug-device-header">
-                            <span class="debug-device-type">${device.deviceType}</span>
-                            <span class="debug-device-model">${device.modelId}</span>
+            <span class="debug-device-type">${device.deviceType}</span>
+            <span class="debug-device-model">${device.modelId}</span>
                         </div>
                         <div class="debug-device-details">
-                            <div class="debug-device-detail">
-                                <span class="debug-device-detail-label">Installation:</span>
-                                <span>${device.installationDesc || device.installationId}</span>
-                            </div>
-                            <div class="debug-device-detail">
-                                <span class="debug-device-detail-label">Device ID:</span>
-                                <span>${device.deviceId}</span>
-                            </div>
-                            <div class="debug-device-detail">
-                                <span class="debug-device-detail-label">Gateway:</span>
-                                <span>${device.gatewaySerial}</span>
-                            </div>
-                            ${device.accountName ? `
-                            <div class="debug-device-detail">
-                                <span class="debug-device-detail-label">Account:</span>
-                                <span>${device.accountName}</span>
-                            </div>
-                            ` : ''}
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Installation:</span>
+                <span>${device.installationDesc || device.installationId}</span>
+            </div>
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Device ID:</span>
+                <span>${device.deviceId}</span>
+            </div>
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Gateway:</span>
+                <span>${device.gatewaySerial}</span>
+            </div>
+            ${device.accountName ? `
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Account:</span>
+                <span>${device.accountName}</span>
+            </div>
+            ` : ''}
                         </div>
                         ${featuresHtml}
                         <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button class="toggle-all" style="flex: 1; min-width: 140px; ${hasFeatures ? 'background: linear-gradient(135deg, #10b981 0%, #059669 100%);' : ''}"
-                                    onclick="loadDeviceFeatures('${deviceKey}', ${i})">
-                                ${hasFeatures ? '✅ Features geladen' : '📊 Features laden'}
-                            </button>
-                            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="copyDeviceJson(${i})">
-                                📋 JSON kopieren
-                            </button>
-                            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="downloadDeviceJson(${i})">
-                                💾 JSON herunterladen
-                            </button>
+            <button class="toggle-all" style="flex: 1; min-width: 140px; ${hasFeatures ? 'background: linear-gradient(135deg, #10b981 0%, #059669 100%);' : ''}"
+                    onclick="loadDeviceFeatures('${deviceKey}', ${i})">
+                ${hasFeatures ? '✅ Features geladen' : '📊 Features laden'}
+            </button>
+            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="copyDeviceJson(${i})">
+                📋 JSON kopieren
+            </button>
+            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="downloadDeviceJson(${i})">
+                💾 JSON herunterladen
+            </button>
                         </div>
                     </div>
                 `;
@@ -1920,20 +2255,20 @@
                     </div>
                     <div class="debug-summary">
                         <div class="debug-stat">
-                            <div class="debug-stat-label">Angezeigte Geräte</div>
-                            <div class="debug-stat-value">${data.totalDevices}</div>
+            <div class="debug-stat-label">Angezeigte Geräte</div>
+            <div class="debug-stat-value">${data.totalDevices}</div>
                         </div>
                         <div class="debug-stat">
-                            <div class="debug-stat-label">Unbekannte Geräte</div>
-                            <div class="debug-stat-value">${data.unknownDevices}</div>
+            <div class="debug-stat-label">Unbekannte Geräte</div>
+            <div class="debug-stat-value">${data.unknownDevices}</div>
                         </div>
                     </div>
                     <div class="debug-actions">
                         <button class="toggle-all" onclick="toggleAllDevices()">
-                            ${showAllDevices ? '🔽 Nur unbekannte Geräte' : '🔼 Alle Geräte anzeigen'}
+            ${showAllDevices ? '🔽 Nur unbekannte Geräte' : '🔼 Alle Geräte anzeigen'}
                         </button>
                         <button class="toggle-all" onclick="toggleJsonView()">
-                            ${showJsonView ? '👁️ Liste anzeigen' : '📄 JSON anzeigen'}
+            ${showJsonView ? '👁️ Liste anzeigen' : '📄 JSON anzeigen'}
                         </button>
                     </div>
                     <div style="padding: 12px; background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px; margin-bottom: 15px; color: #667eea; font-size: 13px;">
