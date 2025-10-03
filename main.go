@@ -245,6 +245,9 @@ func main() {
 	http.HandleFunc("/api/devices", devicesHandler)
 	http.HandleFunc("/api/features", featuresHandler)
 
+	// Debug endpoints
+	http.HandleFunc("/api/debug/devices", debugDevicesHandler)
+
 	// Get bind address from environment, with backward compatibility for PORT
 	bindAddress := os.Getenv("BIND_ADDRESS")
 	if bindAddress == "" {
@@ -1890,4 +1893,122 @@ func fetchGatewayIDForInstallation(installationID, accessToken string) (string, 
 	}
 
 	return "", fmt.Errorf("no gateways found for installation %s (checked %d installations)", installationID, len(result.Data))
+}
+
+// --- Debug API Handlers ---
+
+type DebugDeviceInfo struct {
+	InstallationID  string                 `json:"installationId"`
+	InstallationDesc string                 `json:"installationDesc"`
+	GatewaySerial   string                 `json:"gatewaySerial"`
+	DeviceID        string                 `json:"deviceId"`
+	DeviceType      string                 `json:"deviceType"`
+	ModelID         string                 `json:"modelId"`
+	AccountName     string                 `json:"accountName,omitempty"`
+	Features        []Feature              `json:"features,omitempty"`
+	FeaturesError   string                 `json:"featuresError,omitempty"`
+}
+
+type DebugDevicesResponse struct {
+	TotalDevices   int               `json:"totalDevices"`
+	UnknownDevices int               `json:"unknownDevices"`
+	Devices        []DebugDeviceInfo `json:"devices"`
+	IncludesFeatures bool            `json:"includesFeatures"`
+}
+
+func debugDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	// Check query parameters
+	onlyUnknown := r.URL.Query().Get("onlyUnknown") == "true"
+	includeFeatures := r.URL.Query().Get("includeFeatures") == "true"
+
+	// Build a unified installations map from all account tokens
+	allInstallations := make(map[string]*Installation)
+	accountNames := make(map[string]string) // installationID -> accountName
+	accountTokenMap := make(map[string]string) // installationID -> accessToken
+
+	accountsMutex.RLock()
+	for accountID, token := range accountTokens {
+		// Get account name
+		account, _ := GetAccount(accountID)
+		accountName := accountID
+		if account != nil {
+			accountName = account.Name
+		}
+
+		for id, installation := range token.Installations {
+			allInstallations[id] = installation
+			accountNames[id] = accountName
+			accountTokenMap[id] = token.AccessToken
+		}
+	}
+	accountsMutex.RUnlock()
+
+	// Also include legacy installations
+	if installations != nil {
+		for id, installation := range installations {
+			if _, exists := allInstallations[id]; !exists {
+				allInstallations[id] = installation
+				accountNames[id] = "Legacy Account"
+				accountTokenMap[id] = accessToken
+			}
+		}
+	}
+
+	// Collect all devices
+	debugDevices := make([]DebugDeviceInfo, 0)
+	unknownCount := 0
+
+	for installID, installation := range allInstallations {
+		for _, gateway := range installation.Gateways {
+			for _, gwDevice := range gateway.Devices {
+				isUnknown := gwDevice.DeviceType != "heating"
+
+				// Count unknown devices
+				if isUnknown {
+					unknownCount++
+				}
+
+				// Skip known devices if only unknown requested
+				if onlyUnknown && !isUnknown {
+					continue
+				}
+
+				deviceInfo := DebugDeviceInfo{
+					InstallationID:  installID,
+					InstallationDesc: installation.Description,
+					GatewaySerial:   gateway.Serial,
+					DeviceID:        gwDevice.DeviceID,
+					DeviceType:      gwDevice.DeviceType,
+					ModelID:         gwDevice.ModelID,
+					AccountName:     accountNames[installID],
+				}
+
+				// Fetch features if requested
+				if includeFeatures {
+					if token, ok := accountTokenMap[installID]; ok {
+						features, err := fetchFeaturesForDevice(installID, gateway.Serial, gwDevice.DeviceID, token)
+						if err != nil {
+							deviceInfo.FeaturesError = err.Error()
+							log.Printf("Failed to fetch features for %s/%s/%s: %v\n",
+								installID, gateway.Serial, gwDevice.DeviceID, err)
+						} else if features != nil {
+							deviceInfo.Features = features.RawFeatures
+						}
+					}
+				}
+
+				debugDevices = append(debugDevices, deviceInfo)
+			}
+		}
+	}
+
+	response := DebugDevicesResponse{
+		TotalDevices:     len(debugDevices),
+		UnknownDevices:   unknownCount,
+		Devices:          debugDevices,
+		IncludesFeatures: includeFeatures,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
