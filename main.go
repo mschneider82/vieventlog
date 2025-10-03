@@ -18,6 +18,9 @@ import (
 //go:embed templates/*
 var templatesFS embed.FS
 
+//go:embed static/*
+var staticFS embed.FS
+
 const (
 	// Viessmann API constants
 	defaultClientSecret = "8ad97aceb92c5892e102b093c7c083fa"
@@ -226,6 +229,9 @@ func main() {
 	http.HandleFunc("/login", loginPageHandler)
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
+
+	// Static files handler
+	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
 
 	// Legacy API endpoints
 	http.HandleFunc("/api/login", loginHandler)
@@ -1789,6 +1795,30 @@ func extractFeatureValue(properties map[string]interface{}) FeatureValue {
 		}
 		if unit, ok := valueObj["unit"].(string); ok {
 			fv.Unit = unit
+		}
+	} else {
+		// If there's no "value" property, the properties themselves might be the data
+		// (e.g., heating.curve has "slope" and "shift" directly)
+		// Store all properties as a map in the Value field
+		nestedValues := make(map[string]FeatureValue)
+		for propName, propValue := range properties {
+			if propMap, ok := propValue.(map[string]interface{}); ok {
+				nestedFv := FeatureValue{}
+				if typ, ok := propMap["type"].(string); ok {
+					nestedFv.Type = typ
+				}
+				if val, ok := propMap["value"]; ok {
+					nestedFv.Value = val
+				}
+				if unit, ok := propMap["unit"].(string); ok {
+					nestedFv.Unit = unit
+				}
+				nestedValues[propName] = nestedFv
+			}
+		}
+		if len(nestedValues) > 0 {
+			fv.Type = "object"
+			fv.Value = nestedValues
 		}
 	}
 
