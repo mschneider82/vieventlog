@@ -1073,7 +1073,11 @@
 
         function renderCompressorBurner(kf) {
             // Check if we have compressor (heat pump) or burner (gas)
-            const hasCompressor = kf.compressorSpeed || kf.compressorPower;
+            const hasCompressor = kf.compressorSpeed || kf.compressorPower ||
+                                  kf.compressorCurrent || kf.compressorPressure ||
+                                  kf.compressorOilTemp || kf.compressorMotorTemp ||
+                                  kf.compressorInletTemp || kf.compressorOutletTemp ||
+                                  kf.compressorStats;
             const hasBurner = kf.burnerModulation;
 
             if (!hasCompressor && !hasBurner) return '';
@@ -1086,8 +1090,8 @@
                 const isRunning = kf.compressorSpeed && kf.compressorSpeed.value > 0;
 
                 // Convert speed to RPM if unit is revolutionsPerSecond
-                let speedValue = kf.compressorSpeed ? kf.compressorSpeed.value : 0;
-                let speedUnit = kf.compressorSpeed ? kf.compressorSpeed.unit : '';
+                let speedValue = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.value : 0;
+                let speedUnit = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.unit : '';
 
                 if (speedUnit === 'revolutionsPerSecond') {
                     speedValue = speedValue * 60;
@@ -1120,49 +1124,49 @@
                     ${kf.compressorSpeed ? `
                         <div class="status-item">
             <span class="status-label">Drehzahl</span>
-            <span class="status-value">${formatNum(speedValue)} ${speedUnit}</span>
+            <span class="status-value">${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPower ? `
                         <div class="status-item">
             <span class="status-label">Leistung</span>
-            <span class="status-value">${formatNum(kf.compressorPower.value)} ${kf.compressorPower.unit || 'W'}</span>
+            <span class="status-value">${kf.compressorPower.value !== undefined ? formatNum(kf.compressorPower.value) + ' ' + (kf.compressorPower.unit || 'W') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
                         <div class="status-item">
             <span class="status-label">Stromaufnahme</span>
-            <span class="status-value">${formatNum(kf.compressorCurrent.value)} ${kf.compressorCurrent.unit || 'A'}</span>
+            <span class="status-value">${kf.compressorCurrent.value !== undefined ? formatNum(kf.compressorCurrent.value) + ' ' + (kf.compressorCurrent.unit || 'A') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
             <span class="status-label">Einlassdruck</span>
-            <span class="status-value">${formatNum(kf.compressorPressure.value)} ${kf.compressorPressure.unit || 'bar'}</span>
+            <span class="status-value">${kf.compressorPressure.value !== undefined ? formatNum(kf.compressorPressure.value) + ' ' + (kf.compressorPressure.unit || 'bar') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOilTemp ? `
                         <div class="status-item">
             <span class="status-label">Öltemperatur</span>
-            <span class="status-value">${formatNum(kf.compressorOilTemp.value)} ${kf.compressorOilTemp.unit || '°C'}</span>
+            <span class="status-value">${kf.compressorOilTemp.value !== undefined ? formatNum(kf.compressorOilTemp.value) + ' ' + (kf.compressorOilTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorMotorTemp ? `
                         <div class="status-item">
             <span class="status-label">Motorraumtemperatur</span>
-            <span class="status-value">${formatNum(kf.compressorMotorTemp.value)} ${kf.compressorMotorTemp.unit || '°C'}</span>
+            <span class="status-value">${kf.compressorMotorTemp.value !== undefined ? formatNum(kf.compressorMotorTemp.value) + ' ' + (kf.compressorMotorTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorInletTemp ? `
                         <div class="status-item">
             <span class="status-label">Einlasstemperatur</span>
-            <span class="status-value">${formatNum(kf.compressorInletTemp.value)} ${kf.compressorInletTemp.unit || '°C'}</span>
+            <span class="status-value">${kf.compressorInletTemp.value !== undefined ? formatNum(kf.compressorInletTemp.value) + ' ' + (kf.compressorInletTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOutletTemp ? `
                         <div class="status-item">
             <span class="status-label">Auslasstemperatur</span>
-            <span class="status-value">${formatNum(kf.compressorOutletTemp.value)} ${kf.compressorOutletTemp.unit || '°C'}</span>
+            <span class="status-value">${kf.compressorOutletTemp.value !== undefined ? formatNum(kf.compressorOutletTemp.value) + ' ' + (kf.compressorOutletTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${compressorHours > 0 ? `
