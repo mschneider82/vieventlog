@@ -129,6 +129,28 @@ func (s *SimpleStorage) LoadAccounts() (*AccountStore, error) {
 		return store, nil
 	}
 
+	// Try migrating old single credential from credentials.json
+	oldCred, err := s.LoadCredentials()
+	if err == nil && oldCred != nil && oldCred.Email != "" {
+		// Migrate to new system
+		store := &AccountStore{
+			Accounts: make(map[string]*Account),
+		}
+		account := &Account{
+			ID:           oldCred.Email,
+			Name:         oldCred.Email,
+			Email:        oldCred.Email,
+			Password:     oldCred.Password,
+			ClientID:     oldCred.ClientID,
+			ClientSecret: oldCred.ClientSecret,
+			Active:       true,
+		}
+		store.Accounts[account.ID] = account
+		// Save migrated account to accounts.json for future use
+		s.SaveAccounts(store)
+		return store, nil
+	}
+
 	// No accounts configured
 	return &AccountStore{Accounts: make(map[string]*Account)}, nil
 }
