@@ -1130,43 +1130,43 @@
                     ${kf.compressorPower ? `
                         <div class="status-item">
             <span class="status-label">Leistung</span>
-            <span class="status-value">${kf.compressorPower.value !== undefined ? formatNum(kf.compressorPower.value) + ' ' + (kf.compressorPower.unit || 'W') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorPower) ? formatNum(kf.compressorPower.value) + ' ' + (kf.compressorPower.unit || 'W') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
                         <div class="status-item">
             <span class="status-label">Stromaufnahme</span>
-            <span class="status-value">${kf.compressorCurrent.value !== undefined ? formatNum(kf.compressorCurrent.value) + ' ' + (kf.compressorCurrent.unit || 'A') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatNum(kf.compressorCurrent.value) + ' ' + (kf.compressorCurrent.unit || 'A') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
             <span class="status-label">Einlassdruck</span>
-            <span class="status-value">${kf.compressorPressure.value !== undefined ? formatNum(kf.compressorPressure.value) + ' ' + (kf.compressorPressure.unit || 'bar') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorPressure) ? formatNum(kf.compressorPressure.value) + ' ' + (kf.compressorPressure.unit || 'bar') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOilTemp ? `
                         <div class="status-item">
             <span class="status-label">Öltemperatur</span>
-            <span class="status-value">${kf.compressorOilTemp.value !== undefined ? formatNum(kf.compressorOilTemp.value) + ' ' + (kf.compressorOilTemp.unit || '°C') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorOilTemp) ? formatNum(kf.compressorOilTemp.value) + ' ' + (kf.compressorOilTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorMotorTemp ? `
                         <div class="status-item">
             <span class="status-label">Motorraumtemperatur</span>
-            <span class="status-value">${kf.compressorMotorTemp.value !== undefined ? formatNum(kf.compressorMotorTemp.value) + ' ' + (kf.compressorMotorTemp.unit || '°C') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorMotorTemp) ? formatNum(kf.compressorMotorTemp.value) + ' ' + (kf.compressorMotorTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorInletTemp ? `
                         <div class="status-item">
             <span class="status-label">Einlasstemperatur</span>
-            <span class="status-value">${kf.compressorInletTemp.value !== undefined ? formatNum(kf.compressorInletTemp.value) + ' ' + (kf.compressorInletTemp.unit || '°C') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorInletTemp) ? formatNum(kf.compressorInletTemp.value) + ' ' + (kf.compressorInletTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOutletTemp ? `
                         <div class="status-item">
             <span class="status-label">Auslasstemperatur</span>
-            <span class="status-value">${kf.compressorOutletTemp.value !== undefined ? formatNum(kf.compressorOutletTemp.value) + ' ' + (kf.compressorOutletTemp.unit || '°C') : '--'}</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorOutletTemp) ? formatNum(kf.compressorOutletTemp.value) + ' ' + (kf.compressorOutletTemp.unit || '°C') : '--'}</span>
                         </div>
                     ` : ''}
                     ${compressorHours > 0 ? `
@@ -2040,6 +2040,20 @@
                 return val.toFixed(1);
             }
             return val;
+        }
+
+        // Check if a feature value contains a valid numeric value (not a status object)
+        function isValidNumericValue(featureValue) {
+            if (!featureValue || featureValue.value === undefined || featureValue.value === null) {
+                return false;
+            }
+            // If value is an object (e.g., {status: {type: "string", value: "notConnected"}}),
+            // it's not a valid numeric value
+            if (typeof featureValue.value === 'object') {
+                return false;
+            }
+            // Check if it's a number
+            return typeof featureValue.value === 'number';
         }
 
         function extractFeatureValue(properties) {
