@@ -1290,7 +1290,7 @@
 
             let circuit = '';
 
-            if (kf.evaporatorTemp) {
+            if (kf.evaporatorTemp && isValidNumericValue(kf.evaporatorTemp)) {
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verdampfer</span>
@@ -1299,7 +1299,7 @@
                 `;
             }
 
-            if (kf.evaporatorOverheat) {
+            if (kf.evaporatorOverheat && isValidNumericValue(kf.evaporatorOverheat)) {
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verdampfer Überhitzung</span>
@@ -1308,7 +1308,7 @@
                 `;
             }
 
-            if (kf.condensorTemp) {
+            if (kf.condensorTemp && isValidNumericValue(kf.condensorTemp)) {
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verflüssiger</span>
@@ -1317,7 +1317,7 @@
                 `;
             }
 
-            if (kf.economizerTemp) {
+            if (kf.economizerTemp && isValidNumericValue(kf.economizerTemp)) {
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Economizer</span>
@@ -1326,7 +1326,7 @@
                 `;
             }
 
-            if (kf.inverterTemp) {
+            if (kf.inverterTemp && isValidNumericValue(kf.inverterTemp)) {
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Wechselrichter</span>
