@@ -1,0 +1,1900 @@
+        let currentInstallationId = null;
+        let currentDeviceId = '0';
+        let currentGatewaySerial = '';
+        let installations = [];
+        let autoRefreshInterval = null;
+
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('installationId')) {
+            currentInstallationId = urlParams.get('installationId');
+        }
+        if (urlParams.has('deviceId')) {
+            currentDeviceId = urlParams.get('deviceId');
+        }
+        if (urlParams.has('gatewaySerial')) {
+            currentGatewaySerial = urlParams.get('gatewaySerial');
+        }
+
+        async function init() {
+            await loadDevices();
+            if (currentInstallationId) {
+                await loadDashboard();
+                startAutoRefresh();
+            }
+        }
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const devicesByInstall = await response.json();
+                installations = devicesByInstall;
+
+                const installSelect = document.getElementById('installationSelect');
+                installSelect.innerHTML = '';
+
+                devicesByInstall.forEach(install => {
+                    const option = document.createElement('option');
+                    option.value = install.installationId;
+                    option.textContent = `${install.description || install.installationId} - ${install.location}`;
+                    if (install.installationId === currentInstallationId) {
+                        option.selected = true;
+                    }
+                    installSelect.appendChild(option);
+                });
+
+                // Set first installation if none selected
+                if (!currentInstallationId && devicesByInstall.length > 0) {
+                    currentInstallationId = devicesByInstall[0].installationId;
+                    installSelect.value = currentInstallationId;
+                }
+
+                // If gatewaySerial not set yet, get it from first device BEFORE updating dropdown
+                if (!currentGatewaySerial && currentInstallationId) {
+                    const currentInstall = devicesByInstall.find(i => i.installationId === currentInstallationId);
+                    if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
+                        // Just take the first device and initialize both deviceId AND gatewaySerial
+                        const firstDevice = currentInstall.devices[0];
+                        currentDeviceId = firstDevice.deviceId;
+                        currentGatewaySerial = firstDevice.gatewaySerial || '';
+                        console.log('Initialized with first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                    }
+                }
+
+                // Update device dropdown for selected installation (after initializing currentDeviceId and currentGatewaySerial)
+                updateDeviceDropdown();
+
+                // Update current installation display
+                const selectedInstall = devicesByInstall.find(i => i.installationId === currentInstallationId);
+                if (selectedInstall) {
+                    document.getElementById('currentInstallation').textContent =
+                        selectedInstall.description || selectedInstall.installationId;
+                }
+
+            } catch (error) {
+                showError('Fehler beim Laden der Geräte: ' + error.message);
+            }
+        }
+
+        function updateDeviceDropdown() {
+            const deviceSelect = document.getElementById('deviceSelect');
+            deviceSelect.innerHTML = '';
+
+            // Find current installation
+            const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+
+            console.log('updateDeviceDropdown - currentInstall:', currentInstall);
+
+            if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
+                console.log('Found', currentInstall.devices.length, 'devices:', currentInstall.devices);
+
+                currentInstall.devices.forEach(device => {
+                    const option = document.createElement('option');
+                    // Create a unique value from gatewaySerial and deviceId
+                    const uniqueKey = `${device.gatewaySerial}_${device.deviceId}`;
+                    option.value = uniqueKey;
+                    option.dataset.gatewaySerial = device.gatewaySerial || '';
+                    option.dataset.deviceId = device.deviceId;
+                    option.textContent = device.displayName || `${device.modelId} (Device ${device.deviceId})`;
+
+                    // Check if this is the currently selected device
+                    const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
+                    if (uniqueKey === currentKey) {
+                        option.selected = true;
+                    }
+                    deviceSelect.appendChild(option);
+                    console.log('Added device option:', uniqueKey, device.modelId, 'Gateway:', device.gatewaySerial);
+                });
+
+                // If current device not in list, select first
+                const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
+                const deviceExists = currentInstall.devices.some(d => `${d.gatewaySerial}_${d.deviceId}` === currentKey);
+                if (!deviceExists && currentInstall.devices.length > 0) {
+                    const firstDevice = currentInstall.devices[0];
+                    currentDeviceId = firstDevice.deviceId;
+                    currentGatewaySerial = firstDevice.gatewaySerial;
+                    deviceSelect.value = `${currentGatewaySerial}_${currentDeviceId}`;
+                    console.log('Selected first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                }
+            } else {
+                console.log('No devices found, using fallback Device 0');
+                // Fallback to Device 0
+                const option = document.createElement('option');
+                option.value = '0';
+                option.textContent = 'Device 0 (Standard)';
+                deviceSelect.appendChild(option);
+                currentDeviceId = '0';
+            }
+
+            console.log('Final currentDeviceId:', currentDeviceId);
+        }
+
+        async function loadDashboard(forceRefresh = false) {
+            const contentDiv = document.getElementById('dashboardContent');
+            contentDiv.className = 'loading';
+            contentDiv.innerHTML = '<div class="spinner"></div><p>Lade Dashboard-Daten...</p>';
+
+            try {
+                // Get current device to extract gateway serial
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                // Find device by BOTH gatewaySerial AND deviceId (because multiple devices can have the same deviceId!)
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    console.error('Device not found!', {
+                        currentDeviceId,
+                        currentGatewaySerial,
+                        availableDevices: currentInstall.devices
+                    });
+                    throw new Error(`Gerät nicht gefunden: ${currentDeviceId} @ ${currentGatewaySerial}`);
+                }
+
+                const gatewaySerial = currentDevice.gatewaySerial || '';
+
+                console.log('Selected device:', currentDevice);
+                const refreshParam = forceRefresh ? '&refresh=true' : '';
+
+                console.log('Fetching features for:', {
+                    installationId: currentInstallationId,
+                    gatewaySerial: gatewaySerial,
+                    deviceId: currentDeviceId,
+                    forceRefresh: forceRefresh
+                });
+
+                const response = await fetch(`/api/features?installationId=${currentInstallationId}&gatewaySerial=${gatewaySerial}&deviceId=${currentDeviceId}${refreshParam}`);
+                if (!response.ok) {
+                    throw new Error('API Fehler: ' + response.status);
+                }
+
+                const features = await response.json();
+
+                // Add device info to features for display
+                features.deviceInfo = currentDevice;
+
+                renderDashboard(features);
+                updateLastUpdate();
+
+            } catch (error) {
+                showError('Fehler beim Laden der Features: ' + error.message);
+                contentDiv.innerHTML = '<div class="error">Fehler beim Laden der Daten: ' + error.message + '</div>';
+            }
+        }
+
+        function renderDashboard(features) {
+            const contentDiv = document.getElementById('dashboardContent');
+            contentDiv.className = 'dashboard-grid';
+
+            // Extract key features
+            const keyFeatures = extractKeyFeatures(features);
+
+            // Debug: Log features with specific keywords
+            if (features.rawFeatures) {
+                const volumeFlowFeatures = features.rawFeatures.filter(f =>
+                    f.feature && (
+                        f.feature.toLowerCase().includes('volume') ||
+                        f.feature.toLowerCase().includes('flow') ||
+                        f.feature.toLowerCase().includes('fan')
+                    )
+                );
+                if (volumeFlowFeatures.length > 0) {
+                    console.log('🔍 Features mit volume/flow/fan:', volumeFlowFeatures);
+                }
+
+                const statsFeatures = features.rawFeatures.filter(f =>
+                    f.feature && f.feature.toLowerCase().includes('statistic')
+                );
+                if (statsFeatures.length > 0) {
+                    console.log('📊 Statistics Features:', statsFeatures);
+                }
+            }
+
+            // Build dashboard HTML
+            let html = '';
+
+            // Device info header (if available)
+            if (features.deviceInfo) {
+                html += renderDeviceHeader(features.deviceInfo, keyFeatures);
+            }
+
+            // Main temperature displays (outside, supply)
+            html += renderMainTemperatures(keyFeatures);
+
+            // Store heating curve data for later rendering
+            window.heatingCurveData = {
+                slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
+                shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
+                currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
+                currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
+                maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
+                minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
+            };
+
+            // Compressor/Burner status (Vitocal/Vitodens)
+            html += renderCompressorBurner(keyFeatures);
+
+            // Heating circuit card
+            html += renderHeatingCircuit(keyFeatures);
+
+            // Hot water card
+            html += renderHotWater(keyFeatures);
+
+            // Heating curve & settings
+            html += renderHeatingCurve(keyFeatures);
+
+            // Consumption
+            html += renderConsumption(keyFeatures);
+
+            // Additional sensors & pumps
+            html += renderAdditionalSensors(keyFeatures);
+
+            // Refrigerant circuit (heat pump only)
+            html += renderRefrigerantCircuit(keyFeatures);
+
+            // System status
+            html += renderSystemStatus(keyFeatures);
+
+            // Device information
+            html += renderDeviceInfo(keyFeatures);
+
+            contentDiv.innerHTML = html;
+
+            // Render D3 chart after DOM is updated
+            if (window.heatingCurveData && (window.heatingCurveData.slope !== null || window.heatingCurveData.shift !== null)) {
+                setTimeout(() => renderHeatingCurveChart(), 100);
+            }
+        }
+
+        function extractKeyFeatures(features) {
+            // Find features by exact name first, then by pattern
+            const find = (exactNames, patterns = []) => {
+                if (!Array.isArray(exactNames)) exactNames = [exactNames];
+                if (!Array.isArray(patterns)) patterns = patterns ? [patterns] : [];
+
+                // Try exact matches first
+                for (const exactName of exactNames) {
+                    for (const category of [features.temperatures, features.dhw, features.circuits,
+                           features.operatingModes, features.other]) {
+                        if (category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
+            return category[exactName];
+                        }
+                    }
+                }
+
+                // Fall back to pattern matching
+                for (const pattern of patterns) {
+                    for (const category of [features.temperatures, features.dhw, features.circuits,
+                           features.operatingModes, features.other]) {
+                        for (const [key, value] of Object.entries(category)) {
+            if (key.toLowerCase().includes(pattern.toLowerCase()) &&
+                value.value !== null && value.value !== undefined) {
+                return value;
+            }
+                        }
+                    }
+                }
+                return null;
+            };
+
+            // Special find for nested properties (e.g., heating.curve has slope and shift as properties)
+            const findNested = (featureName, propertyName) => {
+                for (const category of [features.temperatures, features.dhw, features.circuits,
+                       features.operatingModes, features.other]) {
+                    if (category[featureName]) {
+                        const feature = category[featureName];
+                        // Check if it has nested properties (Go now returns type="object" with nested FeatureValues)
+                        if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
+            const nestedValue = feature.value[propertyName];
+            if (nestedValue && nestedValue.value !== undefined) {
+                return {
+                    type: nestedValue.type || 'number',
+                    value: nestedValue.value,
+                    unit: nestedValue.unit || ''
+                };
+            }
+                        }
+                    }
+                }
+                return null;
+            };
+
+            const findAll = (pattern) => {
+                const results = [];
+                for (const category of [features.temperatures, features.dhw, features.circuits,
+                       features.operatingModes, features.other]) {
+                    for (const [key, value] of Object.entries(category)) {
+                        if (key.toLowerCase().includes(pattern.toLowerCase()) &&
+            value.value !== null && value.value !== undefined) {
+            results.push({ name: key, value: value });
+                        }
+                    }
+                }
+                return results;
+            };
+
+            return {
+                // Temperatures
+                outsideTemp: find(['heating.sensors.temperature.outside'], ['outside']),
+                calculatedOutsideTemp: find(['heating.calculated.temperature.outside']),
+                supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']),
+                returnTemp: find(['heating.sensors.temperature.return']),
+                primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),
+                secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),
+                bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
+                boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
+                roomTemp: find(['heating.circuits.0.sensors.temperature.room']),
+                circuitTemp: find(['heating.circuits.0.temperature']),
+
+                // DHW
+                dhwTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage', 'heating.dhw.sensors.temperature.dhwCylinder']),
+                dhwTarget: find(['heating.dhw.temperature.main']),
+                dhwStatus: find(['heating.dhw.operating.modes.active']),
+                dhwHysteresis: find(['heating.dhw.temperature.hysteresis']),
+
+                // Heating curve - these need to be fetched from circuits category
+                heatingCurveSlope: findNested('heating.circuits.0.heating.curve', 'slope'),
+                heatingCurveShift: findNested('heating.circuits.0.heating.curve', 'shift'),
+                supplyTempMax: findNested('heating.circuits.0.temperature.levels', 'max'),
+                supplyTempMin: findNested('heating.circuits.0.temperature.levels', 'min'),
+
+                // Operating mode
+                operatingMode: find(['heating.circuits.0.operating.modes.active']),
+                operatingProgram: find(['heating.circuits.0.operating.programs.active']),
+
+                // Compressor (heat pump - Vitocal)
+                compressorSpeed: find(['heating.compressors.0.speed.current']),
+                compressorPower: find(['heating.inverters.0.sensors.power.output']),
+                compressorCurrent: find(['heating.inverters.0.sensors.power.current']),
+                compressorInletTemp: find(['heating.compressors.0.sensors.temperature.inlet']),
+                compressorOutletTemp: find(['heating.compressors.0.sensors.temperature.outlet']),
+                compressorOilTemp: find(['heating.compressors.0.sensors.temperature.oil']),
+                compressorMotorTemp: find(['heating.compressors.0.sensors.temperature.motorChamber']),
+                compressorPressure: find(['heating.compressors.0.sensors.pressure.inlet']),
+
+                // Burner (gas heating - Vitodens)
+                burnerModulation: find(['heating.burners.0.modulation']),
+
+                // Additional sensors
+                volumetricFlow: find(['heating.sensors.volumetricFlow.allengra']),
+                pressure: find(['heating.sensors.pressure.supply']),
+                pumpInternal: find(['heating.boiler.pumps.internal.current']),
+                fan0: find(['heating.primaryCircuit.fans.0.current']),
+                fan1: find(['heating.primaryCircuit.fans.1.current']),
+
+                // Efficiency
+                scop: find(['heating.scop.total', 'heating.spf.total']),
+                scopHeating: find(['heating.scop.heating', 'heating.spf.heating']),
+                scopDhw: find(['heating.scop.dhw', 'heating.spf.dhw']),
+                seerCooling: find(['heating.seer.cooling']),
+
+                // Valves and auxiliary systems
+                fourWayValve: find(['heating.valves.fourThreeWay.position']),
+                secondaryHeater: find(['heating.secondaryHeatGenerator.state', 'heating.secondaryHeatGenerator.status']),
+
+                // Refrigerant circuit (heat pump specific)
+                evaporatorTemp: find(['heating.evaporators.0.sensors.temperature.liquid']),
+                evaporatorOverheat: find(['heating.evaporators.0.sensors.temperature.overheat']),
+                condensorTemp: find(['heating.condensors.0.sensors.temperature.liquid']),
+                economizerTemp: find(['heating.economizers.0.sensors.temperature.liquid']),
+                inverterTemp: find(['heating.inverters.0.sensors.temperature.powerModule']),
+
+                // Device information
+                deviceSerial: find(['device.serial']),
+                deviceType: find(['device.type']),
+                deviceVariant: find(['device.variant', 'heating.device.variant']),
+
+                // Compressor statistics (load classes)
+                compressorStats: find(['heating.compressors.0.statistics']),
+
+            };
+        }
+
+        function renderDeviceHeader(deviceInfo, kf) {
+            return `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>🔧 ${deviceInfo.modelId || deviceInfo.displayName}</h2>
+                        <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMainTemperatures(kf) {
+            let temps = '';
+            if (kf.outsideTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemperatur</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.outsideTemp.value)}</span>
+            <span class="temp-unit">${kf.outsideTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.calculatedOutsideTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemp. (ged.)</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.calculatedOutsideTemp.value)}</span>
+            <span class="temp-unit">${kf.calculatedOutsideTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.supplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Vorlauftemperatur</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.supplyTemp.value)}</span>
+            <span class="temp-unit">${kf.supplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.returnTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Rücklauftemperatur</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.returnTemp.value)}</span>
+            <span class="temp-unit">${kf.returnTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.boilerTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Kesseltemperatur</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.boilerTemp.value)}</span>
+            <span class="temp-unit">${kf.boilerTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.bufferTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.bufferTemp.value)}</span>
+            <span class="temp-unit">${kf.bufferTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.primarySupplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Primärkreis-Vorlauf</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.primarySupplyTemp.value)}</span>
+            <span class="temp-unit">${kf.primarySupplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.secondarySupplyTemp) {
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Sekundärkreis-Vorlauf</span>
+                        <div>
+            <span class="temp-value">${formatNum(kf.secondarySupplyTemp.value)}</span>
+            <span class="temp-unit">${kf.secondarySupplyTemp.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (!temps) return '';
+
+            return `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>🌡️ Temperaturen</h2>
+                    </div>
+                    <div class="temp-grid">
+                        ${temps}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCompressorBurner(kf) {
+            // Check if we have compressor (heat pump) or burner (gas)
+            const hasCompressor = kf.compressorSpeed || kf.compressorPower ||
+                                  kf.compressorCurrent || kf.compressorPressure ||
+                                  kf.compressorOilTemp || kf.compressorMotorTemp ||
+                                  kf.compressorInletTemp || kf.compressorOutletTemp ||
+                                  kf.compressorStats;
+            const hasBurner = kf.burnerModulation;
+
+            if (!hasCompressor && !hasBurner) return '';
+
+            let content = '';
+            let title = '';
+
+            if (hasCompressor) {
+                title = '⚙️ Kompressor';
+                const isRunning = kf.compressorSpeed && kf.compressorSpeed.value > 0;
+
+                // Convert speed to RPM if unit is revolutionsPerSecond
+                let speedValue = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.value : 0;
+                let speedUnit = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.unit : '';
+
+                if (speedUnit === 'revolutionsPerSecond') {
+                    speedValue = speedValue * 60;
+                    speedUnit = 'U/min';
+                }
+
+                // Extract compressor statistics
+                let compressorHours = 0;
+                let compressorStarts = 0;
+                let avgRuntime = 0;
+
+                if (kf.compressorStats && kf.compressorStats.value) {
+                    const stats = kf.compressorStats.value;
+                    if (stats.hours && stats.hours.value !== undefined) {
+                        compressorHours = stats.hours.value;
+                    }
+                    if (stats.starts && stats.starts.value !== undefined) {
+                        compressorStarts = stats.starts.value;
+                    }
+                    if (compressorHours > 0 && compressorStarts > 0) {
+                        avgRuntime = compressorHours / compressorStarts;
+                    }
+                }
+
+                content = `
+                    <div class="status-item">
+                        <span class="status-label">Status</span>
+                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                    </div>
+                    ${kf.compressorSpeed ? `
+                        <div class="status-item">
+            <span class="status-label">Drehzahl</span>
+            <span class="status-value">${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorPower ? `
+                        <div class="status-item">
+            <span class="status-label">Leistung</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorPower) ? formatNum(kf.compressorPower.value) + ' ' + (kf.compressorPower.unit || 'W') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorCurrent ? `
+                        <div class="status-item">
+            <span class="status-label">Stromaufnahme</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatNum(kf.compressorCurrent.value) + ' ' + (kf.compressorCurrent.unit || 'A') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorPressure ? `
+                        <div class="status-item">
+            <span class="status-label">Einlassdruck</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorPressure) ? formatNum(kf.compressorPressure.value) + ' ' + (kf.compressorPressure.unit || 'bar') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorOilTemp ? `
+                        <div class="status-item">
+            <span class="status-label">Öltemperatur</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorOilTemp) ? formatNum(kf.compressorOilTemp.value) + ' ' + (kf.compressorOilTemp.unit || '°C') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorMotorTemp ? `
+                        <div class="status-item">
+            <span class="status-label">Motorraumtemperatur</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorMotorTemp) ? formatNum(kf.compressorMotorTemp.value) + ' ' + (kf.compressorMotorTemp.unit || '°C') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorInletTemp ? `
+                        <div class="status-item">
+            <span class="status-label">Einlasstemperatur</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorInletTemp) ? formatNum(kf.compressorInletTemp.value) + ' ' + (kf.compressorInletTemp.unit || '°C') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${kf.compressorOutletTemp ? `
+                        <div class="status-item">
+            <span class="status-label">Auslasstemperatur</span>
+            <span class="status-value">${isValidNumericValue(kf.compressorOutletTemp) ? formatNum(kf.compressorOutletTemp.value) + ' ' + (kf.compressorOutletTemp.unit || '°C') : '--'}</span>
+                        </div>
+                    ` : ''}
+                    ${compressorHours > 0 ? `
+                        <div class="status-item">
+            <span class="status-label">Betriebsstunden Verdichter</span>
+            <span class="status-value">${compressorHours} h</span>
+                        </div>
+                    ` : ''}
+                    ${compressorStarts > 0 ? `
+                        <div class="status-item">
+            <span class="status-label">Anzahl Verdichterstarts</span>
+            <span class="status-value">${compressorStarts}</span>
+                        </div>
+                    ` : ''}
+                    ${avgRuntime > 0 ? `
+                        <div class="status-item">
+            <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
+            <span class="status-value">${formatNum(avgRuntime)} h</span>
+                        </div>
+                    ` : ''}
+                `;
+            } else if (hasBurner) {
+                title = '🔥 Brenner';
+                const modulation = kf.burnerModulation ? kf.burnerModulation.value : 0;
+                const isRunning = modulation > 0;
+
+                content = `
+                    <div class="status-item">
+                        <span class="status-label">Status</span>
+                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Modulation</span>
+                        <span class="status-value">${formatNum(modulation)} ${kf.burnerModulation.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>${title}</h2>
+                    </div>
+                    <div class="status-list">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHeatingCircuit(kf) {
+            if (!kf.operatingMode && !kf.operatingProgram && !kf.circuitTemp) return '';
+
+            const mode = kf.operatingMode ? kf.operatingMode.value : 'unknown';
+            const program = kf.operatingProgram ? kf.operatingProgram.value : '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏠 Heizkreis</h2>
+                        ${mode ? `<span class="badge badge-info">${mode}</span>` : ''}
+                    </div>
+                    <div class="status-list">
+                        ${kf.operatingProgram ? `
+            <div class="status-item">
+                <span class="status-label">Betriebsprogramm</span>
+                <span class="status-value">${program}</span>
+            </div>
+                        ` : ''}
+                        ${kf.circuitTemp ? `
+            <div class="status-item">
+                <span class="status-label">Kreistemperatur</span>
+                <span class="status-value">${formatNum(kf.circuitTemp.value)} ${kf.circuitTemp.unit || '°C'}</span>
+            </div>
+                        ` : ''}
+                        ${kf.roomTemp ? `
+            <div class="status-item">
+                <span class="status-label">Raumtemperatur</span>
+                <span class="status-value">${formatNum(kf.roomTemp.value)} ${kf.roomTemp.unit || '°C'}</span>
+            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHotWater(kf) {
+            if (!kf.dhwTemp && !kf.dhwTarget && !kf.dhwStatus) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>💧 Warmwasser</h2>
+                        ${kf.dhwStatus ? `<span class="badge badge-info">${kf.dhwStatus.value}</span>` : ''}
+                    </div>
+                    <div class="status-list">
+                        ${kf.dhwTemp ? `
+            <div class="status-item">
+                <span class="status-label">Ist-Temperatur</span>
+                <span class="status-value">${formatNum(kf.dhwTemp.value)} ${kf.dhwTemp.unit || '°C'}</span>
+            </div>
+                        ` : ''}
+                        ${kf.dhwTarget ? `
+            <div class="status-item">
+                <span class="status-label">Soll-Temperatur</span>
+                <span class="status-value">${formatNum(kf.dhwTarget.value)} ${kf.dhwTarget.unit || '°C'}</span>
+            </div>
+                        ` : ''}
+                        ${kf.dhwHysteresis ? `
+            <div class="status-item">
+                <span class="status-label">Hysterese</span>
+                <span class="status-value">${formatNum(kf.dhwHysteresis.value)} ${kf.dhwHysteresis.unit || 'K'}</span>
+            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHeatingCurve(kf) {
+            console.log('🔍 renderHeatingCurve called');
+            console.log('heatingCurveSlope:', kf.heatingCurveSlope);
+            console.log('heatingCurveShift:', kf.heatingCurveShift);
+
+            if (!kf.heatingCurveSlope && !kf.heatingCurveShift) {
+                console.warn('⚠️ No heating curve data available');
+                return '';
+            }
+
+            const slope = kf.heatingCurveSlope ? kf.heatingCurveSlope.value : 1.0;
+            const shift = kf.heatingCurveShift ? kf.heatingCurveShift.value : 0;
+
+            console.log('✅ Heating curve values - slope:', slope, 'shift:', shift);
+            const currentOutsideTemp = kf.outsideTemp ? kf.outsideTemp.value : null;
+            const currentSupplyTemp = kf.supplyTemp ? kf.supplyTemp.value : null;
+            const maxSupplyTemp = kf.supplyTempMax ? kf.supplyTempMax.value : null;
+            const minSupplyTemp = kf.supplyTempMin ? kf.supplyTempMin.value : null;
+
+            let settings = '';
+            if (kf.heatingCurveSlope) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Neigung</span>
+                        <span class="status-value">${formatValue(kf.heatingCurveSlope)}</span>
+                    </div>
+                `;
+            }
+            if (kf.heatingCurveShift) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Niveau (Verschiebung)</span>
+                        <span class="status-value">${formatValue(kf.heatingCurveShift)}</span>
+                    </div>
+                `;
+            }
+            if (kf.supplyTempMax) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
+                        <span class="status-value">${formatValue(kf.supplyTempMax)}</span>
+                    </div>
+                `;
+            }
+            if (kf.supplyTempMin) {
+                settings += `
+                    <div class="status-item">
+                        <span class="status-label">Vorlauftemperatur (min)</span>
+                        <span class="status-value">${formatValue(kf.supplyTempMin)}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>📐 Heizkurve</h2>
+                    </div>
+                    <div class="status-list" style="margin-bottom: 15px;">
+                        ${settings}
+                    </div>
+                    <div id="heatingCurveChart" style="width: 100%; height: 400px;"></div>
+                </div>
+            `;
+        }
+
+        function renderHeatingCurveChart() {
+            console.log('📈 Starting to render heating curve chart...');
+
+            const chartId = 'heatingCurveChart';
+            const chartElement = document.getElementById(chartId);
+
+            if (!chartElement) {
+                console.error('❌ Chart element not found:', chartId);
+                return;
+            }
+
+            // Check if D3 is loaded
+            if (typeof d3 === 'undefined') {
+                console.error('❌ D3.js is not loaded');
+                chartElement.innerHTML = '<div style="color: #ef4444; padding: 20px; text-align: center;">D3.js konnte nicht geladen werden.</div>';
+                return;
+            }
+            console.log('✅ D3.js is loaded, version:', d3.version);
+
+            const data = window.heatingCurveData;
+            if (!data) {
+                console.error('❌ No heating curve data available');
+                return;
+            }
+
+            const {slope, shift, currentOutside, currentSupply, maxSupply, minSupply} = data;
+            console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply});
+
+            // Clear any existing content
+            chartElement.innerHTML = '';
+
+            // Calculate heating curve: VL = 20 + slope × (20 - AT) + shift
+            function calculateSupplyTemp(outsideTemp) {
+                return 20 + slope * (20 - outsideTemp) + shift;
+            }
+
+            // Setup dimensions
+            const margin = {top: 20, right: 30, bottom: 50, left: 60};
+            const width = chartElement.clientWidth - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            // Create SVG
+            const svg = d3.select('#' + chartId)
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+            // Scales (X-axis reversed: 20°C left, -20°C right)
+            const xScale = d3.scaleLinear()
+                .domain([20, -20])
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([20, 70])
+                .range([height, 0]);
+
+            // Grid lines
+            svg.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .call(d3.axisLeft(yScale)
+                    .tickSize(-width)
+                    .tickFormat(''));
+
+            svg.append('g')
+                .attr('class', 'grid')
+                .attr('opacity', 0.1)
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(xScale)
+                    .tickSize(-height)
+                    .tickFormat(''));
+
+            // Generate curve data
+            const curveData = [];
+            for (let temp = -20; temp <= 20; temp += 0.5) {
+                curveData.push({
+                    outside: temp,
+                    supply: calculateSupplyTemp(temp)
+                });
+            }
+
+            // Line generator
+            const line = d3.line()
+                .x(d => xScale(d.outside))
+                .y(d => yScale(d.supply))
+                .curve(d3.curveMonotoneX);
+
+            // Draw the curve
+            svg.append('path')
+                .datum(curveData)
+                .attr('fill', 'none')
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 3)
+                .attr('d', line);
+
+            // Draw max supply temp reference line
+            if (maxSupply !== null) {
+                svg.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', width)
+                    .attr('y1', yScale(maxSupply))
+                    .attr('y2', yScale(maxSupply))
+                    .attr('stroke', '#ef4444')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('opacity', 0.7);
+
+                svg.append('text')
+                    .attr('x', width - 5)
+                    .attr('y', yScale(maxSupply) - 5)
+                    .attr('text-anchor', 'end')
+                    .attr('fill', '#ef4444')
+                    .attr('font-size', '11px')
+                    .attr('font-weight', 'bold')
+                    .text('Max: ' + maxSupply + '°C');
+            }
+
+            // Draw min supply temp reference line
+            if (minSupply !== null) {
+                svg.append('line')
+                    .attr('x1', 0)
+                    .attr('x2', width)
+                    .attr('y1', yScale(minSupply))
+                    .attr('y2', yScale(minSupply))
+                    .attr('stroke', '#3b82f6')
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', '5,5')
+                    .attr('opacity', 0.7);
+
+                svg.append('text')
+                    .attr('x', width - 5)
+                    .attr('y', yScale(minSupply) + 15)
+                    .attr('text-anchor', 'end')
+                    .attr('fill', '#3b82f6')
+                    .attr('font-size', '11px')
+                    .attr('font-weight', 'bold')
+                    .text('Min: ' + minSupply + '°C');
+            }
+
+            // Draw current point if available
+            if (currentOutside !== null && currentSupply !== null) {
+                svg.append('circle')
+                    .attr('cx', xScale(currentOutside))
+                    .attr('cy', yScale(currentSupply))
+                    .attr('r', 6)
+                    .attr('fill', '#f59e0b')
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', 2);
+
+                svg.append('text')
+                    .attr('x', xScale(currentOutside) + 10)
+                    .attr('y', yScale(currentSupply) - 10)
+                    .attr('fill', '#f59e0b')
+                    .attr('font-size', '12px')
+                    .attr('font-weight', 'bold')
+                    .text('Aktuell: ' + currentOutside.toFixed(1) + '°C / ' + currentSupply.toFixed(1) + '°C');
+            }
+
+            // X-Axis
+            svg.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(xScale).ticks(10))
+                .attr('color', '#a0a0b0');
+
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', height + 40)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-size', '14px')
+                .text('Außentemperatur (°C)');
+
+            // Y-Axis
+            svg.append('g')
+                .call(d3.axisLeft(yScale).ticks(10))
+                .attr('color', '#a0a0b0');
+
+            svg.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -height / 2)
+                .attr('y', -45)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#e0e0e0')
+                .attr('font-size', '14px')
+                .text('Vorlauftemperatur (°C)');
+
+            // Formula text
+            svg.append('text')
+                .attr('x', 10)
+                .attr('y', 15)
+                .attr('fill', '#667eea')
+                .attr('font-size', '12px')
+                .attr('font-family', 'monospace')
+                .text('VL = 20 + ' + slope.toFixed(1) + ' × (20 - AT) + ' + shift);
+
+            // Add hover functionality
+            // Create tooltip
+            const tooltip = d3.select('body')
+                .append('div')
+                .style('position', 'absolute')
+                .style('background', 'rgba(0, 0, 0, 0.8)')
+                .style('color', '#fff')
+                .style('padding', '8px 12px')
+                .style('border-radius', '4px')
+                .style('font-size', '12px')
+                .style('pointer-events', 'none')
+                .style('opacity', 0)
+                .style('z-index', 1000);
+
+            // Create hover line and circle
+            const hoverLine = svg.append('line')
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 1)
+                .attr('stroke-dasharray', '3,3')
+                .style('opacity', 0);
+
+            const hoverCircle = svg.append('circle')
+                .attr('r', 5)
+                .attr('fill', '#667eea')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .style('opacity', 0);
+
+            // Invisible overlay to capture mouse events
+            svg.append('rect')
+                .attr('width', width)
+                .attr('height', height)
+                .style('fill', 'none')
+                .style('pointer-events', 'all')
+                .on('mousemove', function(event) {
+                    const [mouseX] = d3.pointer(event);
+                    const outsideTemp = xScale.invert(mouseX);
+                    const supplyTemp = calculateSupplyTemp(outsideTemp);
+
+                    // Update hover elements
+                    hoverLine
+                        .attr('x1', mouseX)
+                        .attr('x2', mouseX)
+                        .attr('y1', 0)
+                        .attr('y2', height)
+                        .style('opacity', 1);
+
+                    hoverCircle
+                        .attr('cx', xScale(outsideTemp))
+                        .attr('cy', yScale(supplyTemp))
+                        .style('opacity', 1);
+
+                    // Update tooltip
+                    tooltip
+                        .style('opacity', 1)
+                        .html(`
+                            <strong>Außentemperatur:</strong> ${outsideTemp.toFixed(1)}°C<br>
+                            <strong>Vorlauftemperatur:</strong> ${supplyTemp.toFixed(1)}°C
+                        `)
+                        .style('left', (event.pageX + 15) + 'px')
+                        .style('top', (event.pageY - 15) + 'px');
+                })
+                .on('mouseout', function() {
+                    hoverLine.style('opacity', 0);
+                    hoverCircle.style('opacity', 0);
+                    tooltip.style('opacity', 0);
+                });
+
+            console.log('✅ Heating curve chart rendered successfully');
+        }
+
+        function renderConsumption(kf) {
+            let consumption = '';
+
+            // Power consumption
+            if (kf.powerConsumptionToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.powerConsumptionHeatingToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Heizung-Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionHeatingToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.powerConsumptionDhwToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">WW-Stromverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.powerConsumptionDhwToday)}</span>
+                    </div>
+                `;
+            }
+
+            // Gas consumption
+            if (kf.gasConsumptionToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.gasConsumptionHeatingToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Heizung-Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionHeatingToday)}</span>
+                    </div>
+                `;
+            }
+            if (kf.gasConsumptionDhwToday) {
+                consumption += `
+                    <div class="status-item">
+                        <span class="status-label">WW-Gasverbrauch heute</span>
+                        <span class="status-value">${formatValue(kf.gasConsumptionDhwToday)}</span>
+                    </div>
+                `;
+            }
+
+            if (!consumption) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📊 Verbrauch heute</h2>
+                    </div>
+                    <div class="status-list">
+                        ${consumption}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdditionalSensors(kf) {
+            let sensors = '';
+
+            if (kf.volumetricFlow) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Volumenstrom</span>
+                        <span class="status-value">${formatNum(kf.volumetricFlow.value)} ${kf.volumetricFlow.unit || 'l/h'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.pressure) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Druck</span>
+                        <span class="status-value">${formatNum(kf.pressure.value)} ${kf.pressure.unit || 'bar'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.pumpInternal) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Interne Pumpe</span>
+                        <span class="status-value">${formatNum(kf.pumpInternal.value)} ${kf.pumpInternal.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fan0) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Lüfter 1</span>
+                        <span class="status-value">${formatNum(kf.fan0.value)} ${kf.fan0.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fan1) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Lüfter 2</span>
+                        <span class="status-value">${formatNum(kf.fan1.value)} ${kf.fan1.unit || '%'}</span>
+                    </div>
+                `;
+            }
+
+            // 4-Way Valve Position
+            if (kf.fourWayValve) {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">4-Wege-Ventil</span>
+                        <span class="status-value">${kf.fourWayValve.value}</span>
+                    </div>
+                `;
+            }
+
+            // Secondary Heater
+            if (kf.secondaryHeater) {
+                const heaterStatus = kf.secondaryHeater.value;
+                const isActive = heaterStatus !== 'off' && heaterStatus !== 'standby';
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Zusatzheizung</span>
+                        <span class="status-value">${isActive ? '🟢' : '⚪'} ${heaterStatus}</span>
+                    </div>
+                `;
+            }
+
+            if (!sensors) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔧 Weitere Komponenten</h2>
+                    </div>
+                    <div class="status-list">
+                        ${sensors}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRefrigerantCircuit(kf) {
+            // Only for heat pumps
+            if (!kf.evaporatorTemp && !kf.condensorTemp && !kf.inverterTemp) return '';
+
+            let circuit = '';
+
+            if (kf.evaporatorTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verdampfer</span>
+                        <span class="status-value">${formatNum(kf.evaporatorTemp.value)} ${kf.evaporatorTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.evaporatorOverheat) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verdampfer Überhitzung</span>
+                        <span class="status-value">${formatNum(kf.evaporatorOverheat.value)} ${kf.evaporatorOverheat.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.condensorTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Verflüssiger</span>
+                        <span class="status-value">${formatNum(kf.condensorTemp.value)} ${kf.condensorTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.economizerTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Economizer</span>
+                        <span class="status-value">${formatNum(kf.economizerTemp.value)} ${kf.economizerTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.inverterTemp) {
+                circuit += `
+                    <div class="status-item">
+                        <span class="status-label">Wechselrichter</span>
+                        <span class="status-value">${formatNum(kf.inverterTemp.value)} ${kf.inverterTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔧 Kältekreislauf</h2>
+                    </div>
+                    <div class="status-list">
+                        ${circuit}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSystemStatus(kf) {
+            let status = '';
+
+            if (kf.operatingMode) {
+                const mode = translateMode(kf.operatingMode.value);
+                status += `
+                    <div class="status-item">
+                        <span class="status-label">Betriebsmodus</span>
+                        <span class="status-value">${mode}</span>
+                    </div>
+                `;
+            }
+
+            if (!status) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚙️ Systemstatus</h2>
+                        <span class="badge badge-success">Normal</span>
+                    </div>
+                    <div class="status-list">
+                        ${status}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDeviceInfo(kf) {
+            if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant && !kf.scop && !kf.compressorStats) return '';
+
+            let info = '';
+
+            // Basic device info
+            if (kf.deviceVariant) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Modell</span>
+                        <span class="status-value">${kf.deviceVariant.value}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceType) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Typ</span>
+                        <span class="status-value">${kf.deviceType.value}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceSerial) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">Seriennummer</span>
+                        <span class="status-value" style="font-family: monospace;">${kf.deviceSerial.value}</span>
+                    </div>
+                `;
+            }
+
+            // JAZ / SCOP / SPF values (Coefficient of Performance)
+            if (kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
+                info += `
+                    <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
+                        <span class="status-label" style="font-weight: 600; color: #667eea;">Coefficient of Performance (JAZ)</span>
+                    </div>
+                `;
+
+                if (kf.scop) {
+                    info += `
+                        <div class="status-item">
+            <span class="status-label">JAZ Gesamt</span>
+            <span class="status-value">${formatNum(kf.scop.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.scopHeating) {
+                    info += `
+                        <div class="status-item">
+            <span class="status-label">JAZ Heizen</span>
+            <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.scopDhw) {
+                    info += `
+                        <div class="status-item">
+            <span class="status-label">JAZ Warmwasser</span>
+            <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
+                        </div>
+                    `;
+                }
+
+                if (kf.seerCooling) {
+                    info += `
+                        <div class="status-item">
+            <span class="status-label">JAZ Kühlen (SEER)</span>
+            <span class="status-value">${formatNum(kf.seerCooling.value)}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Compressor statistics (Lastklassen / Load classes)
+            if (kf.compressorStats) {
+                const stats = kf.compressorStats.value;
+
+                // Debug: Log the statistics structure
+                console.log('📊 Compressor Statistics:', stats);
+
+                if (stats && typeof stats === 'object') {
+                    // Check if this has the nested structure (hours/starts from heating.compressors.0.statistics)
+                    // These are shown in the Kompressor card, so skip them here
+                    const hasHoursStarts = stats.hours && stats.hours.value !== undefined;
+
+                    if (!hasHoursStarts) {
+                        // This is the load class data (heating.compressors.0.statistics with loadClassOne, etc.)
+                        info += `
+            <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
+                <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf 1 - Betriebsstunden</span>
+            </div>
+                        `;
+
+                        // Try different property name patterns for load classes
+                        const loadClassPatterns = [
+            ['hoursLoadClassOne', 'hoursLoadClassTwo', 'hoursLoadClassThree', 'hoursLoadClassFour', 'hoursLoadClassFive'],
+            ['loadClassOne', 'loadClassTwo', 'loadClassThree', 'loadClassFour', 'loadClassFive'],
+            ['hoursLoadClass1', 'hoursLoadClass2', 'hoursLoadClass3', 'hoursLoadClass4', 'hoursLoadClass5'],
+            ['class1', 'class2', 'class3', 'class4', 'class5'],
+            ['one', 'two', 'three', 'four', 'five']
+                        ];
+
+                        let foundPattern = null;
+                        for (const pattern of loadClassPatterns) {
+            // Check both direct values and nested structure
+            if (stats[pattern[0]] !== undefined) {
+                foundPattern = pattern;
+                break;
+            }
+            if (stats[pattern[0]] && stats[pattern[0]].value !== undefined) {
+                foundPattern = pattern;
+                break;
+            }
+                        }
+
+                        if (foundPattern) {
+            foundPattern.forEach((key, index) => {
+                let value = null;
+                // Handle both direct values and nested structure
+                if (stats[key] !== undefined) {
+                    if (typeof stats[key] === 'object' && stats[key].value !== undefined) {
+                        value = stats[key].value;
+                    } else {
+                        value = stats[key];
+                    }
+                }
+
+                if (value !== null) {
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">Stunden Lastklasse ${['eins', 'zwei', 'drei', 'vier', 'fünf'][index]}</span>
+                            <span class="status-value">${value} h</span>
+                        </div>
+                    `;
+                }
+            });
+                        }
+                    }
+                }
+            }
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>ℹ️ Geräteinformationen</h2>
+                    </div>
+                    <div class="status-list">
+                        ${info}
+                    </div>
+                </div>
+            `;
+        }
+
+        function translateMode(mode) {
+            const modes = {
+                'standby': 'Standby',
+                'dhw': 'Warmwasser',
+                'dhwAndHeating': 'Heizen + Warmwasser',
+                'forcedReduced': 'Reduziert',
+                'forcedNormal': 'Normal',
+                'normal': 'Normal'
+            };
+            return modes[mode] || mode;
+        }
+
+        function formatNum(val) {
+            if (val === null || val === undefined) return '--';
+            if (typeof val === 'number') {
+                return val.toFixed(1);
+            }
+            return val;
+        }
+
+        // Check if a feature value contains a valid numeric value (not a status object)
+        function isValidNumericValue(featureValue) {
+            if (!featureValue || featureValue.value === undefined || featureValue.value === null) {
+                return false;
+            }
+            // If value is an object (e.g., {status: {type: "string", value: "notConnected"}}),
+            // it's not a valid numeric value
+            if (typeof featureValue.value === 'object') {
+                return false;
+            }
+            // Check if it's a number
+            return typeof featureValue.value === 'number';
+        }
+
+        function extractFeatureValue(properties) {
+            if (properties && properties.value) {
+                return properties.value;
+            }
+            return { value: '--' };
+        }
+
+        function formatValue(featureValue) {
+            if (!featureValue || featureValue.value === undefined) {
+                return '--';
+            }
+            let val = featureValue.value;
+            if (typeof val === 'number') {
+                val = val.toFixed(1);
+            }
+            return val + (featureValue.unit ? ' ' + featureValue.unit : '');
+        }
+
+        function findFeature(features, keyword) {
+            for (const [key, value] of Object.entries(features)) {
+                if (key.toLowerCase().includes(keyword.toLowerCase())) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorContainer');
+            errorDiv.innerHTML = `<div class="error">${message}</div>`;
+            setTimeout(() => {
+                errorDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('de-DE');
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(() => {
+                loadDashboard();
+            }, 60000); // Every minute
+        }
+
+        // Event Listeners
+        document.getElementById('installationSelect').addEventListener('change', (e) => {
+            currentInstallationId = e.target.value;
+
+            // Get first device of new installation and set currentDeviceId + currentGatewaySerial
+            const selectedInstall = installations.find(i => i.installationId === currentInstallationId);
+            if (selectedInstall && selectedInstall.devices && selectedInstall.devices.length > 0) {
+                const firstDevice = selectedInstall.devices[0];
+                currentDeviceId = firstDevice.deviceId;
+                currentGatewaySerial = firstDevice.gatewaySerial || '';
+                console.log('Installation changed - selected first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+            }
+
+            // Update device dropdown for new installation (will select the device we just set)
+            updateDeviceDropdown();
+
+            // Update installation name in breadcrumb
+            if (selectedInstall) {
+                document.getElementById('currentInstallation').textContent =
+                    selectedInstall.description || selectedInstall.installationId;
+            }
+
+            // Reload dashboard with first device of new installation (use cache)
+            loadDashboard(false); // Use cache when switching installations
+        });
+
+        document.getElementById('deviceSelect').addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            currentGatewaySerial = selectedOption.dataset.gatewaySerial || '';
+            currentDeviceId = selectedOption.dataset.deviceId || '0';
+            console.log('Device changed to:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+            loadDashboard(false); // Use cache when switching devices
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            console.log('Manual refresh triggered');
+            loadDashboard(true); // Force refresh only on manual refresh button
+        });
+
+        document.getElementById('debugBtn').addEventListener('click', () => {
+            showDebugDevices();
+        });
+
+        // Debug functionality
+        let showAllDevices = false;
+        let showJsonView = false;
+        let currentDebugData = null;
+        let deviceFeatures = {}; // Store features per device
+
+        async function showDebugDevices() {
+            try {
+                const params = new URLSearchParams();
+                if (!showAllDevices) params.append('onlyUnknown', 'true');
+
+                const response = await fetch('/api/debug/devices?' + params.toString());
+                if (!response.ok) {
+                    throw new Error('API Fehler: ' + response.status);
+                }
+
+                const data = await response.json();
+                currentDebugData = data;
+                renderDebugModal(data);
+
+            } catch (error) {
+                showError('Fehler beim Laden der Debug-Daten: ' + error.message);
+            }
+        }
+
+        function renderDebugModal(data) {
+            // Create modal
+            const modal = document.createElement('div');
+            modal.className = 'debug-modal';
+            modal.id = 'debugModal';
+
+            let devicesHtml = '';
+            for (let i = 0; i < data.devices.length; i++) {
+                const device = data.devices[i];
+                const deviceKey = `${device.installationId}_${device.gatewaySerial}_${device.deviceId}`;
+                const hasFeatures = deviceFeatures[deviceKey];
+
+                let featuresHtml = '';
+                if (hasFeatures) {
+                    if (hasFeatures.error) {
+                        featuresHtml = `
+            <div style="margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 4px; color: #fca5a5;">
+                ❌ Fehler beim Laden der Features: ${hasFeatures.error}
+            </div>
+                        `;
+                    } else if (hasFeatures.features && hasFeatures.features.length > 0) {
+                        featuresHtml = `
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
+                <div style="color: #667eea; font-weight: 600; margin-bottom: 8px;">📊 Features (${hasFeatures.features.length}):</div>
+                <div style="max-height: 200px; overflow-y: auto; font-size: 11px;">
+                    ${hasFeatures.features.map(f => `
+                        <div style="margin-bottom: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 3px;">
+                            <div style="color: #fbbf24;">${f.feature}</div>
+                            ${f.properties && f.properties.value ? `
+                                <div style="color: #a0a0b0; margin-left: 10px;">
+                                    ${JSON.stringify(f.properties.value).substring(0, 100)}${JSON.stringify(f.properties.value).length > 100 ? '...' : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+                        `;
+                    } else {
+                        featuresHtml = `
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; color: #a0a0b0; font-style: italic;">
+                Keine Features gefunden
+            </div>
+                        `;
+                    }
+                }
+
+                devicesHtml += `
+                    <div class="debug-device">
+                        <div class="debug-device-header">
+            <span class="debug-device-type">${device.deviceType}</span>
+            <span class="debug-device-model">${device.modelId}</span>
+                        </div>
+                        <div class="debug-device-details">
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Installation:</span>
+                <span>${device.installationDesc || device.installationId}</span>
+            </div>
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Device ID:</span>
+                <span>${device.deviceId}</span>
+            </div>
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Gateway:</span>
+                <span>${device.gatewaySerial}</span>
+            </div>
+            ${device.accountName ? `
+            <div class="debug-device-detail">
+                <span class="debug-device-detail-label">Account:</span>
+                <span>${device.accountName}</span>
+            </div>
+            ` : ''}
+                        </div>
+                        ${featuresHtml}
+                        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="toggle-all" style="flex: 1; min-width: 140px; ${hasFeatures ? 'background: linear-gradient(135deg, #10b981 0%, #059669 100%);' : ''}"
+                    onclick="loadDeviceFeatures('${deviceKey}', ${i})">
+                ${hasFeatures ? '✅ Features geladen' : '📊 Features laden'}
+            </button>
+            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="copyDeviceJson(${i})">
+                📋 JSON kopieren
+            </button>
+            <button class="toggle-all" style="flex: 1; min-width: 140px;" onclick="downloadDeviceJson(${i})">
+                💾 JSON herunterladen
+            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const jsonString = JSON.stringify(data, null, 2);
+
+            modal.innerHTML = `
+                <div class="debug-content">
+                    <div class="debug-header">
+                        <h2>🐛 Debug: Geräte-Übersicht</h2>
+                        <button class="close-btn" onclick="closeDebugModal()">✕ Schließen</button>
+                    </div>
+                    <div class="debug-summary">
+                        <div class="debug-stat">
+            <div class="debug-stat-label">Angezeigte Geräte</div>
+            <div class="debug-stat-value">${data.totalDevices}</div>
+                        </div>
+                        <div class="debug-stat">
+            <div class="debug-stat-label">Unbekannte Geräte</div>
+            <div class="debug-stat-value">${data.unknownDevices}</div>
+                        </div>
+                    </div>
+                    <div class="debug-actions">
+                        <button class="toggle-all" onclick="toggleAllDevices()">
+            ${showAllDevices ? '🔽 Nur unbekannte Geräte' : '🔼 Alle Geräte anzeigen'}
+                        </button>
+                        <button class="toggle-all" onclick="toggleJsonView()">
+            ${showJsonView ? '👁️ Liste anzeigen' : '📄 JSON anzeigen'}
+                        </button>
+                    </div>
+                    <div style="padding: 12px; background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px; margin-bottom: 15px; color: #667eea; font-size: 13px;">
+                        ℹ️ Verwende die Buttons unter jedem Gerät um Features zu laden oder das Gerät zu exportieren.
+                    </div>
+                    <div id="debugDeviceList" style="max-height: 500px; overflow-y: auto; display: ${showJsonView ? 'none' : 'block'};">
+                        ${devicesHtml || '<p style="color: #a0a0b0; text-align: center; padding: 20px;">Keine Geräte gefunden</p>'}
+                    </div>
+                    <div id="debugJsonView" class="json-view" style="display: ${showJsonView ? 'block' : 'none'};">${jsonString}</div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeDebugModal();
+                }
+            });
+        }
+
+        function closeDebugModal() {
+            const modal = document.getElementById('debugModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function toggleAllDevices() {
+            showAllDevices = !showAllDevices;
+            closeDebugModal();
+            showDebugDevices();
+        }
+
+        function toggleJsonView() {
+            showJsonView = !showJsonView;
+            closeDebugModal();
+            renderDebugModal(currentDebugData);
+        }
+
+        async function loadDeviceFeatures(deviceKey, deviceIndex) {
+            const device = currentDebugData.devices[deviceIndex];
+
+            // Show loading indicator
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Laden...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/features?installationId=${device.installationId}&gatewaySerial=${device.gatewaySerial}&deviceId=${device.deviceId}`);
+                if (!response.ok) {
+                    throw new Error('API Fehler: ' + response.status);
+                }
+
+                const features = await response.json();
+
+                // Store features for this device
+                deviceFeatures[deviceKey] = {
+                    features: features.rawFeatures || []
+                };
+
+                // Re-render modal to show features
+                closeDebugModal();
+                renderDebugModal(currentDebugData);
+
+            } catch (error) {
+                deviceFeatures[deviceKey] = {
+                    error: error.message
+                };
+                closeDebugModal();
+                renderDebugModal(currentDebugData);
+            }
+        }
+
+        async function copyDeviceJson(deviceIndex) {
+            const device = currentDebugData.devices[deviceIndex];
+            const deviceKey = `${device.installationId}_${device.gatewaySerial}_${device.deviceId}`;
+
+            // Build device JSON with features if loaded
+            const deviceData = { ...device };
+            if (deviceFeatures[deviceKey]) {
+                if (deviceFeatures[deviceKey].features) {
+                    deviceData.features = deviceFeatures[deviceKey].features;
+                }
+                if (deviceFeatures[deviceKey].error) {
+                    deviceData.featuresError = deviceFeatures[deviceKey].error;
+                }
+            }
+
+            const jsonString = JSON.stringify(deviceData, null, 2);
+
+            try {
+                await navigator.clipboard.writeText(jsonString);
+                // Show success feedback
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Kopiert!';
+                btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 2000);
+            } catch (err) {
+                showError('Fehler beim Kopieren: ' + err.message);
+            }
+        }
+
+        function downloadDeviceJson(deviceIndex) {
+            const device = currentDebugData.devices[deviceIndex];
+            const deviceKey = `${device.installationId}_${device.gatewaySerial}_${device.deviceId}`;
+
+            // Build device JSON with features if loaded
+            const deviceData = { ...device };
+            if (deviceFeatures[deviceKey]) {
+                if (deviceFeatures[deviceKey].features) {
+                    deviceData.features = deviceFeatures[deviceKey].features;
+                }
+                if (deviceFeatures[deviceKey].error) {
+                    deviceData.featuresError = deviceFeatures[deviceKey].error;
+                }
+            }
+
+            const jsonString = JSON.stringify(deviceData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+
+            // Create filename from device info
+            const filename = `vicare-device-${device.deviceType}-${device.modelId.replace(/[^a-zA-Z0-9]/g, '_')}-${device.deviceId}.json`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // Show success feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Heruntergeladen!';
+            btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }
+
+        // Initialize
+        init();
