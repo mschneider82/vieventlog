@@ -245,6 +245,11 @@ func main() {
 	http.HandleFunc("/api/accounts/delete", accountDeleteHandler)
 	http.HandleFunc("/api/accounts/toggle", accountToggleHandler)
 
+	// Device settings endpoints
+	http.HandleFunc("/api/device-settings/get", deviceSettingsGetHandler)
+	http.HandleFunc("/api/device-settings/set", deviceSettingsSetHandler)
+	http.HandleFunc("/api/device-settings/delete", deviceSettingsDeleteHandler)
+
 	// Data endpoints
 	http.HandleFunc("/api/events", eventsHandler)
 	http.HandleFunc("/api/status", statusHandler)
@@ -1703,6 +1708,150 @@ func accountToggleHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AccountActionResponse{Success: true})
+}
+
+// --- Device Settings Handlers ---
+
+type DeviceSettingsRequest struct {
+	AccountID        string `json:"accountId"`
+	InstallationID   string `json:"installationId"`
+	DeviceID         string `json:"deviceId"`
+	CompressorRpmMin int    `json:"compressorRpmMin"`
+	CompressorRpmMax int    `json:"compressorRpmMax"`
+}
+
+type DeviceSettingsResponse struct {
+	Success          bool   `json:"success"`
+	Error            string `json:"error,omitempty"`
+	CompressorRpmMin int    `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax int    `json:"compressorRpmMax,omitempty"`
+}
+
+func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	accountID := r.URL.Query().Get("accountId")
+	installationID := r.URL.Query().Get("installationId")
+	deviceID := r.URL.Query().Get("deviceId")
+
+	if accountID == "" || installationID == "" || deviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "accountId, installationId, and deviceId are required",
+		})
+		return
+	}
+
+	deviceKey := fmt.Sprintf("%s_%s", installationID, deviceID)
+	settings, err := GetDeviceSettings(accountID, deviceKey)
+	if err != nil {
+		// No settings found is not an error - return empty settings
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: true,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(DeviceSettingsResponse{
+		Success:          true,
+		CompressorRpmMin: settings.CompressorRpmMin,
+		CompressorRpmMax: settings.CompressorRpmMax,
+	})
+}
+
+func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DeviceSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	if req.AccountID == "" || req.InstallationID == "" || req.DeviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "accountId, installationId, and deviceId are required",
+		})
+		return
+	}
+
+	deviceKey := fmt.Sprintf("%s_%s", req.InstallationID, req.DeviceID)
+	settings := &DeviceSettings{
+		CompressorRpmMin: req.CompressorRpmMin,
+		CompressorRpmMax: req.CompressorRpmMax,
+	}
+
+	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "Failed to save settings: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Device settings saved for %s (account: %s): min=%d, max=%d\n",
+		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(DeviceSettingsResponse{Success: true})
+}
+
+func deviceSettingsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DeviceSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	if req.AccountID == "" || req.InstallationID == "" || req.DeviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "accountId, installationId, and deviceId are required",
+		})
+		return
+	}
+
+	deviceKey := fmt.Sprintf("%s_%s", req.InstallationID, req.DeviceID)
+
+	if err := DeleteDeviceSettings(req.AccountID, deviceKey); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DeviceSettingsResponse{
+			Success: false,
+			Error:   "Failed to delete settings: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Device settings deleted for %s (account: %s)\n", deviceKey, req.AccountID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(DeviceSettingsResponse{Success: true})
 }
 
 func getEnv(key, defaultValue string) string {

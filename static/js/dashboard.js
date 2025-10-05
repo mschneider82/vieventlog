@@ -177,6 +177,12 @@
                 // Add device info to features for display
                 features.deviceInfo = currentDevice;
 
+                // Store current device info globally for RPM calculation
+                window.currentDeviceInfo = currentDevice;
+
+                // Load device settings for RPM percentage calculation
+                await loadDeviceSettings(currentDevice.installationId, currentDevice.deviceId);
+
                 renderDashboard(features);
                 updateLastUpdate();
 
@@ -471,7 +477,13 @@
                 <div class="card wide">
                     <div class="card-header">
                         <h2>🔧 ${deviceInfo.modelId || deviceInfo.displayName}</h2>
-                        <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
+                        <div>
+                            <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
+                            <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
+                                    style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
+                                ⚙️ Einstellungen
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -627,6 +639,18 @@
                     }
                 }
 
+                // Get device settings from cache for RPM percentage calculation
+                const deviceInfo = window.currentDeviceInfo; // Store this globally
+                let rpmPercentage = null;
+                if (deviceInfo && window.deviceSettingsCache) {
+                    const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+                    const settings = window.deviceSettingsCache[deviceKey];
+                    if (settings && settings.max > settings.min && speedValue > 0) {
+                        rpmPercentage = Math.round(((speedValue - settings.min) / (settings.max - settings.min)) * 100);
+                        rpmPercentage = Math.max(0, Math.min(100, rpmPercentage)); // Clamp 0-100
+                    }
+                }
+
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
@@ -635,8 +659,21 @@
                     ${kf.compressorSpeed ? `
                         <div class="status-item">
             <span class="status-label">Drehzahl</span>
-            <span class="status-value">${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}</span>
+            <span class="status-value">
+                ${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}
+                ${rpmPercentage !== null ? `<span style="color: #10b981; margin-left: 8px;">(${rpmPercentage}%)</span>` : ''}
+            </span>
                         </div>
+                        ${rpmPercentage !== null ? `
+                            <div class="status-item">
+                                <span class="status-label">Auslastung</span>
+                                <span class="status-value">
+                                    <div style="width: 100%; max-width: 200px; height: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
+                                        <div style="width: ${rpmPercentage}%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #059669 100%); transition: width 0.3s ease;"></div>
+                                    </div>
+                                </span>
+                            </div>
+                        ` : ''}
                     ` : ''}
                     ${kf.compressorPower ? `
                         <div class="status-item">
@@ -2248,6 +2285,206 @@
                 btn.textContent = originalText;
                 btn.style.background = '';
             }, 2000);
+        }
+
+        // --- Device Settings Modal ---
+
+        window.deviceSettingsCache = {}; // Cache for device settings
+
+        async function loadDeviceSettings(installationId, deviceId) {
+            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
+            if (!currentAccount) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(currentAccount)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
+                const data = await response.json();
+
+                if (data.success && data.compressorRpmMin && data.compressorRpmMax) {
+                    const deviceKey = `${installationId}_${deviceId}`;
+                    window.deviceSettingsCache[deviceKey] = {
+                        min: data.compressorRpmMin,
+                        max: data.compressorRpmMax
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading device settings:', error);
+            }
+        }
+
+        async function openDeviceSettingsModal(installationId, deviceId) {
+            // Get active account
+            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
+            if (!currentAccount) {
+                alert('Kein Account ausgewählt');
+                return;
+            }
+
+            // Load current settings
+            try {
+                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(currentAccount)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    console.error('Failed to load settings:', data.error);
+                }
+
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0);
+            } catch (error) {
+                console.error('Error loading device settings:', error);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0);
+            }
+        }
+
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax) {
+            const modal = document.createElement('div');
+            modal.className = 'debug-modal';
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+                <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+                    <h2 style="margin-top: 0; color: #fff;">⚙️ Geräteeinstellungen</h2>
+                    <p style="color: #a0a0b0; margin-bottom: 20px;">Device: ${deviceId}</p>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 8px; font-weight: 600;">
+                            Kompressor U/min Minimum
+                        </label>
+                        <input type="number" id="rpmMin" value="${currentMin}"
+                               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 8px; font-weight: 600;">
+                            Kompressor U/min Maximum
+                        </label>
+                        <input type="number" id="rpmMax" value="${currentMax}"
+                               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 30px;">
+                        <button onclick="saveDeviceSettings('${installationId}', '${deviceId}')"
+                                style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            💾 Speichern
+                        </button>
+                        <button onclick="deleteDeviceSettings('${installationId}', '${deviceId}')"
+                                style="flex: 1; padding: 12px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            🗑️ Löschen
+                        </button>
+                        <button onclick="closeDeviceSettingsModal()"
+                                style="padding: 12px 20px; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            Abbrechen
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            modal.id = 'deviceSettingsModal';
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeDeviceSettingsModal();
+                }
+            });
+        }
+
+        function closeDeviceSettingsModal() {
+            const modal = document.getElementById('deviceSettingsModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        async function saveDeviceSettings(installationId, deviceId) {
+            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
+            if (!currentAccount) {
+                alert('Kein Account ausgewählt');
+                return;
+            }
+
+            const rpmMin = parseInt(document.getElementById('rpmMin').value) || 0;
+            const rpmMax = parseInt(document.getElementById('rpmMax').value) || 0;
+
+            if (rpmMin >= rpmMax && rpmMax !== 0) {
+                alert('Minimum muss kleiner als Maximum sein');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/device-settings/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountId: currentAccount,
+                        installationId: installationId,
+                        deviceId: deviceId,
+                        compressorRpmMin: rpmMin,
+                        compressorRpmMax: rpmMax
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update cache
+                    const deviceKey = `${installationId}_${deviceId}`;
+                    window.deviceSettingsCache[deviceKey] = { min: rpmMin, max: rpmMax };
+
+                    alert('Einstellungen gespeichert!');
+                    closeDeviceSettingsModal();
+
+                    // Reload dashboard to show updated percentages
+                    loadDashboard();
+                } else {
+                    alert('Fehler beim Speichern: ' + data.error);
+                }
+            } catch (error) {
+                alert('Fehler beim Speichern: ' + error.message);
+            }
+        }
+
+        async function deleteDeviceSettings(installationId, deviceId) {
+            if (!confirm('Einstellungen wirklich löschen?')) {
+                return;
+            }
+
+            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
+            if (!currentAccount) {
+                alert('Kein Account ausgewählt');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/device-settings/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountId: currentAccount,
+                        installationId: installationId,
+                        deviceId: deviceId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Clear cache
+                    const deviceKey = `${installationId}_${deviceId}`;
+                    delete window.deviceSettingsCache[deviceKey];
+
+                    alert('Einstellungen gelöscht!');
+                    closeDeviceSettingsModal();
+
+                    // Reload dashboard
+                    loadDashboard();
+                } else {
+                    alert('Fehler beim Löschen: ' + data.error);
+                }
+            } catch (error) {
+                alert('Fehler beim Löschen: ' + error.message);
+            }
         }
 
         // Initialize

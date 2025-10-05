@@ -33,14 +33,20 @@ type Credentials struct {
 	ClientSecret string `json:"clientSecret"`
 }
 
+type DeviceSettings struct {
+	CompressorRpmMin int `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax int `json:"compressorRpmMax,omitempty"`
+}
+
 type Account struct {
-	ID           string `json:"id"`   // Unique identifier (email)
-	Name         string `json:"name"` // User-friendly name
-	Email        string `json:"email"`
-	Password     string `json:"password"`
-	ClientID     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	Active       bool   `json:"active"` // Whether this account is currently active
+	ID             string                     `json:"id"`             // Unique identifier (email)
+	Name           string                     `json:"name"`           // User-friendly name
+	Email          string                     `json:"email"`
+	Password       string                     `json:"password"`
+	ClientID       string                     `json:"clientId"`
+	ClientSecret   string                     `json:"clientSecret"`
+	Active         bool                       `json:"active"`         // Whether this account is currently active
+	DeviceSettings map[string]*DeviceSettings `json:"deviceSettings,omitempty"` // Key: "{installationId}_{deviceId}"
 }
 
 type AccountStore struct {
@@ -152,6 +158,67 @@ func GetActiveAccounts() ([]*Account, error) {
 	}
 
 	return activeAccounts, nil
+}
+
+// --- Device Settings Functions ---
+
+// GetDeviceSettings retrieves settings for a specific device
+func GetDeviceSettings(accountID, deviceKey string) (*DeviceSettings, error) {
+	account, err := GetAccount(accountID)
+	if err != nil {
+		return nil, err
+	}
+
+	if account.DeviceSettings == nil {
+		return nil, fmt.Errorf("no device settings found for device %s", deviceKey)
+	}
+
+	settings, exists := account.DeviceSettings[deviceKey]
+	if !exists {
+		return nil, fmt.Errorf("device settings not found for device %s", deviceKey)
+	}
+
+	return settings, nil
+}
+
+// SetDeviceSettings stores or updates settings for a specific device
+func SetDeviceSettings(accountID, deviceKey string, settings *DeviceSettings) error {
+	store, err := LoadAccounts()
+	if err != nil {
+		return err
+	}
+
+	account, exists := store.Accounts[accountID]
+	if !exists {
+		return fmt.Errorf("account %s not found", accountID)
+	}
+
+	if account.DeviceSettings == nil {
+		account.DeviceSettings = make(map[string]*DeviceSettings)
+	}
+
+	account.DeviceSettings[deviceKey] = settings
+	return SaveAccounts(store)
+}
+
+// DeleteDeviceSettings removes settings for a specific device
+func DeleteDeviceSettings(accountID, deviceKey string) error {
+	store, err := LoadAccounts()
+	if err != nil {
+		return err
+	}
+
+	account, exists := store.Accounts[accountID]
+	if !exists {
+		return fmt.Errorf("account %s not found", accountID)
+	}
+
+	if account.DeviceSettings != nil {
+		delete(account.DeviceSettings, deviceKey)
+		return SaveAccounts(store)
+	}
+
+	return nil
 }
 
 // SetAccountActive sets the active status of an account
