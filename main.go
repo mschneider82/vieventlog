@@ -545,14 +545,22 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func devicesHandler(w http.ResponseWriter, r *http.Request) {
-	// Use cached events if available, otherwise fetch with long timespan
-	events := eventsCache
-	if len(events) == 0 {
-		var err error
-		events, err = fetchEvents(365)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+	// Get active accounts and ensure they're authenticated
+	activeAccounts, err := GetActiveAccounts()
+	if err == nil && len(activeAccounts) > 0 {
+		// Authenticate all active accounts to populate accountTokens
+		for _, account := range activeAccounts {
+			_, err := ensureAccountAuthenticated(account)
+			if err != nil {
+				log.Printf("Warning: Failed to authenticate account %s for devices: %v\n", account.Email, err)
+			}
+		}
+	} else if err == nil && len(activeAccounts) == 0 {
+		// Fallback to legacy system
+		if currentCreds != nil {
+			if err := ensureAuthenticated(); err != nil {
+				log.Printf("Warning: Failed to authenticate legacy credentials: %v\n", err)
+			}
 		}
 	}
 
