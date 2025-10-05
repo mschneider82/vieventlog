@@ -2292,13 +2292,15 @@
         window.deviceSettingsCache = {}; // Cache for device settings
 
         async function loadDeviceSettings(installationId, deviceId) {
-            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
-            if (!currentAccount) {
+            // Get account from current device
+            const accountId = window.currentDeviceInfo?.accountId;
+            if (!accountId) {
+                console.log('No accountId available for device settings');
                 return;
             }
 
             try {
-                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(currentAccount)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
+                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(accountId)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
                 const data = await response.json();
 
                 if (data.success && data.compressorRpmMin && data.compressorRpmMax) {
@@ -2314,16 +2316,16 @@
         }
 
         async function openDeviceSettingsModal(installationId, deviceId) {
-            // Get active account
-            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
-            if (!currentAccount) {
-                alert('Kein Account ausgewählt');
+            // Get account from current device
+            const accountId = window.currentDeviceInfo?.accountId;
+            if (!accountId) {
+                alert('Kein Account für dieses Gerät verfügbar');
                 return;
             }
 
             // Load current settings
             try {
-                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(currentAccount)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
+                const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(accountId)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
                 const data = await response.json();
 
                 if (!data.success) {
@@ -2398,9 +2400,9 @@
         }
 
         async function saveDeviceSettings(installationId, deviceId) {
-            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
-            if (!currentAccount) {
-                alert('Kein Account ausgewählt');
+            const accountId = window.currentDeviceInfo?.accountId;
+            if (!accountId) {
+                alert('Kein Account für dieses Gerät verfügbar');
                 return;
             }
 
@@ -2417,7 +2419,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        accountId: currentAccount,
+                        accountId: accountId,
                         installationId: installationId,
                         deviceId: deviceId,
                         compressorRpmMin: rpmMin,
@@ -2450,9 +2452,9 @@
                 return;
             }
 
-            const currentAccount = window.currentAccount || localStorage.getItem('selectedAccount');
-            if (!currentAccount) {
-                alert('Kein Account ausgewählt');
+            const accountId = window.currentDeviceInfo?.accountId;
+            if (!accountId) {
+                alert('Kein Account für dieses Gerät verfügbar');
                 return;
             }
 
@@ -2461,7 +2463,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        accountId: currentAccount,
+                        accountId: accountId,
                         installationId: installationId,
                         deviceId: deviceId
                     })
