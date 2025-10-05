@@ -113,6 +113,7 @@ type Device struct {
 	DisplayName    string `json:"displayName"`
 	InstallationID string `json:"installationId"`
 	GatewaySerial  string `json:"gatewaySerial"`
+	AccountID      string `json:"accountId,omitempty"` // Account ID (email) for device settings
 }
 
 type DevicesByInstallation struct {
@@ -570,11 +571,15 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build a unified installations map from all account tokens
+	// Track which account owns each installation
 	allInstallations := make(map[string]*Installation)
+	installationToAccount := make(map[string]string) // installationID -> accountID
+
 	accountsMutex.RLock()
-	for _, token := range accountTokens {
+	for accountID, token := range accountTokens {
 		for id, installation := range token.Installations {
 			allInstallations[id] = installation
+			installationToAccount[id] = accountID
 		}
 	}
 	accountsMutex.RUnlock()
@@ -584,6 +589,8 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 		for id, installation := range installations {
 			if _, exists := allInstallations[id]; !exists {
 				allInstallations[id] = installation
+				// Legacy installations don't have an account ID
+				installationToAccount[id] = ""
 			}
 		}
 	}
@@ -597,11 +604,13 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 			devicesByInstallation[installID] = make(map[string]Device)
 		}
 
+		accountID := installationToAccount[installID]
+
 		// Iterate through gateways and their devices
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				// Only include heating devices
-				if gwDevice.DeviceType != "heating" {
+				// Include heating and zigbee devices (SmartClimate)
+				if gwDevice.DeviceType != "heating" && gwDevice.DeviceType != "zigbee" {
 					continue
 				}
 
@@ -612,9 +621,10 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 					DisplayName:    fmt.Sprintf("%s (Gateway %s)", gwDevice.ModelID, gateway.Serial),
 					InstallationID: installID,
 					GatewaySerial:  gateway.Serial,
+					AccountID:      accountID,
 				}
-				log.Printf("Registered heating device in installation %s: %s (Gateway %s, Device %s)\n",
-					installID, gwDevice.ModelID, gateway.Serial, gwDevice.DeviceID)
+				log.Printf("Registered %s device in installation %s: %s (Gateway %s, Device %s, Account %s)\n",
+					gwDevice.DeviceType, installID, gwDevice.ModelID, gateway.Serial, gwDevice.DeviceID, accountID)
 			}
 		}
 	}
