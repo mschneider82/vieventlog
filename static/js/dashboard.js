@@ -217,55 +217,86 @@
             // Build dashboard HTML
             let html = '';
 
-            // Device info header (if available)
-            if (features.deviceInfo) {
-                html += renderDeviceHeader(features.deviceInfo, keyFeatures);
+            // Check if this is a SmartClimate / Zigbee device
+            const deviceInfo = features.deviceInfo;
+            const deviceType = deviceInfo ? deviceInfo.deviceType : null;
+            const modelId = deviceInfo ? deviceInfo.modelId : null;
+
+            console.log('Device Type:', deviceType, 'Model ID:', modelId);
+
+            // Render appropriate view based on device type
+            if (deviceType === 'zigbee') {
+                // SmartClimate / Zigbee device
+                if (modelId && modelId.includes('eTRV')) {
+                    // Heizkörper-Thermostat
+                    html += renderThermostatView(keyFeatures, deviceInfo);
+                } else if (modelId && modelId.includes('cs_generic')) {
+                    // Klimasensor
+                    html += renderClimateSensorView(keyFeatures, deviceInfo);
+                } else if (modelId && modelId.includes('fht')) {
+                    // Fußboden-Thermostat
+                    html += renderFloorHeatingView(keyFeatures, deviceInfo);
+                } else if (modelId && modelId.includes('repeater')) {
+                    // Repeater
+                    html += renderRepeaterView(keyFeatures, deviceInfo);
+                } else {
+                    // Unknown zigbee device - show generic info
+                    html += renderDeviceHeader(deviceInfo, keyFeatures);
+                    html += renderZigbeeDeviceInfo(keyFeatures);
+                }
+            } else {
+                // Standard heating device (Vitocal/Vitodens)
+
+                // Device info header (if available)
+                if (features.deviceInfo) {
+                    html += renderDeviceHeader(features.deviceInfo, keyFeatures);
+                }
+
+                // Main temperature displays (outside, supply)
+                html += renderMainTemperatures(keyFeatures);
+
+                // Store heating curve data for later rendering
+                window.heatingCurveData = {
+                    slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
+                    shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
+                    currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
+                    currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
+                    maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
+                    minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
+                };
+
+                // Compressor/Burner status (Vitocal/Vitodens)
+                html += renderCompressorBurner(keyFeatures);
+
+                // Heating circuit card
+                html += renderHeatingCircuit(keyFeatures);
+
+                // Hot water card
+                html += renderHotWater(keyFeatures);
+
+                // Heating curve & settings
+                html += renderHeatingCurve(keyFeatures);
+
+                // Consumption
+                html += renderConsumption(keyFeatures);
+
+                // Additional sensors & pumps
+                html += renderAdditionalSensors(keyFeatures);
+
+                // Refrigerant circuit (heat pump only)
+                html += renderRefrigerantCircuit(keyFeatures);
+
+                // System status
+                html += renderSystemStatus(keyFeatures);
+
+                // Device information
+                html += renderDeviceInfo(keyFeatures);
             }
-
-            // Main temperature displays (outside, supply)
-            html += renderMainTemperatures(keyFeatures);
-
-            // Store heating curve data for later rendering
-            window.heatingCurveData = {
-                slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
-                shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
-                currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
-                currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
-                maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
-                minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
-            };
-
-            // Compressor/Burner status (Vitocal/Vitodens)
-            html += renderCompressorBurner(keyFeatures);
-
-            // Heating circuit card
-            html += renderHeatingCircuit(keyFeatures);
-
-            // Hot water card
-            html += renderHotWater(keyFeatures);
-
-            // Heating curve & settings
-            html += renderHeatingCurve(keyFeatures);
-
-            // Consumption
-            html += renderConsumption(keyFeatures);
-
-            // Additional sensors & pumps
-            html += renderAdditionalSensors(keyFeatures);
-
-            // Refrigerant circuit (heat pump only)
-            html += renderRefrigerantCircuit(keyFeatures);
-
-            // System status
-            html += renderSystemStatus(keyFeatures);
-
-            // Device information
-            html += renderDeviceInfo(keyFeatures);
 
             contentDiv.innerHTML = html;
 
-            // Render D3 chart after DOM is updated
-            if (window.heatingCurveData && (window.heatingCurveData.slope !== null || window.heatingCurveData.shift !== null)) {
+            // Render D3 chart after DOM is updated (only for heating devices)
+            if (deviceType !== 'zigbee' && window.heatingCurveData && (window.heatingCurveData.slope !== null || window.heatingCurveData.shift !== null)) {
                 setTimeout(() => renderHeatingCurveChart(), 100);
             }
         }
@@ -410,6 +441,27 @@
 
                 // Compressor statistics (load classes)
                 compressorStats: find(['heating.compressors.0.statistics']),
+
+                // SmartClimate / Zigbee device features
+                // Device generic
+                deviceName: find(['device.name']),
+                deviceBattery: find(['device.power.battery']),
+                zigbeeLqi: find(['device.zigbee.lqi']),
+                deviceHumidity: find(['device.sensors.humidity']),
+                deviceTemperature: find(['device.sensors.temperature']),
+
+                // Thermostat (TRV) features
+                trvTemperature: find(['trv.temperature']),
+                trvValvePosition: find(['trv.valve.position']),
+                trvChildLock: find(['trv.childLock']),
+                trvMountingMode: find(['trv.mountingMode']),
+
+                // Floor heating thermostat (FHT) features
+                fhtOperatingMode: find(['fht.operating.modes.active']),
+                fhtSupplyTemp: find(['fht.sensors.temperature.supply']),
+                fhtHeatingActive: find(['fht.operating.modes.heating']),
+                fhtCoolingActive: find(['fht.operating.modes.cooling']),
+                fhtStandbyActive: find(['fht.operating.modes.standby']),
 
             };
         }
@@ -1479,6 +1531,308 @@
                     </div>
                 </div>
             `;
+        }
+
+        // SmartClimate / Zigbee device rendering functions
+
+        function renderThermostatView(kf, deviceInfo) {
+            let html = '';
+
+            // Device header
+            html += renderDeviceHeader(deviceInfo, kf);
+
+            // Main temperature card
+            html += `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🌡️ Raumtemperatur</h2>
+                    </div>
+                    <div class="status-list">
+            `;
+
+            if (kf.deviceTemperature) {
+                const tempValue = kf.deviceTemperature.value;
+                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Ist-Temperatur</span>
+                        <span class="status-value">${formatNum(tempStatus)} ${kf.deviceTemperature.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.trvTemperature) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Soll-Temperatur</span>
+                        <span class="status-value">${formatNum(kf.trvTemperature.value)} ${kf.trvTemperature.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.trvValvePosition) {
+                const valvePos = kf.trvValvePosition.value;
+                const valveStatus = valvePos > 0 ? '🟢 Offen' : '⚪ Geschlossen';
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Ventilstellung</span>
+                        <span class="status-value">${valveStatus} (${formatNum(valvePos)} ${kf.trvValvePosition.unit || '%'})</span>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Settings & Status card
+            html += `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚙️ Einstellungen & Status</h2>
+                    </div>
+                    <div class="status-list">
+            `;
+
+            if (kf.trvChildLock) {
+                const lockStatus = kf.trvChildLock.value;
+                const lockText = lockStatus === 'active' ? '🔒 AN' : '🔓 AUS';
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Kindersicherung</span>
+                        <span class="status-value">${lockText}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.trvMountingMode && kf.trvMountingMode.value !== undefined) {
+                const mountingActive = kf.trvMountingMode.value;
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Montagemodus</span>
+                        <span class="status-value">${mountingActive ? 'Aktiv' : 'Inaktiv'}</span>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Zigbee device info
+            html += renderZigbeeDeviceInfo(kf);
+
+            return html;
+        }
+
+        function renderClimateSensorView(kf, deviceInfo) {
+            let html = '';
+
+            // Device header
+            html += renderDeviceHeader(deviceInfo, kf);
+
+            // Sensor data card
+            html += `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>📊 Sensordaten</h2>
+                    </div>
+                    <div class="temp-grid">
+            `;
+
+            if (kf.deviceTemperature) {
+                const tempValue = kf.deviceTemperature.value;
+                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+                html += `
+                    <div class="temp-item">
+                        <span class="temp-label">Temperatur</span>
+                        <div>
+                            <span class="temp-value">${formatNum(tempStatus)}</span>
+                            <span class="temp-unit">${kf.deviceTemperature.unit || '°C'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceHumidity) {
+                const humValue = kf.deviceHumidity.value;
+                const humStatus = humValue && typeof humValue === 'object' ? humValue.value : humValue;
+                html += `
+                    <div class="temp-item">
+                        <span class="temp-label">Luftfeuchtigkeit</span>
+                        <div>
+                            <span class="temp-value">${formatNum(humStatus)}</span>
+                            <span class="temp-unit">${kf.deviceHumidity.unit || '%'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Zigbee device info
+            html += renderZigbeeDeviceInfo(kf);
+
+            return html;
+        }
+
+        function renderFloorHeatingView(kf, deviceInfo) {
+            let html = '';
+
+            // Device header
+            html += renderDeviceHeader(deviceInfo, kf);
+
+            // Operating mode card
+            html += `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏠 Betriebsmodus</h2>
+            `;
+
+            if (kf.fhtOperatingMode) {
+                const mode = kf.fhtOperatingMode.value;
+                const modeText = mode === 'heating' ? 'Heizen' : mode === 'cooling' ? 'Kühlen' : 'Standby';
+                const badgeClass = mode === 'heating' ? 'badge-info' : mode === 'cooling' ? 'badge-success' : 'badge-warning';
+                html += `<span class="badge ${badgeClass}">${modeText}</span>`;
+            }
+
+            html += `
+                    </div>
+                    <div class="status-list">
+            `;
+
+            if (kf.fhtSupplyTemp) {
+                const tempValue = kf.fhtSupplyTemp.value;
+                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Vorlauftemperatur</span>
+                        <span class="status-value">${formatNum(tempStatus)} ${kf.fhtSupplyTemp.unit || '°C'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fhtHeatingActive && kf.fhtHeatingActive.value !== undefined) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Heizen</span>
+                        <span class="status-value">${kf.fhtHeatingActive.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.fhtCoolingActive && kf.fhtCoolingActive.value !== undefined) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Kühlen</span>
+                        <span class="status-value">${kf.fhtCoolingActive.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // Zigbee device info
+            html += renderZigbeeDeviceInfo(kf);
+
+            return html;
+        }
+
+        function renderRepeaterView(kf, deviceInfo) {
+            let html = '';
+
+            // Device header
+            html += renderDeviceHeader(deviceInfo, kf);
+
+            // Network info card
+            html += `
+                <div class="card wide">
+                    <div class="card-header">
+                        <h2>📡 Netzwerk-Informationen</h2>
+                    </div>
+                    <div class="status-list">
+            `;
+
+            if (kf.zigbeeLqi) {
+                const lqi = kf.zigbeeLqi.value;
+                const lqiValue = lqi && typeof lqi === 'object' ? lqi.value : lqi;
+                const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Link Quality Indicator</span>
+                        <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
+                            ${formatNum(lqiValue)} ${kf.zigbeeLqi.unit || '%'}
+                        </span>
+                    </div>
+                `;
+            }
+
+            html += `
+                        <div class="status-item">
+                            <span class="status-label">Gerätetyp</span>
+                            <span class="status-value">Zigbee Repeater</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            return html;
+        }
+
+        function renderZigbeeDeviceInfo(kf) {
+            if (!kf.deviceBattery && !kf.zigbeeLqi) return '';
+
+            let html = `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔋 Geräteinformationen</h2>
+                    </div>
+                    <div class="status-list">
+            `;
+
+            if (kf.deviceBattery) {
+                const batteryValue = kf.deviceBattery.value;
+                const battery = batteryValue && typeof batteryValue === 'object' ? batteryValue.value : batteryValue;
+                const batteryColor = battery >= 70 ? '#10b981' : battery >= 30 ? '#f59e0b' : '#ef4444';
+                const batteryIcon = battery >= 70 ? '🔋' : battery >= 30 ? '🪫' : '🔴';
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Batteriestand</span>
+                        <span class="status-value" style="color: ${batteryColor}; font-weight: bold;">
+                            ${batteryIcon} ${formatNum(battery)} ${kf.deviceBattery.unit || '%'}
+                        </span>
+                    </div>
+                `;
+            }
+
+            if (kf.zigbeeLqi) {
+                const lqi = kf.zigbeeLqi.value;
+                const lqiValue = lqi && typeof lqi === 'object' ? lqi.value : lqi;
+                const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Link Quality</span>
+                        <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
+                            ${formatNum(lqiValue)} ${kf.zigbeeLqi.unit || '%'}
+                        </span>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            return html;
         }
 
         function translateMode(mode) {
