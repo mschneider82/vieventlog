@@ -1,0 +1,488 @@
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e0e0e0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 24px;
+        }
+
+        .breadcrumb {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 14px;
+            color: #a0a0b0;
+            margin-top: 10px;
+        }
+
+        .breadcrumb a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* Controls */
+        .controls {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .install-select {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        select {
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            font-size: 14px;
+            background: rgba(30, 30, 46, 0.9);
+            color: #ffffff;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        select:hover {
+            border-color: rgba(255,255,255,0.5);
+            background: rgba(30, 30, 46, 1);
+        }
+
+        select option {
+            background: #1e1e2e;
+            color: #ffffff;
+            padding: 8px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b41a0 100%);
+            transform: translateY(-1px);
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card.wide {
+            grid-column: span 2;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-header h2 {
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        /* Temperature Display */
+        .temp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .temp-item {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+        }
+
+        .temp-label {
+            font-size: 11px;
+            color: #a0a0b0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .temp-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .temp-unit {
+            font-size: 20px;
+            color: #a0a0b0;
+            margin-left: 2px;
+        }
+
+        /* Large temp display for main values */
+        .temp-display-large {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .temp-display-large .temp-item {
+            flex: 1;
+            padding: 30px 20px;
+        }
+
+        .temp-display-large .temp-value {
+            font-size: 48px;
+        }
+
+        /* Status Items */
+        .status-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+
+        .status-label {
+            color: #a0a0b0;
+            font-size: 14px;
+        }
+
+        .status-value {
+            color: #fff;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        /* Mode Selector */
+        .mode-display {
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .mode-display .mode-label {
+            font-size: 12px;
+            color: #a0a0b0;
+            margin-bottom: 8px;
+        }
+
+        .mode-display .mode-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #a0a0b0;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Error */
+        .error {
+            background: rgba(220, 38, 38, 0.1);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            color: #fca5a5;
+            margin-bottom: 20px;
+        }
+
+        /* Last Update */
+        .last-update {
+            font-size: 12px;
+            color: #a0a0b0;
+            text-align: right;
+        }
+
+        /* Feature List */
+        .feature-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .feature-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .feature-name {
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .feature-value {
+            color: #e0e0e0;
+            margin-left: 10px;
+        }
+
+        /* Debug Modal */
+        .debug-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .debug-content {
+            background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 1200px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .debug-header h2 {
+            color: #fff;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid rgba(220, 38, 38, 0.5);
+            color: #fca5a5;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .close-btn:hover {
+            background: rgba(220, 38, 38, 0.3);
+        }
+
+        .debug-summary {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .debug-stat {
+            background: rgba(0,0,0,0.2);
+            padding: 15px 20px;
+            border-radius: 8px;
+            flex: 1;
+        }
+
+        .debug-stat-label {
+            font-size: 12px;
+            color: #a0a0b0;
+            margin-bottom: 5px;
+        }
+
+        .debug-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .debug-device {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        .debug-device-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .debug-device-type {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .debug-device-model {
+            color: #fbbf24;
+        }
+
+        .debug-device-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            color: #a0a0b0;
+        }
+
+        .debug-device-detail {
+            display: flex;
+            gap: 8px;
+        }
+
+        .debug-device-detail-label {
+            color: #667eea;
+            min-width: 120px;
+        }
+
+        .toggle-all {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .toggle-all:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .debug-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .json-view {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow: auto;
+            font-family: monospace;
+            font-size: 12px;
+            color: #e0e0e0;
+            white-space: pre;
+        }
