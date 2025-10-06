@@ -274,14 +274,26 @@
                 let roomTempSetpoint = 20; // Default fallback
                 if (keyFeatures.operatingProgram && keyFeatures.operatingProgram.value) {
                     const activeProgram = keyFeatures.operatingProgram.value;
-                    // Try to get temperature for active program
-                    const programTempFeatureName = `heating.circuits.0.operating.programs.${activeProgram}.temperature`;
-                    for (const category of [features.circuits, features.operatingModes, features.other]) {
-                        if (category && category[programTempFeatureName] && category[programTempFeatureName].value !== null) {
-                            roomTempSetpoint = category[programTempFeatureName].value;
-                            console.log(`Using room temp setpoint from active program ${activeProgram}: ${roomTempSetpoint}°C`);
-                            break;
+                    console.log('🔍 Active program for heating curve:', activeProgram);
+                    // Try to get temperature for active program (it's a nested property)
+                    const programFeatureName = `heating.circuits.0.operating.programs.${activeProgram}`;
+                    console.log('🔍 Looking for feature:', programFeatureName);
+                    for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                        if (category && category[programFeatureName]) {
+                            const programFeature = category[programFeatureName];
+                            console.log('🔍 Found program feature:', programFeature);
+                            if (programFeature.value && programFeature.value.temperature) {
+                                const tempProp = programFeature.value.temperature;
+                                if (tempProp.value !== undefined && tempProp.value !== null) {
+                                    roomTempSetpoint = tempProp.value;
+                                    console.log(`✅ Using room temp setpoint from active program ${activeProgram}: ${roomTempSetpoint}°C`);
+                                    break;
+                                }
+                            }
                         }
+                    }
+                    if (roomTempSetpoint === 20) {
+                        console.log('⚠️ Could not find temperature for active program, using default 20°C');
                     }
                 }
 
