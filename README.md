@@ -393,16 +393,35 @@ Der Event Viewer unterstützt mehrere Viessmann-Accounts gleichzeitig. Dies ist 
 
 Das Dashboard bietet eine übersichtliche Echtzeitansicht aller wichtigen Parameter Ihrer Heizungsanlage:
 
+#### Anzeige und Überwachung
+
 - Live-Anzeige von Temperaturen: Außentemperatur, Vorlauf, Rücklauf, Puffer, Primär- und Sekundärkreis
 - Kompressor-Status bei Wärmepumpen: Drehzahl, Leistung, Ein-/Auslasstemperatur
 - Brenner-Status bei Gasheizungen: Modulation, Betriebszustand
-- Warmwasser-Informationen: Ist- und Soll-Temperatur, Betriebsmodus
-- Heizkreis-Status: Betriebsmodus, Betriebsprogramm
-- Heizkurve: Steigung und Verschiebung
+- Warmwasser-Informationen: Ist- und Soll-Temperatur, Betriebsmodus, Hysterese
+- Heizkreis-Status: Betriebsmodus, Betriebsprogramm, Heizkurve
 - Zusätzliche Sensoren: Volumenstrom, Druck, interne Pumpe, Lüfter
 - Effizienz-Kennzahlen: SCOP/SPF für Heizung und Warmwasser
 - Unterstützung mehrerer Geräte pro Installation (z.B. Wärmepumpe + Gasheizung)
 - Automatische Anpassung der Anzeige je nach Gerätetyp (Vitocal, Vitodens, etc.)
+
+#### Interaktive Steuerung (nur Wärmepumpen)
+
+**Warmwasser-Steuerung:**
+- Betriebsart ändern: Eco, Komfort oder Aus
+- Soll-Temperatur einstellen: 10-60°C in 1°C Schritten
+- Hysterese Ein: 1-10K in 0,5K Schritten
+- Hysterese Aus: 0-2,5K in 0,5K Schritten
+- Einmalige Warmwassererwärmung starten: Einmaliges Aufheizen per Knopfdruck
+
+**Heizkreis-Steuerung:**
+- Betriebsart ändern: Heizen oder Standby
+- Heizkurve anpassen:
+  - Steigung: 0,2-3,5 in 0,1er Schritten
+  - Niveau: -13 bis +40 in 1er Schritten
+- Vorlauftemperaturbegrenzung: 10-70°C in 1°C Schritten
+
+Alle Änderungen werden sofort an die Viessmann API übermittelt und das Dashboard aktualisiert sich nach 2 Sekunden automatisch, um die neuen Werte anzuzeigen.
 
 Das Dashboard ist über den entsprechenden Button in der Hauptansicht erreichbar und aktualisiert sich automatisch.
 
@@ -498,6 +517,96 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
   }
   ```
 - `GET /api/credentials/check` - Prüft, ob gespeicherte Credentials vorhanden sind
+
+#### Gerätesteuerung
+
+**Warmwasser (DHW) Steuerung:**
+- `POST /api/dhw/mode/set` - Betriebsart ändern
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "mode": "efficient"
+  }
+  ```
+  Gültige Modi: `efficient` (Eco), `efficientWithMinComfort` (Eco), `off` (Aus)
+
+- `POST /api/dhw/temperature/set` - Soll-Temperatur setzen
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "temperature": 50
+  }
+  ```
+
+- `POST /api/dhw/hysteresis/set` - Hysterese Ein/Aus setzen
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "type": "switchOn",
+    "value": 5.0
+  }
+  ```
+  Typ: `switchOn` (Ein) oder `switchOff` (Aus)
+
+- `POST /api/dhw/oneTimeCharge/activate` - Einmalige Warmwassererwärmung starten
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0"
+  }
+  ```
+
+**Heizkreis-Steuerung:**
+- `POST /api/heating/mode/set` - Betriebsart ändern
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "circuit": 0,
+    "mode": "heating"
+  }
+  ```
+  Gültige Modi: `heating` (Heizen), `standby` (Standby)
+
+- `POST /api/heating/curve/set` - Heizkurve anpassen
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "circuit": 0,
+    "slope": 1.2,
+    "shift": 5
+  }
+  ```
+
+- `POST /api/heating/supplyTempMax/set` - Vorlauftemperaturbegrenzung setzen
+  ```json
+  {
+    "accountId": "account-id",
+    "installationId": "installation-id",
+    "gatewaySerial": "gateway-serial",
+    "deviceId": "0",
+    "circuit": 0,
+    "temperature": 55
+  }
+  ```
+
+Alle Steuerungs-Endpoints invalidieren automatisch den Feature-Cache und geben bei Erfolg `{"success": true}` zurück.
 
 ## Technische Details
 
