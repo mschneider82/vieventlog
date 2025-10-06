@@ -392,6 +392,8 @@
                 dhwTarget: find(['heating.dhw.temperature.main']),
                 dhwStatus: find(['heating.dhw.operating.modes.active']),
                 dhwHysteresis: find(['heating.dhw.temperature.hysteresis']),
+                dhwHysteresisSwitchOn: findNested('heating.dhw.temperature.hysteresis', 'switchOnValue'),
+                dhwHysteresisSwitchOff: findNested('heating.dhw.temperature.hysteresis', 'switchOffValue'),
 
                 // Heating curve - these need to be fetched from circuits category
                 heatingCurveSlope: findNested('heating.circuits.0.heating.curve', 'slope'),
@@ -806,13 +808,37 @@
         function renderHotWater(kf) {
             if (!kf.dhwTemp && !kf.dhwTarget && !kf.dhwStatus) return '';
 
+            // Map API modes to user-friendly labels and vice versa
+            const modeMapping = {
+                'eco': 'Eco',
+                'efficient': 'Eco',
+                'efficientWithMinComfort': 'Eco',
+                'comfort': 'Komfort',
+                'off': 'Aus'
+            };
+
+            // Get current mode and convert to display mode
+            const currentApiMode = kf.dhwStatus ? kf.dhwStatus.value : '';
+            const currentDisplayMode = modeMapping[currentApiMode] || currentApiMode;
+
             return `
                 <div class="card">
                     <div class="card-header">
                         <h2>💧 Warmwasser</h2>
-                        ${kf.dhwStatus ? `<span class="badge badge-info">${kf.dhwStatus.value}</span>` : ''}
                     </div>
                     <div class="status-list">
+                        ${kf.dhwStatus ? `
+            <div class="status-item">
+                <span class="status-label">Betriebsart</span>
+                <span class="status-value">
+                    <select id="dhwModeSelect" onchange="changeDhwMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        <option value="efficient" ${currentApiMode === 'efficient' ? 'selected' : ''}>Eco</option>
+                        <option value="efficientWithMinComfort" ${currentApiMode === 'efficientWithMinComfort' ? 'selected' : ''}>Komfort</option>
+                        <option value="off" ${currentApiMode === 'off' ? 'selected' : ''}>Aus</option>
+                    </select>
+                </span>
+            </div>
+                        ` : ''}
                         ${kf.dhwTemp ? `
             <div class="status-item">
                 <span class="status-label">Ist-Temperatur</span>
@@ -822,15 +848,47 @@
                         ${kf.dhwTarget ? `
             <div class="status-item">
                 <span class="status-label">Soll-Temperatur</span>
-                <span class="status-value">${formatNum(kf.dhwTarget.value)} ${kf.dhwTarget.unit || '°C'}</span>
+                <span class="status-value">
+                    <select id="dhwTargetSelect" onchange="changeDhwTemperature(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        ${Array.from({length: 51}, (_, i) => i + 10).map(temp => `
+                            <option value="${temp}" ${Math.round(kf.dhwTarget.value) === temp ? 'selected' : ''}>${temp}°C</option>
+                        `).join('')}
+                    </select>
+                </span>
             </div>
                         ` : ''}
-                        ${kf.dhwHysteresis ? `
+                        ${kf.dhwHysteresisSwitchOn ? `
             <div class="status-item">
-                <span class="status-label">Hysterese</span>
-                <span class="status-value">${formatNum(kf.dhwHysteresis.value)} ${kf.dhwHysteresis.unit || 'K'}</span>
+                <span class="status-label">Hysterese Ein</span>
+                <span class="status-value">
+                    <select id="dhwHysteresisOnSelect" onchange="changeDhwHysteresis('on', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        ${Array.from({length: 19}, (_, i) => 1 + (i * 0.5)).map(val => `
+                            <option value="${val}" ${kf.dhwHysteresisSwitchOn.value === val ? 'selected' : ''}>${val}K</option>
+                        `).join('')}
+                    </select>
+                </span>
             </div>
                         ` : ''}
+                        ${kf.dhwHysteresisSwitchOff ? `
+            <div class="status-item">
+                <span class="status-label">Hysterese Aus</span>
+                <span class="status-value">
+                    <select id="dhwHysteresisOffSelect" onchange="changeDhwHysteresis('off', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        <option value="0" ${kf.dhwHysteresisSwitchOff.value === 0 ? 'selected' : ''}>0K</option>
+                        <option value="0.5" ${kf.dhwHysteresisSwitchOff.value === 0.5 ? 'selected' : ''}>0.5K</option>
+                        <option value="1" ${kf.dhwHysteresisSwitchOff.value === 1 ? 'selected' : ''}>1K</option>
+                        <option value="1.5" ${kf.dhwHysteresisSwitchOff.value === 1.5 ? 'selected' : ''}>1.5K</option>
+                        <option value="2" ${kf.dhwHysteresisSwitchOff.value === 2 ? 'selected' : ''}>2K</option>
+                        <option value="2.5" ${kf.dhwHysteresisSwitchOff.value === 2.5 ? 'selected' : ''}>2.5K</option>
+                    </select>
+                </span>
+            </div>
+                        ` : ''}
+                    </div>
+                    <div style="margin-top: 15px; padding: 0 15px 15px 15px;">
+                        <button onclick="startOneTimeCharge()" style="width: 100%; padding: 10px; background: rgba(59, 130, 246, 0.8); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            🔥 Einmalige Warmwassererwärmung starten
+                        </button>
                     </div>
                 </div>
             `;
@@ -857,26 +915,54 @@
 
             let settings = '';
             if (kf.heatingCurveSlope) {
+                // Generate slope options from 0.2 to 3.5 in 0.1 steps
+                const slopeOptions = [];
+                for (let i = 2; i <= 35; i++) {
+                    const val = i / 10;
+                    slopeOptions.push(`<option value="${val}" ${Math.abs(kf.heatingCurveSlope.value - val) < 0.01 ? 'selected' : ''}>${val}</option>`);
+                }
                 settings += `
                     <div class="status-item">
                         <span class="status-label">Neigung</span>
-                        <span class="status-value">${formatValue(kf.heatingCurveSlope)}</span>
+                        <span class="status-value">
+                            <select id="heatingCurveSlopeSelect" onchange="changeHeatingCurve('slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                ${slopeOptions.join('')}
+                            </select>
+                        </span>
                     </div>
                 `;
             }
             if (kf.heatingCurveShift) {
+                // Generate shift options from -13 to 40 in 1 step
+                const shiftOptions = [];
+                for (let i = -13; i <= 40; i++) {
+                    shiftOptions.push(`<option value="${i}" ${kf.heatingCurveShift.value === i ? 'selected' : ''}>${i}</option>`);
+                }
                 settings += `
                     <div class="status-item">
                         <span class="status-label">Niveau (Verschiebung)</span>
-                        <span class="status-value">${formatValue(kf.heatingCurveShift)}</span>
+                        <span class="status-value">
+                            <select id="heatingCurveShiftSelect" onchange="changeHeatingCurve('shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                ${shiftOptions.join('')}
+                            </select>
+                        </span>
                     </div>
                 `;
             }
             if (kf.supplyTempMax) {
+                // Generate max temp options from 10 to 70 in 1°C steps
+                const maxTempOptions = [];
+                for (let i = 10; i <= 70; i++) {
+                    maxTempOptions.push(`<option value="${i}" ${Math.round(kf.supplyTempMax.value) === i ? 'selected' : ''}>${i}°C</option>`);
+                }
                 settings += `
                     <div class="status-item">
                         <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
-                        <span class="status-value">${formatValue(kf.supplyTempMax)}</span>
+                        <span class="status-value">
+                            <select id="supplyTempMaxSelect" onchange="changeSupplyTempMax(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                ${maxTempOptions.join('')}
+                            </select>
+                        </span>
                     </div>
                 `;
             }
@@ -1402,11 +1488,22 @@
             let status = '';
 
             if (kf.operatingMode) {
-                const mode = translateMode(kf.operatingMode.value);
+                // Map API modes to German labels
+                const modeLabels = {
+                    'heating': 'Heizen',
+                    'standby': 'Standby'
+                };
+                const currentMode = kf.operatingMode.value;
+
                 status += `
                     <div class="status-item">
                         <span class="status-label">Betriebsmodus</span>
-                        <span class="status-value">${mode}</span>
+                        <span class="status-value">
+                            <select id="heatingModeSelect" onchange="changeHeatingMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                <option value="heating" ${currentMode === 'heating' ? 'selected' : ''}>Heizen</option>
+                                <option value="standby" ${currentMode === 'standby' ? 'selected' : ''}>Standby</option>
+                            </select>
+                        </span>
                     </div>
                 `;
             }
@@ -2527,6 +2624,381 @@
                 alert('Fehler beim Löschen: ' + error.message);
             }
         }
+
+        // DHW Mode Change Function
+        async function changeDhwMode(newMode) {
+            const select = document.getElementById('dhwModeSelect');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/dhw/mode/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        mode: newMode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('DHW mode changed to:', newMode);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Betriebsart: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Betriebsart: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
+        // Make changeDhwMode available globally
+        window.changeDhwMode = changeDhwMode;
+
+        // DHW Temperature Change Function
+        async function changeDhwTemperature(newTemp) {
+            const select = document.getElementById('dhwTargetSelect');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/dhw/temperature/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        temperature: parseFloat(newTemp)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('DHW temperature changed to:', newTemp);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Temperatur: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Temperatur: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
+        // DHW Hysteresis Change Function
+        async function changeDhwHysteresis(type, newValue) {
+            const selectId = type === 'on' ? 'dhwHysteresisOnSelect' : 'dhwHysteresisOffSelect';
+            const select = document.getElementById(selectId);
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/dhw/hysteresis/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        type: type,
+                        value: parseFloat(newValue)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`DHW hysteresis ${type} changed to:`, newValue);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Hysterese: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Hysterese: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
+        // Make functions available globally
+        window.changeDhwTemperature = changeDhwTemperature;
+        window.changeDhwHysteresis = changeDhwHysteresis;
+
+        // DHW One Time Charge Function
+        async function startOneTimeCharge() {
+            if (!confirm('Möchten Sie die einmalige Warmwassererwärmung wirklich starten?')) {
+                return;
+            }
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                const response = await fetch('/api/dhw/oneTimeCharge/activate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Einmalige Warmwassererwärmung wurde gestartet! ✓');
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Starten: ' + data.error);
+                }
+            } catch (error) {
+                alert('Fehler beim Starten: ' + error.message);
+            }
+        }
+
+        // Make function available globally
+        window.startOneTimeCharge = startOneTimeCharge;
+
+        // Heating Curve Change Function
+        async function changeHeatingCurve(type, newValue) {
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Get current values from window.heatingCurveData
+                let shift = window.heatingCurveData ? window.heatingCurveData.shift : 0;
+                let slope = window.heatingCurveData ? window.heatingCurveData.slope : 1.0;
+
+                // Update the changed value
+                if (type === 'shift') {
+                    shift = parseInt(newValue);
+                } else if (type === 'slope') {
+                    slope = parseFloat(newValue);
+                }
+
+                // Disable both selects while changing
+                const shiftSelect = document.getElementById('heatingCurveShiftSelect');
+                const slopeSelect = document.getElementById('heatingCurveSlopeSelect');
+                if (shiftSelect) shiftSelect.disabled = true;
+                if (slopeSelect) slopeSelect.disabled = true;
+
+                const response = await fetch('/api/heating/curve/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        circuit: 0, // Usually circuit 0
+                        shift: shift,
+                        slope: slope
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`Heating curve changed: shift=${shift}, slope=${slope}`);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Heizkurve: ' + data.error);
+                    if (shiftSelect) shiftSelect.disabled = false;
+                    if (slopeSelect) slopeSelect.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Heizkurve: ' + error.message);
+                const shiftSelect = document.getElementById('heatingCurveShiftSelect');
+                const slopeSelect = document.getElementById('heatingCurveSlopeSelect');
+                if (shiftSelect) shiftSelect.disabled = false;
+                if (slopeSelect) slopeSelect.disabled = false;
+            }
+        }
+
+        // Supply Temperature Max Change Function (placeholder - may not be supported by API)
+        async function changeSupplyTempMax(newValue) {
+            alert('Die Vorlauftemperaturbegrenzung kann derzeit nicht über die API geändert werden. Bitte verwenden Sie die Viessmann App.');
+        }
+
+        // Make functions available globally
+        window.changeHeatingCurve = changeHeatingCurve;
+        window.changeSupplyTempMax = changeSupplyTempMax;
+
+        // Heating Mode Change Function
+        async function changeHeatingMode(newMode) {
+            const select = document.getElementById('heatingModeSelect');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/heating/mode/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        circuit: 0, // Usually circuit 0
+                        mode: newMode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Heating mode changed to:', newMode);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern des Betriebsmodus: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern des Betriebsmodus: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
+        // Make function available globally
+        window.changeHeatingMode = changeHeatingMode;
 
         // Initialize
         init();
