@@ -1101,14 +1101,15 @@
                 .attr('font-size', '14px')
                 .text('Vorlauftemperatur (°C)');
 
-            // Formula text
+            // Formula text - Viessmann official formula (simplified display)
+            const shiftText = shift >= 0 ? '+ ' + shift : '- ' + Math.abs(shift);
             svg.append('text')
                 .attr('x', 10)
                 .attr('y', 15)
                 .attr('fill', '#667eea')
-                .attr('font-size', '12px')
+                .attr('font-size', '11px')
                 .attr('font-family', 'monospace')
-                .text('VL = 20 + ' + slope.toFixed(1) + ' × (20 - AT) + ' + shift);
+                .text('VL = 20 ' + shiftText + ' - ' + slope.toFixed(1) + ' × DAR × (1.4347 + 0.021×DAR + 247.9×10⁻⁶×DAR²)   mit DAR = AT - 20');
 
             // Add hover functionality
             // Create tooltip
