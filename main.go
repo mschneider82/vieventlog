@@ -260,6 +260,7 @@ func main() {
 	// Heating curve control
 	http.HandleFunc("/api/heating/curve/set", heatingCurveSetHandler)
 	http.HandleFunc("/api/heating/mode/set", heatingModeSetHandler)
+	http.HandleFunc("/api/heating/supplyTempMax/set", supplyTempMaxSetHandler)
 
 	// Data endpoints
 	http.HandleFunc("/api/events", eventsHandler)
@@ -3039,6 +3040,125 @@ func heatingModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Heating mode changed to '%s' for device %s (account: %s)", req.Mode, req.DeviceID, req.AccountID)
+
+	// Clear features cache to force refresh
+	featuresCacheMutex.Lock()
+	cacheKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
+	delete(featuresCache, cacheKey)
+	featuresCacheMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// Supply Temperature Max Set Handler
+func supplyTempMaxSetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		AccountID      string `json:"accountId"`
+		InstallationID string `json:"installationId"`
+		GatewaySerial  string `json:"gatewaySerial"`
+		DeviceID       string `json:"deviceId"`
+		Circuit        int    `json:"circuit"` // Circuit number, usually 0
+		Temperature    int    `json:"temperature"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.AccountID == "" || req.InstallationID == "" || req.GatewaySerial == "" || req.DeviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "accountId, installationId, gatewaySerial, deviceId, and temperature are required",
+		})
+		return
+	}
+
+	// Get access token for the account
+	accountsMutex.RLock()
+	token, exists := accountTokens[req.AccountID]
+	accountsMutex.RUnlock()
+
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Account not found or not authenticated",
+		})
+		return
+	}
+
+	// Build Viessmann API URL - NOTE: using v2 API!
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.temperature.levels/commands/setMax",
+		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit)
+
+	// Prepare request body
+	requestBody := map[string]int{
+		"temperature": req.Temperature,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Make API call
+	client := &http.Client{Timeout: 30 * time.Second}
+	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to call Viessmann API: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("Viessmann API error: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Viessmann API returned status %d: %s", resp.StatusCode, string(bodyBytes)),
+		})
+		return
+	}
+
+	log.Printf("Supply temperature max changed to %d°C for device %s (account: %s)", req.Temperature, req.DeviceID, req.AccountID)
 
 	// Clear features cache to force refresh
 	featuresCacheMutex.Lock()

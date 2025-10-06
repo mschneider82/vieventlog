@@ -2930,9 +2930,62 @@
             }
         }
 
-        // Supply Temperature Max Change Function (placeholder - may not be supported by API)
+        // Supply Temperature Max Change Function
         async function changeSupplyTempMax(newValue) {
-            alert('Die Vorlauftemperaturbegrenzung kann derzeit nicht über die API geändert werden. Bitte verwenden Sie die Viessmann App.');
+            const select = document.getElementById('supplyTempMaxSelect');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/heating/supplyTempMax/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        circuit: 0,
+                        temperature: parseInt(newValue)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Supply temperature max changed to:', newValue);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Vorlauftemperaturbegrenzung: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Vorlauftemperaturbegrenzung: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
         }
 
         // Make functions available globally
