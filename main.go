@@ -614,17 +614,33 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
+				// Try to get device name from features
+				displayName := gwDevice.ModelID
+
+				// Get access token for this account
+				accountsMutex.RLock()
+				token, hasToken := accountTokens[accountID]
+				accountsMutex.RUnlock()
+
+				if hasToken && token.AccessToken != "" {
+					// Try to fetch device.name feature
+					deviceName := getDeviceNameFromFeatures(installID, gateway.Serial, gwDevice.DeviceID, token.AccessToken)
+					if deviceName != "" {
+						displayName = deviceName
+					}
+				}
+
 				key := fmt.Sprintf("%s_%s", gateway.Serial, gwDevice.DeviceID)
 				devicesByInstallation[installID][key] = Device{
 					DeviceID:       gwDevice.DeviceID,
 					ModelID:        gwDevice.ModelID,
-					DisplayName:    fmt.Sprintf("%s (Gateway %s)", gwDevice.ModelID, gateway.Serial),
+					DisplayName:    displayName,
 					InstallationID: installID,
 					GatewaySerial:  gateway.Serial,
 					AccountID:      accountID,
 				}
 				log.Printf("Registered %s device in installation %s: %s (Gateway %s, Device %s, Account %s)\n",
-					gwDevice.DeviceType, installID, gwDevice.ModelID, gateway.Serial, gwDevice.DeviceID, accountID)
+					gwDevice.DeviceType, installID, displayName, gateway.Serial, gwDevice.DeviceID, accountID)
 			}
 		}
 	}
@@ -2027,6 +2043,31 @@ func fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken str
 	featuresCacheMutex.Unlock()
 
 	return features, nil
+}
+
+// getDeviceNameFromFeatures fetches the device.name feature for a device
+func getDeviceNameFromFeatures(installationID, gatewayID, deviceID, accessToken string) string {
+	features, err := fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken)
+	if err != nil {
+		return ""
+	}
+
+	// Look for device.name in the "other" category
+	if deviceName, exists := features.Other["device.name"]; exists {
+		if nameValue, ok := deviceName.Value.(string); ok {
+			return nameValue
+		}
+		// Handle nested structure: value.name.value
+		if nameMap, ok := deviceName.Value.(map[string]FeatureValue); ok {
+			if nameProp, exists := nameMap["name"]; exists {
+				if nameStr, ok := nameProp.Value.(string); ok {
+					return nameStr
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // getGlobalAccessToken returns the global access token (for legacy support)

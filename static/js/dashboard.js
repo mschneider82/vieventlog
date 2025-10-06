@@ -473,10 +473,16 @@
         }
 
         function renderDeviceHeader(deviceInfo, kf) {
+            // Prefer device.name feature over modelId/displayName
+            let deviceTitle = deviceInfo.modelId || deviceInfo.displayName;
+            if (kf.deviceName && kf.deviceName.value) {
+                deviceTitle = kf.deviceName.value;
+            }
+
             return `
                 <div class="card wide">
                     <div class="card-header">
-                        <h2>🔧 ${deviceInfo.modelId || deviceInfo.displayName}</h2>
+                        <h2>🔧 ${deviceTitle}</h2>
                         <div>
                             <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
                             <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
@@ -1588,18 +1594,16 @@
                     <div class="status-list">
             `;
 
-            if (kf.deviceTemperature) {
-                const tempValue = kf.deviceTemperature.value;
-                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+            if (kf.deviceTemperature && isValidNumericValue(kf.deviceTemperature)) {
                 html += `
                     <div class="status-item">
                         <span class="status-label">Ist-Temperatur</span>
-                        <span class="status-value">${formatNum(tempStatus)} ${kf.deviceTemperature.unit || '°C'}</span>
+                        <span class="status-value">${formatNum(kf.deviceTemperature.value)} ${kf.deviceTemperature.unit || '°C'}</span>
                     </div>
                 `;
             }
 
-            if (kf.trvTemperature) {
+            if (kf.trvTemperature && isValidNumericValue(kf.trvTemperature)) {
                 html += `
                     <div class="status-item">
                         <span class="status-label">Soll-Temperatur</span>
@@ -1609,14 +1613,19 @@
             }
 
             if (kf.trvValvePosition) {
-                const valvePos = kf.trvValvePosition.value;
-                const valveStatus = valvePos > 0 ? '🟢 Offen' : '⚪ Geschlossen';
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Ventilstellung</span>
-                        <span class="status-value">${valveStatus} (${formatNum(valvePos)} ${kf.trvValvePosition.unit || '%'})</span>
-                    </div>
-                `;
+                // Nested property: value.position.value
+                const valveData = kf.trvValvePosition.value;
+                if (valveData && valveData.position && typeof valveData.position.value === 'number') {
+                    const valvePos = valveData.position.value;
+                    const valveUnit = valveData.position.unit || '%';
+                    const valveStatus = valvePos > 0 ? '🟢 Offen' : '⚪ Geschlossen';
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Ventilstellung</span>
+                            <span class="status-value">${valveStatus} (${formatNum(valvePos)} ${valveUnit})</span>
+                        </div>
+                    `;
+                }
             }
 
             html += `
@@ -1634,24 +1643,32 @@
             `;
 
             if (kf.trvChildLock) {
-                const lockStatus = kf.trvChildLock.value;
-                const lockText = lockStatus === 'active' ? '🔒 AN' : '🔓 AUS';
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Kindersicherung</span>
-                        <span class="status-value">${lockText}</span>
-                    </div>
-                `;
+                // Nested property: value.status.value
+                const lockData = kf.trvChildLock.value;
+                if (lockData && lockData.status) {
+                    const lockStatus = lockData.status.value;
+                    const lockText = lockStatus === 'active' ? '🔒 AN' : '🔓 AUS';
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Kindersicherung</span>
+                            <span class="status-value">${lockText}</span>
+                        </div>
+                    `;
+                }
             }
 
-            if (kf.trvMountingMode && kf.trvMountingMode.value !== undefined) {
-                const mountingActive = kf.trvMountingMode.value;
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Montagemodus</span>
-                        <span class="status-value">${mountingActive ? 'Aktiv' : 'Inaktiv'}</span>
-                    </div>
-                `;
+            if (kf.trvMountingMode) {
+                // Nested property: value.active.value
+                const mountingData = kf.trvMountingMode.value;
+                if (mountingData && mountingData.active && mountingData.active.value !== undefined) {
+                    const mountingActive = mountingData.active.value;
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Montagemodus</span>
+                            <span class="status-value">${mountingActive ? 'Aktiv' : 'Inaktiv'}</span>
+                        </div>
+                    `;
+                }
             }
 
             html += `
@@ -1680,28 +1697,24 @@
                     <div class="temp-grid">
             `;
 
-            if (kf.deviceTemperature) {
-                const tempValue = kf.deviceTemperature.value;
-                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+            if (kf.deviceTemperature && isValidNumericValue(kf.deviceTemperature)) {
                 html += `
                     <div class="temp-item">
                         <span class="temp-label">Temperatur</span>
                         <div>
-                            <span class="temp-value">${formatNum(tempStatus)}</span>
+                            <span class="temp-value">${formatNum(kf.deviceTemperature.value)}</span>
                             <span class="temp-unit">${kf.deviceTemperature.unit || '°C'}</span>
                         </div>
                     </div>
                 `;
             }
 
-            if (kf.deviceHumidity) {
-                const humValue = kf.deviceHumidity.value;
-                const humStatus = humValue && typeof humValue === 'object' ? humValue.value : humValue;
+            if (kf.deviceHumidity && isValidNumericValue(kf.deviceHumidity)) {
                 html += `
                     <div class="temp-item">
                         <span class="temp-label">Luftfeuchtigkeit</span>
                         <div>
-                            <span class="temp-value">${formatNum(humStatus)}</span>
+                            <span class="temp-value">${formatNum(kf.deviceHumidity.value)}</span>
                             <span class="temp-unit">${kf.deviceHumidity.unit || '%'}</span>
                         </div>
                     </div>
@@ -1732,7 +1745,7 @@
                         <h2>🏠 Betriebsmodus</h2>
             `;
 
-            if (kf.fhtOperatingMode) {
+            if (kf.fhtOperatingMode && kf.fhtOperatingMode.value) {
                 const mode = kf.fhtOperatingMode.value;
                 const modeText = mode === 'heating' ? 'Heizen' : mode === 'cooling' ? 'Kühlen' : 'Standby';
                 const badgeClass = mode === 'heating' ? 'badge-info' : mode === 'cooling' ? 'badge-success' : 'badge-warning';
@@ -1744,33 +1757,39 @@
                     <div class="status-list">
             `;
 
-            if (kf.fhtSupplyTemp) {
-                const tempValue = kf.fhtSupplyTemp.value;
-                const tempStatus = tempValue && typeof tempValue === 'object' ? tempValue.value : tempValue;
+            if (kf.fhtSupplyTemp && isValidNumericValue(kf.fhtSupplyTemp)) {
                 html += `
                     <div class="status-item">
                         <span class="status-label">Vorlauftemperatur</span>
-                        <span class="status-value">${formatNum(tempStatus)} ${kf.fhtSupplyTemp.unit || '°C'}</span>
+                        <span class="status-value">${formatNum(kf.fhtSupplyTemp.value)} ${kf.fhtSupplyTemp.unit || '°C'}</span>
                     </div>
                 `;
             }
 
-            if (kf.fhtHeatingActive && kf.fhtHeatingActive.value !== undefined) {
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Heizen</span>
-                        <span class="status-value">${kf.fhtHeatingActive.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
-                    </div>
-                `;
+            if (kf.fhtHeatingActive) {
+                // Nested property: value.active.value
+                const heatingData = kf.fhtHeatingActive.value;
+                if (heatingData && heatingData.active && heatingData.active.value !== undefined) {
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Heizen</span>
+                            <span class="status-value">${heatingData.active.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
+                        </div>
+                    `;
+                }
             }
 
-            if (kf.fhtCoolingActive && kf.fhtCoolingActive.value !== undefined) {
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Kühlen</span>
-                        <span class="status-value">${kf.fhtCoolingActive.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
-                    </div>
-                `;
+            if (kf.fhtCoolingActive) {
+                // Nested property: value.active.value
+                const coolingData = kf.fhtCoolingActive.value;
+                if (coolingData && coolingData.active && coolingData.active.value !== undefined) {
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Kühlen</span>
+                            <span class="status-value">${coolingData.active.value ? '🟢 Aktiv' : '⚪ Inaktiv'}</span>
+                        </div>
+                    `;
+                }
             }
 
             html += `
@@ -1800,17 +1819,21 @@
             `;
 
             if (kf.zigbeeLqi) {
-                const lqi = kf.zigbeeLqi.value;
-                const lqiValue = lqi && typeof lqi === 'object' ? lqi.value : lqi;
-                const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Link Quality Indicator</span>
-                        <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
-                            ${formatNum(lqiValue)} ${kf.zigbeeLqi.unit || '%'}
-                        </span>
-                    </div>
-                `;
+                // Nested property: value.strength.value
+                const lqiData = kf.zigbeeLqi.value;
+                if (lqiData && lqiData.strength && typeof lqiData.strength.value === 'number') {
+                    const lqiValue = lqiData.strength.value;
+                    const lqiUnit = lqiData.strength.unit || '%';
+                    const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Link Quality Indicator</span>
+                            <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
+                                ${formatNum(lqiValue)} ${lqiUnit}
+                            </span>
+                        </div>
+                    `;
+                }
             }
 
             html += `
@@ -1837,32 +1860,40 @@
             `;
 
             if (kf.deviceBattery) {
-                const batteryValue = kf.deviceBattery.value;
-                const battery = batteryValue && typeof batteryValue === 'object' ? batteryValue.value : batteryValue;
-                const batteryColor = battery >= 70 ? '#10b981' : battery >= 30 ? '#f59e0b' : '#ef4444';
-                const batteryIcon = battery >= 70 ? '🔋' : battery >= 30 ? '🪫' : '🔴';
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Batteriestand</span>
-                        <span class="status-value" style="color: ${batteryColor}; font-weight: bold;">
-                            ${batteryIcon} ${formatNum(battery)} ${kf.deviceBattery.unit || '%'}
-                        </span>
-                    </div>
-                `;
+                // Nested property: value.level.value
+                const batteryData = kf.deviceBattery.value;
+                if (batteryData && batteryData.level && typeof batteryData.level.value === 'number') {
+                    const battery = batteryData.level.value;
+                    const batteryUnit = batteryData.level.unit || '%';
+                    const batteryColor = battery >= 70 ? '#10b981' : battery >= 30 ? '#f59e0b' : '#ef4444';
+                    const batteryIcon = battery >= 70 ? '🔋' : battery >= 30 ? '🪫' : '🔴';
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Batteriestand</span>
+                            <span class="status-value" style="color: ${batteryColor}; font-weight: bold;">
+                                ${batteryIcon} ${formatNum(battery)} ${batteryUnit}
+                            </span>
+                        </div>
+                    `;
+                }
             }
 
             if (kf.zigbeeLqi) {
-                const lqi = kf.zigbeeLqi.value;
-                const lqiValue = lqi && typeof lqi === 'object' ? lqi.value : lqi;
-                const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Link Quality</span>
-                        <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
-                            ${formatNum(lqiValue)} ${kf.zigbeeLqi.unit || '%'}
-                        </span>
-                    </div>
-                `;
+                // Nested property: value.strength.value
+                const lqiData = kf.zigbeeLqi.value;
+                if (lqiData && lqiData.strength && typeof lqiData.strength.value === 'number') {
+                    const lqiValue = lqiData.strength.value;
+                    const lqiUnit = lqiData.strength.unit || '%';
+                    const lqiColor = lqiValue >= 70 ? '#10b981' : lqiValue >= 40 ? '#f59e0b' : '#ef4444';
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Link Quality</span>
+                            <span class="status-value" style="color: ${lqiColor}; font-weight: bold;">
+                                ${formatNum(lqiValue)} ${lqiUnit}
+                            </span>
+                        </div>
+                    `;
+                }
             }
 
             html += `
