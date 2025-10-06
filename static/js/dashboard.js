@@ -481,9 +481,9 @@
                 deviceTitle = kf.deviceName.value;
             }
 
-            // Only show settings button for heating devices (Vitocal)
-            const isHeatingDevice = deviceInfo.deviceType === 'heating';
-            const settingsButton = isHeatingDevice ? `
+            // Show settings button for heat pumps (devices with compressor)
+            const hasCompressor = kf.compressorSpeed || kf.compressorActive || kf.compressorHours;
+            const settingsButton = hasCompressor ? `
                 <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
                     ⚙️ Einstellungen
