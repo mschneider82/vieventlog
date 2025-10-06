@@ -664,16 +664,6 @@
                 ${rpmPercentage !== null ? `<span style="color: #10b981; margin-left: 8px;">(${rpmPercentage}%)</span>` : ''}
             </span>
                         </div>
-                        ${rpmPercentage !== null ? `
-                            <div class="status-item">
-                                <span class="status-label">Auslastung</span>
-                                <span class="status-value">
-                                    <div style="width: 100%; max-width: 200px; height: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
-                                        <div style="width: ${rpmPercentage}%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #059669 100%); transition: width 0.3s ease;"></div>
-                                    </div>
-                                </span>
-                            </div>
-                        ` : ''}
                     ` : ''}
                     ${kf.compressorPower ? `
                         <div class="status-item">
@@ -931,9 +921,20 @@
             // Clear any existing content
             chartElement.innerHTML = '';
 
-            // Calculate heating curve: VL = 20 + slope × (20 - AT) + shift
+            // Calculate heating curve using official Viessmann formula:
+            // VT = RTSoll + Niveau - Neigung * DAR * (1.4347 + 0.021 * DAR + 247.9 * 10^-6 * DAR^2)
+            // with DAR = AT - RTSoll
             function calculateSupplyTemp(outsideTemp) {
-                return 20 + slope * (20 - outsideTemp) + shift;
+                const RTSoll = 20;  // Raumtemperatursollwert (room temperature setpoint)
+                const DAR = outsideTemp - RTSoll;
+                let VT = RTSoll + shift - slope * DAR * (1.4347 + 0.021 * DAR + 247.9 * 1e-6 * DAR * DAR);
+
+                // Cap at max supply temperature (Viessmann behavior)
+                if (maxSupply !== null && VT > maxSupply) {
+                    VT = maxSupply;
+                }
+
+                return VT;
             }
 
             // Setup dimensions
@@ -949,9 +950,9 @@
                 .append('g')
                 .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
 
-            // Scales (X-axis reversed: 20°C left, -20°C right)
+            // Scales (X-axis reversed: 20°C left, -30°C right)
             const xScale = d3.scaleLinear()
-                .domain([20, -20])
+                .domain([20, -30])
                 .range([0, width]);
 
             const yScale = d3.scaleLinear()
@@ -976,7 +977,7 @@
 
             // Generate curve data
             const curveData = [];
-            for (let temp = -20; temp <= 20; temp += 0.5) {
+            for (let temp = -30; temp <= 20; temp += 0.5) {
                 curveData.push({
                     outside: temp,
                     supply: calculateSupplyTemp(temp)
