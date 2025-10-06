@@ -1387,10 +1387,20 @@
 
             // 4-Way Valve Position
             if (kf.fourWayValve) {
+                const valveLabels = {
+                    'domesticHotWater': 'Warmwasser',
+                    'heating': 'Heizen',
+                    'cooling': 'Kühlen',
+                    'defrost': 'Abtauen',
+                    'standby': 'Standby',
+                    'off': 'Aus'
+                };
+                const valveValue = kf.fourWayValve.value;
+                const valveDisplay = valveLabels[valveValue] || valveValue;
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">4-Wege-Ventil</span>
-                        <span class="status-value">${kf.fourWayValve.value}</span>
+                        <span class="status-value">${valveDisplay}</span>
                     </div>
                 `;
             }
