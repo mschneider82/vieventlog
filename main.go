@@ -261,6 +261,7 @@ func main() {
 	http.HandleFunc("/api/heating/curve/set", heatingCurveSetHandler)
 	http.HandleFunc("/api/heating/mode/set", heatingModeSetHandler)
 	http.HandleFunc("/api/heating/supplyTempMax/set", supplyTempMaxSetHandler)
+	http.HandleFunc("/api/heating/roomTemp/set", roomTempSetHandler)
 
 	// Data endpoints
 	http.HandleFunc("/api/events", eventsHandler)
@@ -3159,6 +3160,159 @@ func supplyTempMaxSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Supply temperature max changed to %d°C for device %s (account: %s)", req.Temperature, req.DeviceID, req.AccountID)
+
+	// Clear features cache to force refresh
+	featuresCacheMutex.Lock()
+	cacheKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
+	delete(featuresCache, cacheKey)
+	featuresCacheMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// Room Temperature Setpoint Handler
+func roomTempSetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		AccountID      string `json:"accountId"`
+		InstallationID string `json:"installationId"`
+		GatewaySerial  string `json:"gatewaySerial"`
+		DeviceID       string `json:"deviceId"`
+		Circuit        int    `json:"circuit"` // Circuit number, usually 0
+		Temperature    int    `json:"temperature"`
+		Program        string `json:"program"` // Program: normal, comfort, reduced
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.AccountID == "" || req.InstallationID == "" || req.GatewaySerial == "" || req.DeviceID == "" || req.Program == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "accountId, installationId, gatewaySerial, deviceId, program, and temperature are required",
+		})
+		return
+	}
+
+	// Validate program - accept various program types
+	validPrograms := map[string]bool{
+		"normal":                            true,
+		"normalHeating":                     true,
+		"normalCooling":                     true,
+		"normalEnergySaving":                true,
+		"normalCoolingEnergySaving":         true,
+		"comfort":                           true,
+		"comfortHeating":                    true,
+		"comfortCooling":                    true,
+		"comfortEnergySaving":               true,
+		"comfortCoolingEnergySaving":        true,
+		"reduced":                           true,
+		"reducedHeating":                    true,
+		"reducedCooling":                    true,
+		"reducedEnergySaving":               true,
+		"reducedCoolingEnergySaving":        true,
+		"eco":                               true,
+		"fixed":                             true,
+		"standby":                           true,
+		"frostprotection":                   true,
+		"forcedLastFromSchedule":            true,
+		"summerEco":                         true,
+	}
+	if !validPrograms[req.Program] {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Invalid program: %s", req.Program),
+		})
+		return
+	}
+
+	// Get access token for the account
+	accountsMutex.RLock()
+	token, exists := accountTokens[req.AccountID]
+	accountsMutex.RUnlock()
+
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Account not found or not authenticated",
+		})
+		return
+	}
+
+	// Build Viessmann API URL
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/equipment/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.programs.%s/commands/setTemperature",
+		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit, req.Program)
+
+	// Prepare request body
+	requestBody := map[string]int{
+		"targetTemperature": req.Temperature,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Make API call
+	client := &http.Client{Timeout: 30 * time.Second}
+	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to call Viessmann API: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("Viessmann API error: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Viessmann API returned status %d: %s", resp.StatusCode, string(bodyBytes)),
+		})
+		return
+	}
+
+	log.Printf("Room temperature for program %s changed to %d°C for circuit %d, device %s (account: %s)", req.Program, req.Temperature, req.Circuit, req.DeviceID, req.AccountID)
 
 	// Clear features cache to force refresh
 	featuresCacheMutex.Lock()

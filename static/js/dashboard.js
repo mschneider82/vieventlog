@@ -261,8 +261,17 @@
                 // Main temperature displays (outside, supply)
                 html += renderMainTemperatures(keyFeatures);
 
-                // Store heating curve data for later rendering
-                window.heatingCurveData = {
+                // Detect heating circuits first
+                const circuits = detectHeatingCircuits(features);
+                console.log('Rendering circuits:', circuits);
+
+                // Store heating curve data per circuit for later use
+                if (!window.heatingCurveData) {
+                    window.heatingCurveData = {};
+                }
+
+                // Store data for circuit 0 (backward compatibility)
+                window.heatingCurveData[0] = {
                     slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
                     shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
                     currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
@@ -270,18 +279,64 @@
                     maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
                     minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
                 };
+                // Keep legacy format for backward compatibility (for chart rendering)
+                window.heatingCurveData.slope = window.heatingCurveData[0].slope;
+                window.heatingCurveData.shift = window.heatingCurveData[0].shift;
+                window.heatingCurveData.currentOutside = window.heatingCurveData[0].currentOutside;
+                window.heatingCurveData.currentSupply = window.heatingCurveData[0].currentSupply;
+                window.heatingCurveData.maxSupply = window.heatingCurveData[0].maxSupply;
+                window.heatingCurveData.minSupply = window.heatingCurveData[0].minSupply;
 
-                // Compressor/Burner status (Vitocal/Vitodens)
-                html += renderCompressorBurner(keyFeatures);
+                // Store data for each circuit
+                for (const circuitId of circuits) {
+                    const circuitPrefix = `heating.circuits.${circuitId}`;
+                    const find = (exactName) => {
+                        for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                            if (category && category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
+                                return category[exactName];
+                            }
+                        }
+                        return null;
+                    };
+                    const findNested = (featureName, propertyName) => {
+                        for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                            if (category && category[featureName]) {
+                                const feature = category[featureName];
+                                if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
+                                    const nestedValue = feature.value[propertyName];
+                                    if (nestedValue && nestedValue.value !== undefined) {
+                                        return nestedValue.value;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    };
 
-                // Heating circuit card
-                html += renderHeatingCircuit(keyFeatures);
+                    const slope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
+                    const shift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
+
+                    window.heatingCurveData[circuitId] = {
+                        slope: slope,
+                        shift: shift
+                    };
+                }
+
+                // Compressor/burner status card with all details
+                html += renderCompressorBurnerStatus(keyFeatures);
+
+                // Render heating circuits
+                for (const circuitId of circuits) {
+                    html += renderHeatingCircuitCard(features, circuitId, deviceInfo);
+                }
 
                 // Hot water card
                 html += renderHotWater(keyFeatures);
 
-                // Heating curve & settings
-                html += renderHeatingCurve(keyFeatures);
+                // Heating curve & settings - only show if no heating circuit cards were rendered
+                if (circuits.length === 0) {
+                    html += renderHeatingCurve(keyFeatures);
+                }
 
                 // Consumption
                 html += renderConsumption(keyFeatures);
@@ -292,8 +347,10 @@
                 // Refrigerant circuit (heat pump only)
                 html += renderRefrigerantCircuit(keyFeatures);
 
-                // System status
-                html += renderSystemStatus(keyFeatures);
+                // System status - only show if no heating circuit cards were rendered
+                if (circuits.length === 0) {
+                    html += renderSystemStatus(keyFeatures);
+                }
 
                 // Device information
                 html += renderDeviceInfo(keyFeatures);
@@ -474,6 +531,58 @@
             };
         }
 
+        // Detect available heating circuits
+        function detectHeatingCircuits(features) {
+            if (features.circuits && features.circuits['heating.circuits']) {
+                const heatingCircuits = features.circuits['heating.circuits'];
+
+                if (heatingCircuits.value && heatingCircuits.value.enabled) {
+                    let enabled = heatingCircuits.value.enabled;
+
+                    // Handle nested structure: {type: 'array', value: [...]}
+                    if (enabled.type === 'array' && enabled.value) {
+                        enabled = enabled.value;
+                    }
+
+                    // Check if enabled is an array
+                    if (Array.isArray(enabled)) {
+                        console.log('Found enabled circuits array:', enabled);
+                        return enabled.map(c => parseInt(c));
+                    }
+
+                    // Handle single value as string or number
+                    if (typeof enabled === 'string' || typeof enabled === 'number') {
+                        console.log('Found single circuit:', enabled);
+                        return [parseInt(enabled)];
+                    }
+                }
+            }
+
+            // Fallback: search for heating.circuits.X features
+            console.log('Fallback: searching for circuit features');
+            const circuitNumbers = new Set();
+            for (const category of [features.circuits, features.operatingModes, features.temperatures]) {
+                if (category) {
+                    for (const key of Object.keys(category)) {
+                        const match = key.match(/^heating\.circuits\.(\d+)\./);
+                        if (match) {
+                            circuitNumbers.add(parseInt(match[1]));
+                        }
+                    }
+                }
+            }
+
+            if (circuitNumbers.size > 0) {
+                const circuits = Array.from(circuitNumbers).sort((a, b) => a - b);
+                console.log('Found circuits from features:', circuits);
+                return circuits;
+            }
+
+            // Ultimate fallback: assume circuit 0 exists
+            console.log('No circuits found, defaulting to [0]');
+            return [0];
+        }
+
         function renderDeviceHeader(deviceInfo, kf) {
             // Prefer device.name feature over modelId/displayName
             let deviceTitle = deviceInfo.modelId || deviceInfo.displayName;
@@ -490,6 +599,121 @@
                 </button>
             ` : '';
 
+            // Build temperature grid
+            let temps = '';
+            if (kf.outsideTemp) {
+                const formatted = formatValue(kf.outsideTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.calculatedOutsideTemp) {
+                const formatted = formatValue(kf.calculatedOutsideTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Außentemp. (ged.)</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.supplyTemp) {
+                const formatted = formatValue(kf.supplyTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Gemeinsame Vorlauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.returnTemp) {
+                const formatted = formatValue(kf.returnTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Rücklauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.boilerTemp) {
+                const formatted = formatValue(kf.boilerTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Kesseltemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.bufferTemp) {
+                const formatted = formatValue(kf.bufferTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.primarySupplyTemp) {
+                const formatted = formatValue(kf.primarySupplyTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Primärkreis-Vorlauf</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.secondarySupplyTemp) {
+                const formatted = formatValue(kf.secondarySupplyTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Sekundärkreis-Vorlauf</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
             return `
                 <div class="card wide">
                     <div class="card-header">
@@ -499,117 +723,18 @@
                             ${settingsButton}
                         </div>
                     </div>
+                    ${temps ? `<div class="temp-grid">${temps}</div>` : ''}
                 </div>
             `;
         }
 
         function renderMainTemperatures(kf) {
-            let temps = '';
-            if (kf.outsideTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Außentemperatur</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.outsideTemp.value)}</span>
-            <span class="temp-unit">${kf.outsideTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.calculatedOutsideTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Außentemp. (ged.)</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.calculatedOutsideTemp.value)}</span>
-            <span class="temp-unit">${kf.calculatedOutsideTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.supplyTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Vorlauftemperatur</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.supplyTemp.value)}</span>
-            <span class="temp-unit">${kf.supplyTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.returnTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Rücklauftemperatur</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.returnTemp.value)}</span>
-            <span class="temp-unit">${kf.returnTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.boilerTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Kesseltemperatur</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.boilerTemp.value)}</span>
-            <span class="temp-unit">${kf.boilerTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.bufferTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.bufferTemp.value)}</span>
-            <span class="temp-unit">${kf.bufferTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.primarySupplyTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Primärkreis-Vorlauf</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.primarySupplyTemp.value)}</span>
-            <span class="temp-unit">${kf.primarySupplyTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.secondarySupplyTemp) {
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Sekundärkreis-Vorlauf</span>
-                        <div>
-            <span class="temp-value">${formatNum(kf.secondarySupplyTemp.value)}</span>
-            <span class="temp-unit">${kf.secondarySupplyTemp.unit || '°C'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-
-            if (!temps) return '';
-
-            return `
-                <div class="card wide">
-                    <div class="card-header">
-                        <h2>🌡️ Temperaturen</h2>
-                    </div>
-                    <div class="temp-grid">
-                        ${temps}
-                    </div>
-                </div>
-            `;
+            // Temperatures are now integrated into renderDeviceHeader
+            return '';
         }
 
-        function renderCompressorBurner(kf) {
-            // Check if we have compressor (heat pump) or burner (gas)
+        function renderCompressorBurnerStatus(kf) {
+            // Combined status card with all details
             const hasCompressor = kf.compressorSpeed || kf.compressorPower ||
                                   kf.compressorCurrent || kf.compressorPressure ||
                                   kf.compressorOilTemp || kf.compressorMotorTemp ||
@@ -623,7 +748,7 @@
             let title = '';
 
             if (hasCompressor) {
-                title = '⚙️ Kompressor';
+                title = '⚙️ Verdichter';
                 const isRunning = kf.compressorSpeed && kf.compressorSpeed.value > 0;
 
                 // Convert speed to RPM if unit is revolutionsPerSecond
@@ -654,89 +779,89 @@
                 }
 
                 // Get device settings from cache for RPM percentage calculation
-                const deviceInfo = window.currentDeviceInfo; // Store this globally
+                const deviceInfo = window.currentDeviceInfo;
                 let rpmPercentage = null;
                 if (deviceInfo && window.deviceSettingsCache) {
                     const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
                     const settings = window.deviceSettingsCache[deviceKey];
                     if (settings && settings.max > settings.min && speedValue > 0) {
                         rpmPercentage = Math.round(((speedValue - settings.min) / (settings.max - settings.min)) * 100);
-                        rpmPercentage = Math.max(0, Math.min(100, rpmPercentage)); // Clamp 0-100
+                        rpmPercentage = Math.max(0, Math.min(100, rpmPercentage));
                     }
                 }
 
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
-                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                        <span class="status-value">${isRunning ? '🟢 An' : '⚪ Aus'}</span>
                     </div>
                     ${kf.compressorSpeed ? `
                         <div class="status-item">
-            <span class="status-label">Drehzahl</span>
-            <span class="status-value">
-                ${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}
-                ${rpmPercentage !== null ? `<span style="color: #10b981; margin-left: 8px;">(${rpmPercentage}%)</span>` : ''}
-            </span>
+                            <span class="status-label">Drehzahl</span>
+                            <span class="status-value">
+                                ${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}
+                                ${rpmPercentage !== null ? `<span style="color: #10b981; margin-left: 8px;">(${rpmPercentage}%)</span>` : ''}
+                            </span>
                         </div>
                     ` : ''}
                     ${kf.compressorPower ? `
                         <div class="status-item">
-            <span class="status-label">Leistung</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorPower) ? formatNum(kf.compressorPower.value) + ' ' + (kf.compressorPower.unit || 'W') : '--'}</span>
+                            <span class="status-label">Leistung</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorPower) ? formatValue(kf.compressorPower) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
                         <div class="status-item">
-            <span class="status-label">Stromaufnahme</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatNum(kf.compressorCurrent.value) + ' ' + (kf.compressorCurrent.unit || 'A') : '--'}</span>
+                            <span class="status-label">Stromaufnahme</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatValue(kf.compressorCurrent) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
-            <span class="status-label">Einlassdruck</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorPressure) ? formatNum(kf.compressorPressure.value) + ' ' + (kf.compressorPressure.unit || 'bar') : '--'}</span>
+                            <span class="status-label">Einlassdruck</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorPressure) ? formatValue(kf.compressorPressure) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOilTemp ? `
                         <div class="status-item">
-            <span class="status-label">Öltemperatur</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorOilTemp) ? formatNum(kf.compressorOilTemp.value) + ' ' + (kf.compressorOilTemp.unit || '°C') : '--'}</span>
+                            <span class="status-label">Öltemperatur</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorOilTemp) ? formatValue(kf.compressorOilTemp) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorMotorTemp ? `
                         <div class="status-item">
-            <span class="status-label">Motorraumtemperatur</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorMotorTemp) ? formatNum(kf.compressorMotorTemp.value) + ' ' + (kf.compressorMotorTemp.unit || '°C') : '--'}</span>
+                            <span class="status-label">Motorraumtemperatur</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorMotorTemp) ? formatValue(kf.compressorMotorTemp) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorInletTemp ? `
                         <div class="status-item">
-            <span class="status-label">Einlasstemperatur</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorInletTemp) ? formatNum(kf.compressorInletTemp.value) + ' ' + (kf.compressorInletTemp.unit || '°C') : '--'}</span>
+                            <span class="status-label">Einlasstemperatur</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorInletTemp) ? formatValue(kf.compressorInletTemp) : '--'}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorOutletTemp ? `
                         <div class="status-item">
-            <span class="status-label">Auslasstemperatur</span>
-            <span class="status-value">${isValidNumericValue(kf.compressorOutletTemp) ? formatNum(kf.compressorOutletTemp.value) + ' ' + (kf.compressorOutletTemp.unit || '°C') : '--'}</span>
+                            <span class="status-label">Auslasstemperatur</span>
+                            <span class="status-value">${isValidNumericValue(kf.compressorOutletTemp) ? formatValue(kf.compressorOutletTemp) : '--'}</span>
                         </div>
                     ` : ''}
                     ${compressorHours > 0 ? `
                         <div class="status-item">
-            <span class="status-label">Betriebsstunden Verdichter</span>
-            <span class="status-value">${compressorHours} h</span>
+                            <span class="status-label">Betriebsstunden Verdichter</span>
+                            <span class="status-value">${formatNum(compressorHours)} Std.</span>
                         </div>
                     ` : ''}
                     ${compressorStarts > 0 ? `
                         <div class="status-item">
-            <span class="status-label">Anzahl Verdichterstarts</span>
-            <span class="status-value">${compressorStarts}</span>
+                            <span class="status-label">Anzahl Verdichterstarts</span>
+                            <span class="status-value">${compressorStarts}</span>
                         </div>
                     ` : ''}
                     ${avgRuntime > 0 ? `
                         <div class="status-item">
-            <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
-            <span class="status-value">${formatNum(avgRuntime)} h</span>
+                            <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
+                            <span class="status-value">${formatNum(avgRuntime)} Std.</span>
                         </div>
                     ` : ''}
                 `;
@@ -748,11 +873,11 @@
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
-                        <span class="status-value">${isRunning ? '🟢 Running' : '⚪ Not running'}</span>
+                        <span class="status-value">${isRunning ? '🟢 An' : '⚪ Aus'}</span>
                     </div>
                     <div class="status-item">
                         <span class="status-label">Modulation</span>
-                        <span class="status-value">${formatNum(modulation)} ${kf.burnerModulation.unit || '%'}</span>
+                        <span class="status-value">${formatValue(kf.burnerModulation)}</span>
                     </div>
                 `;
             }
@@ -769,40 +894,288 @@
             `;
         }
 
-        function renderHeatingCircuit(kf) {
-            if (!kf.operatingMode && !kf.operatingProgram && !kf.circuitTemp) return '';
+        // Render heating circuit card for a specific circuit
+        function renderHeatingCircuitCard(features, circuitId, deviceInfo) {
+            const circuitPrefix = `heating.circuits.${circuitId}`;
 
-            const mode = kf.operatingMode ? kf.operatingMode.value : 'unknown';
-            const program = kf.operatingProgram ? kf.operatingProgram.value : '';
+            // Extract circuit-specific features
+            const find = (exactNames) => {
+                if (!Array.isArray(exactNames)) exactNames = [exactNames];
+                for (const exactName of exactNames) {
+                    for (const category of [features.temperatures, features.circuits, features.operatingModes, features.other]) {
+                        if (category && category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
+                            return category[exactName];
+                        }
+                    }
+                }
+                return null;
+            };
 
-            return `
-                <div class="card">
+            const findNested = (featureName, propertyName) => {
+                for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                    if (category && category[featureName]) {
+                        const feature = category[featureName];
+                        if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
+                            const nestedValue = feature.value[propertyName];
+                            if (nestedValue && nestedValue.value !== undefined) {
+                                return {
+                                    type: nestedValue.type || 'number',
+                                    value: nestedValue.value,
+                                    unit: nestedValue.unit || ''
+                                };
+                            }
+                        }
+                    }
+                }
+                return null;
+            };
+
+            const circuitName = find([`${circuitPrefix}.name`]);
+            const operatingMode = find([`${circuitPrefix}.operating.modes.active`]);
+            const operatingProgram = find([`${circuitPrefix}.operating.programs.active`]);
+            const circuitTemp = find([`${circuitPrefix}.sensors.temperature.supply`]);
+            const roomTemp = find([`${circuitPrefix}.sensors.temperature.room`]);
+            const heatingCurveSlope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
+            const heatingCurveShift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
+            const supplyTempMax = findNested(`${circuitPrefix}.temperature.levels`, 'max');
+
+            // Get program temperatures (normal, comfort, reduced)
+            const normalTemp = find([`${circuitPrefix}.operating.programs.normal.temperature`]);
+            const normalHeatingTemp = find([`${circuitPrefix}.operating.programs.normalHeating.temperature`]);
+            const comfortTemp = find([`${circuitPrefix}.operating.programs.comfort.temperature`]);
+            const comfortHeatingTemp = find([`${circuitPrefix}.operating.programs.comfortHeating.temperature`]);
+            const reducedTemp = find([`${circuitPrefix}.operating.programs.reduced.temperature`]);
+            const reducedHeatingTemp = find([`${circuitPrefix}.operating.programs.reducedHeating.temperature`]);
+
+            // Check if circuit has any relevant data
+            if (!operatingMode && !operatingProgram && !circuitTemp && !heatingCurveSlope && !supplyTempMax) {
+                return '';
+            }
+
+            // Get circuit name (handle nested structure)
+            // Display circuit number starting from 1 (circuitId 0 = Heizkreis 1)
+            let displayName = `Heizkreis ${circuitId + 1}`;
+            if (circuitName && circuitName.value) {
+                let nameValue = circuitName.value;
+                if (nameValue.name && typeof nameValue.name === 'object') {
+                    if (nameValue.name.value) {
+                        nameValue = nameValue.name.value;
+                    }
+                }
+                if (typeof nameValue === 'string') {
+                    displayName = nameValue;
+                }
+            }
+
+            // Program name translations
+            const programNames = {
+                'normal': 'Normal',
+                'normalHeating': 'Normal (Heizen)',
+                'normalCooling': 'Normal (Kühlen)',
+                'normalEnergySaving': 'Normal (Energiesparen)',
+                'normalCoolingEnergySaving': 'Normal (Kühlen, Energiesparen)',
+                'comfort': 'Komfort',
+                'comfortHeating': 'Komfort (Heizen)',
+                'comfortCooling': 'Komfort (Kühlen)',
+                'comfortEnergySaving': 'Komfort (Energiesparen)',
+                'comfortCoolingEnergySaving': 'Komfort (Kühlen, Energiesparen)',
+                'reduced': 'Reduziert',
+                'reducedHeating': 'Reduziert (Heizen)',
+                'reducedCooling': 'Reduziert (Kühlen)',
+                'reducedEnergySaving': 'Reduziert (Energiesparen)',
+                'reducedCoolingEnergySaving': 'Reduziert (Kühlen, Energiesparen)',
+                'eco': 'Eco',
+                'fixed': 'Fest',
+                'standby': 'Standby',
+                'frostprotection': 'Frostschutz',
+                'forcedLastFromSchedule': 'Zeitprogramm',
+            };
+
+            // Mode translations
+            const modeNames = {
+                'heating': 'Heizen',
+                'standby': 'Standby',
+                'cooling': 'Kühlen',
+                'dhw': 'Warmwasser',
+                'dhwAndHeating': 'Warmwasser und Heizen',
+                'forcedReduced': 'Reduziert (Erzwungen)',
+                'forcedNormal': 'Normal (Erzwungen)',
+            };
+
+            const currentMode = operatingMode ? operatingMode.value : '';
+            const currentProgram = operatingProgram ? operatingProgram.value : '';
+            const programDisplay = programNames[currentProgram] || currentProgram;
+            const modeDisplay = modeNames[currentMode] || currentMode;
+
+            let html = `
+                <div class="card wide">
                     <div class="card-header">
-                        <h2>🏠 Heizkreis</h2>
-                        ${mode ? `<span class="badge badge-info">${mode}</span>` : ''}
+                        <h2>🏠 ${displayName}</h2>
                     </div>
                     <div class="status-list">
-                        ${kf.operatingProgram ? `
-            <div class="status-item">
-                <span class="status-label">Betriebsprogramm</span>
-                <span class="status-value">${program}</span>
-            </div>
-                        ` : ''}
-                        ${kf.circuitTemp ? `
-            <div class="status-item">
-                <span class="status-label">Kreistemperatur</span>
-                <span class="status-value">${formatNum(kf.circuitTemp.value)} ${kf.circuitTemp.unit || '°C'}</span>
-            </div>
-                        ` : ''}
-                        ${kf.roomTemp ? `
-            <div class="status-item">
-                <span class="status-label">Raumtemperatur</span>
-                <span class="status-value">${formatNum(kf.roomTemp.value)} ${kf.roomTemp.unit || '°C'}</span>
-            </div>
-                        ` : ''}
+            `;
+
+            // Operating mode with dropdown
+            if (operatingMode) {
+                const availableModes = find([`${circuitPrefix}.operating.modes.dhwAndHeating`]) ?
+                    ['heating', 'standby', 'dhwAndHeating'] : ['heating', 'standby'];
+
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Betriebsart</span>
+                        <span class="status-value">
+                            <select onchange="changeHeatingMode(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                `;
+                for (const mode of availableModes) {
+                    const selected = mode === currentMode ? 'selected' : '';
+                    html += `<option value="${mode}" ${selected}>${modeNames[mode] || mode}</option>`;
+                }
+                html += `
+                            </select>
+                        </span>
                     </div>
+                `;
+            }
+
+            // Active program
+            if (operatingProgram) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Aktives Programm</span>
+                        <span class="status-value">${programDisplay}</span>
+                    </div>
+                `;
+            }
+
+            // Room temperature setpoints for different programs
+            if (normalTemp || normalHeatingTemp || comfortTemp || comfortHeatingTemp || reducedTemp || reducedHeatingTemp) {
+                html += '<div class="status-item"><span class="status-label">Raumtemperatur-Sollwerte</span><span class="status-value"></span></div>';
+
+                const programTemps = [
+                    { name: 'Normal', apiName: 'normal', temp: normalTemp },
+                    { name: 'Normal (Heizen)', apiName: 'normalHeating', temp: normalHeatingTemp },
+                    { name: 'Komfort', apiName: 'comfort', temp: comfortTemp },
+                    { name: 'Komfort (Heizen)', apiName: 'comfortHeating', temp: comfortHeatingTemp },
+                    { name: 'Reduziert', apiName: 'reduced', temp: reducedTemp },
+                    { name: 'Reduziert (Heizen)', apiName: 'reducedHeating', temp: reducedHeatingTemp },
+                ];
+
+                for (const prog of programTemps) {
+                    if (prog.temp) {
+                        html += `
+                            <div class="status-item" style="padding-left: 20px;">
+                                <span class="status-label">${prog.name}</span>
+                                <span class="status-value">
+                                    <select onchange="changeRoomTemp(${circuitId}, '${prog.apiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        `;
+                        for (let temp = 10; temp <= 30; temp++) {
+                            const selected = Math.round(prog.temp.value) === temp ? 'selected' : '';
+                            html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
+                        }
+                        html += `
+                                    </select>
+                                </span>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            // Circuit temperature
+            if (circuitTemp) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Vorlauftemperatur</span>
+                        <span class="status-value">${formatValue(circuitTemp)}</span>
+                    </div>
+                `;
+            }
+
+            // Room temperature sensor
+            if (roomTemp) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Raumtemperatur (Ist)</span>
+                        <span class="status-value">${formatValue(roomTemp)}</span>
+                    </div>
+                `;
+            }
+
+            // Heating curve with editable dropdowns
+            if (heatingCurveSlope) {
+                // Generate slope options from 0.2 to 3.5 in 0.1 steps
+                const slopeOptions = [];
+                for (let i = 2; i <= 35; i++) {
+                    const val = i / 10;
+                    const selected = Math.abs(heatingCurveSlope.value - val) < 0.01 ? 'selected' : '';
+                    slopeOptions.push(`<option value="${val}" ${selected}>${val}</option>`);
+                }
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Heizkurve Neigung</span>
+                        <span class="status-value">
+                            <select onchange="changeHeatingCurve(${circuitId}, 'slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                ${slopeOptions.join('')}
+                            </select>
+                        </span>
+                    </div>
+                `;
+            }
+
+            if (heatingCurveShift) {
+                // Generate shift options from -13 to 40 in 1 step
+                const shiftOptions = [];
+                for (let i = -13; i <= 40; i++) {
+                    const selected = heatingCurveShift.value === i ? 'selected' : '';
+                    shiftOptions.push(`<option value="${i}" ${selected}>${i}</option>`);
+                }
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Heizkurve Niveau</span>
+                        <span class="status-value">
+                            <select onchange="changeHeatingCurve(${circuitId}, 'shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                ${shiftOptions.join('')}
+                            </select>
+                        </span>
+                    </div>
+                `;
+            }
+
+            // Supply temperature limit
+            if (supplyTempMax) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
+                        <span class="status-value">
+                            <select onchange="changeSupplyTempMax(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                `;
+                for (let i = 10; i <= 90; i++) {
+                    const selected = Math.round(supplyTempMax.value) === i ? 'selected' : '';
+                    html += `<option value="${i}" ${selected}>${i}°C</option>`;
+                }
+                html += `
+                            </select>
+                        </span>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+            `;
+
+            // Add heating curve chart for circuit 0 only (to avoid duplicate charts)
+            if (circuitId === 0 && (heatingCurveSlope || heatingCurveShift)) {
+                html += `
+                    <div id="heatingCurveChart" style="width: 100%; height: 400px; margin-top: 15px;"></div>
+                `;
+            }
+
+            html += `
                 </div>
             `;
+
+            return html;
         }
 
         function renderHotWater(kf) {
@@ -842,7 +1215,7 @@
                         ${kf.dhwTemp ? `
             <div class="status-item">
                 <span class="status-label">Ist-Temperatur</span>
-                <span class="status-value">${formatNum(kf.dhwTemp.value)} ${kf.dhwTemp.unit || '°C'}</span>
+                <span class="status-value">${formatValue(kf.dhwTemp)}</span>
             </div>
                         ` : ''}
                         ${kf.dhwTarget ? `
@@ -1385,7 +1758,7 @@
                 `;
             }
 
-            // 4-Way Valve Position
+            // 4/3-Way Valve Position
             if (kf.fourWayValve) {
                 const valveLabels = {
                     'domesticHotWater': 'Warmwasser',
@@ -1393,13 +1766,15 @@
                     'cooling': 'Kühlen',
                     'defrost': 'Abtauen',
                     'standby': 'Standby',
-                    'off': 'Aus'
+                    'off': 'Aus',
+                    'climateCircuitOne': 'Integrierter Pufferspeicher',
+                    'climatCircuitTwoDefrost': 'Leerlauf'
                 };
                 const valveValue = kf.fourWayValve.value;
                 const valveDisplay = valveLabels[valveValue] || valveValue;
                 sensors += `
                     <div class="status-item">
-                        <span class="status-label">4-Wege-Ventil</span>
+                        <span class="status-label">4/3-Wege-Ventil</span>
                         <span class="status-value">${valveDisplay}</span>
                     </div>
                 `;
@@ -1441,7 +1816,7 @@
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verdampfer</span>
-                        <span class="status-value">${formatNum(kf.evaporatorTemp.value)} ${kf.evaporatorTemp.unit || '°C'}</span>
+                        <span class="status-value">${formatValue(kf.evaporatorTemp)}</span>
                     </div>
                 `;
             }
@@ -1450,7 +1825,7 @@
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verdampfer Überhitzung</span>
-                        <span class="status-value">${formatNum(kf.evaporatorOverheat.value)} ${kf.evaporatorOverheat.unit || '°C'}</span>
+                        <span class="status-value">${formatValue(kf.evaporatorOverheat)}</span>
                     </div>
                 `;
             }
@@ -1459,7 +1834,7 @@
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Verflüssiger</span>
-                        <span class="status-value">${formatNum(kf.condensorTemp.value)} ${kf.condensorTemp.unit || '°C'}</span>
+                        <span class="status-value">${formatValue(kf.condensorTemp)}</span>
                     </div>
                 `;
             }
@@ -1468,7 +1843,7 @@
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Economizer</span>
-                        <span class="status-value">${formatNum(kf.economizerTemp.value)} ${kf.economizerTemp.unit || '°C'}</span>
+                        <span class="status-value">${formatValue(kf.economizerTemp)}</span>
                     </div>
                 `;
             }
@@ -1477,7 +1852,7 @@
                 circuit += `
                     <div class="status-item">
                         <span class="status-label">Wechselrichter</span>
-                        <span class="status-value">${formatNum(kf.inverterTemp.value)} ${kf.inverterTemp.unit || '°C'}</span>
+                        <span class="status-value">${formatValue(kf.inverterTemp)}</span>
                     </div>
                 `;
             }
@@ -2059,15 +2434,53 @@
             return { value: '--' };
         }
 
+        // Format units to be more readable
+        function formatUnit(unit, value = null) {
+            if (!unit) return '';
+
+            const unitMap = {
+                'celsius': '°C',
+                'ampere': 'A',
+                'watt': 'W',
+                'kilowatt': 'kW',
+                'hour': 'Std.',
+                'hours': 'Std.',
+                'kilowattHour': 'kWh',
+                'percent': '%',
+                'bar': 'bar',
+                'revolutionsPerSecond': 'U/s',
+                'revolutionsPerMinute': 'U/min',
+                'cubicMeter': 'm³',
+                'cubicMeterPerHour': 'm³/h',
+                'litersPerHour': 'l/h',
+                'kelvin': 'K'
+            };
+
+            // Special case: Convert watt to kilowatt if value is large
+            if (unit === 'watt' && value !== null && value >= 1000) {
+                return 'kW';
+            }
+
+            return unitMap[unit] || unit;
+        }
+
         function formatValue(featureValue) {
             if (!featureValue || featureValue.value === undefined) {
                 return '--';
             }
             let val = featureValue.value;
+            const unit = featureValue.unit;
+
+            // Special case: Convert watt to kilowatt
+            if (unit === 'watt' && val >= 1000) {
+                val = (val / 1000).toFixed(1);
+                return val + ' ' + formatUnit('kilowatt');
+            }
+
             if (typeof val === 'number') {
                 val = val.toFixed(1);
             }
-            return val + (featureValue.unit ? ' ' + featureValue.unit : '');
+            return val + (unit ? ' ' + formatUnit(unit, val) : '');
         }
 
         function findFeature(features, keyword) {
@@ -2869,7 +3282,21 @@
         window.startOneTimeCharge = startOneTimeCharge;
 
         // Heating Curve Change Function
-        async function changeHeatingCurve(type, newValue) {
+        async function changeHeatingCurve(circuitIdOrType, typeOrValue, valueOrNull = null) {
+            // Support both old signature changeHeatingCurve(type, value) and new changeHeatingCurve(circuitId, type, value)
+            let circuitId, type, newValue;
+            if (valueOrNull === null) {
+                // Old signature: changeHeatingCurve(type, value)
+                circuitId = 0;
+                type = circuitIdOrType;
+                newValue = typeOrValue;
+            } else {
+                // New signature: changeHeatingCurve(circuitId, type, value)
+                circuitId = circuitIdOrType;
+                type = typeOrValue;
+                newValue = valueOrNull;
+            }
+
             try {
                 // Get current device info
                 const currentInstall = installations.find(i => i.installationId === currentInstallationId);
@@ -2885,9 +3312,13 @@
                     throw new Error('Gerät nicht gefunden');
                 }
 
-                // Get current values from window.heatingCurveData
-                let shift = window.heatingCurveData ? window.heatingCurveData.shift : 0;
-                let slope = window.heatingCurveData ? window.heatingCurveData.slope : 1.0;
+                // Get current values from window.heatingCurveData for this circuit
+                let shift = 0;
+                let slope = 1.0;
+                if (window.heatingCurveData && window.heatingCurveData[circuitId]) {
+                    shift = window.heatingCurveData[circuitId].shift || 0;
+                    slope = window.heatingCurveData[circuitId].slope || 1.0;
+                }
 
                 // Update the changed value
                 if (type === 'shift') {
@@ -2896,7 +3327,7 @@
                     slope = parseFloat(newValue);
                 }
 
-                // Disable both selects while changing
+                // Disable both selects while changing (if they exist)
                 const shiftSelect = document.getElementById('heatingCurveShiftSelect');
                 const slopeSelect = document.getElementById('heatingCurveSlopeSelect');
                 if (shiftSelect) shiftSelect.disabled = true;
@@ -2912,7 +3343,7 @@
                         installationId: currentInstallationId,
                         gatewaySerial: currentGatewaySerial,
                         deviceId: currentDeviceId,
-                        circuit: 0, // Usually circuit 0
+                        circuit: circuitId,
                         shift: shift,
                         slope: slope
                     })
@@ -2921,7 +3352,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log(`Heating curve changed: shift=${shift}, slope=${slope}`);
+                    console.log(`Heating curve changed for circuit ${circuitId}: shift=${shift}, slope=${slope}`);
                     // Wait a bit then reload to show new status
                     setTimeout(() => {
                         loadDashboard(true); // Force refresh
@@ -2941,9 +3372,20 @@
         }
 
         // Supply Temperature Max Change Function
-        async function changeSupplyTempMax(newValue) {
+        async function changeSupplyTempMax(circuitIdOrValue, tempValue = null) {
+            // Support both old signature changeSupplyTempMax(value) and new changeSupplyTempMax(circuitId, value)
+            let circuitId, newValue;
+            if (tempValue === null) {
+                // Old signature: changeSupplyTempMax(value)
+                circuitId = 0;
+                newValue = circuitIdOrValue;
+            } else {
+                // New signature: changeSupplyTempMax(circuitId, value)
+                circuitId = circuitIdOrValue;
+                newValue = tempValue;
+            }
+
             const select = document.getElementById('supplyTempMaxSelect');
-            const originalValue = select.value;
 
             try {
                 // Get current device info
@@ -2960,8 +3402,10 @@
                     throw new Error('Gerät nicht gefunden');
                 }
 
-                // Disable select while changing
-                select.disabled = true;
+                // Disable select while changing (if it exists)
+                if (select) {
+                    select.disabled = true;
+                }
 
                 const response = await fetch('/api/heating/supplyTempMax/set', {
                     method: 'POST',
@@ -2973,7 +3417,7 @@
                         installationId: currentInstallationId,
                         gatewaySerial: currentGatewaySerial,
                         deviceId: currentDeviceId,
-                        circuit: 0,
+                        circuit: circuitId,
                         temperature: parseInt(newValue)
                     })
                 });
@@ -2981,31 +3425,94 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log('Supply temperature max changed to:', newValue);
+                    console.log(`Supply temperature max changed to ${newValue} for circuit ${circuitId}`);
                     // Wait a bit then reload to show new status
                     setTimeout(() => {
                         loadDashboard(true); // Force refresh
                     }, 2000);
                 } else {
                     alert('Fehler beim Ändern der Vorlauftemperaturbegrenzung: ' + data.error);
-                    select.value = originalValue;
-                    select.disabled = false;
+                    if (select) {
+                        select.disabled = false;
+                    }
                 }
             } catch (error) {
                 alert('Fehler beim Ändern der Vorlauftemperaturbegrenzung: ' + error.message);
-                select.value = originalValue;
-                select.disabled = false;
+                if (select) {
+                    select.disabled = false;
+                }
+            }
+        }
+
+        // Room Temperature Change Function
+        async function changeRoomTemp(circuitId, program, temperature) {
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                const response = await fetch('/api/heating/roomTemp/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        circuit: circuitId,
+                        program: program,
+                        temperature: parseInt(temperature)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`Room temperature for program ${program} changed to ${temperature}°C for circuit ${circuitId}`);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Raumtemperatur: ' + data.error);
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Raumtemperatur: ' + error.message);
             }
         }
 
         // Make functions available globally
         window.changeHeatingCurve = changeHeatingCurve;
         window.changeSupplyTempMax = changeSupplyTempMax;
+        window.changeRoomTemp = changeRoomTemp;
 
         // Heating Mode Change Function
-        async function changeHeatingMode(newMode) {
+        async function changeHeatingMode(circuitIdOrMode, modeValue = null) {
+            // Support both old signature changeHeatingMode(mode) and new changeHeatingMode(circuitId, mode)
+            let circuitId, newMode;
+            if (modeValue === null) {
+                // Old signature: changeHeatingMode(mode)
+                circuitId = 0;
+                newMode = circuitIdOrMode;
+            } else {
+                // New signature: changeHeatingMode(circuitId, mode)
+                circuitId = circuitIdOrMode;
+                newMode = modeValue;
+            }
+
             const select = document.getElementById('heatingModeSelect');
-            const originalValue = select.value;
 
             try {
                 // Get current device info
@@ -3022,8 +3529,10 @@
                     throw new Error('Gerät nicht gefunden');
                 }
 
-                // Disable select while changing
-                select.disabled = true;
+                // Disable select while changing (if it exists)
+                if (select) {
+                    select.disabled = true;
+                }
 
                 const response = await fetch('/api/heating/mode/set', {
                     method: 'POST',
@@ -3035,7 +3544,7 @@
                         installationId: currentInstallationId,
                         gatewaySerial: currentGatewaySerial,
                         deviceId: currentDeviceId,
-                        circuit: 0, // Usually circuit 0
+                        circuit: circuitId,
                         mode: newMode
                     })
                 });
@@ -3043,20 +3552,22 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    console.log('Heating mode changed to:', newMode);
+                    console.log(`Heating mode changed to ${newMode} for circuit ${circuitId}`);
                     // Wait a bit then reload to show new status
                     setTimeout(() => {
                         loadDashboard(true); // Force refresh
                     }, 2000);
                 } else {
                     alert('Fehler beim Ändern des Betriebsmodus: ' + data.error);
-                    select.value = originalValue;
-                    select.disabled = false;
+                    if (select) {
+                        select.disabled = false;
+                    }
                 }
             } catch (error) {
                 alert('Fehler beim Ändern des Betriebsmodus: ' + error.message);
-                select.value = originalValue;
-                select.disabled = false;
+                if (select) {
+                    select.disabled = false;
+                }
             }
         }
 
