@@ -479,16 +479,22 @@
                 deviceTitle = kf.deviceName.value;
             }
 
+            // Only show settings button for heating devices (Vitocal)
+            const isHeatingDevice = deviceInfo.deviceType === 'heating';
+            const settingsButton = isHeatingDevice ? `
+                <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
+                        style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
+                    ⚙️ Einstellungen
+                </button>
+            ` : '';
+
             return `
                 <div class="card wide">
                     <div class="card-header">
                         <h2>🔧 ${deviceTitle}</h2>
                         <div>
                             <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
-                            <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
-                                    style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
-                                ⚙️ Einstellungen
-                            </button>
+                            ${settingsButton}
                         </div>
                     </div>
                 </div>
