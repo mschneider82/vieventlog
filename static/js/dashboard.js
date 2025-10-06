@@ -270,6 +270,21 @@
                     window.heatingCurveData = {};
                 }
 
+                // Get room temperature setpoint from active program
+                let roomTempSetpoint = 20; // Default fallback
+                if (keyFeatures.operatingProgram && keyFeatures.operatingProgram.value) {
+                    const activeProgram = keyFeatures.operatingProgram.value;
+                    // Try to get temperature for active program
+                    const programTempFeatureName = `heating.circuits.0.operating.programs.${activeProgram}.temperature`;
+                    for (const category of [features.circuits, features.operatingModes, features.other]) {
+                        if (category && category[programTempFeatureName] && category[programTempFeatureName].value !== null) {
+                            roomTempSetpoint = category[programTempFeatureName].value;
+                            console.log(`Using room temp setpoint from active program ${activeProgram}: ${roomTempSetpoint}°C`);
+                            break;
+                        }
+                    }
+                }
+
                 // Store data for circuit 0 (backward compatibility)
                 window.heatingCurveData[0] = {
                     slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
@@ -277,7 +292,8 @@
                     currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
                     currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
                     maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
-                    minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null
+                    minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null,
+                    roomTempSetpoint: roomTempSetpoint
                 };
                 // Keep legacy format for backward compatibility (for chart rendering)
                 window.heatingCurveData.slope = window.heatingCurveData[0].slope;
@@ -286,6 +302,7 @@
                 window.heatingCurveData.currentSupply = window.heatingCurveData[0].currentSupply;
                 window.heatingCurveData.maxSupply = window.heatingCurveData[0].maxSupply;
                 window.heatingCurveData.minSupply = window.heatingCurveData[0].minSupply;
+                window.heatingCurveData.roomTempSetpoint = window.heatingCurveData[0].roomTempSetpoint;
 
                 // Store data for each circuit
                 for (const circuitId of circuits) {
@@ -939,13 +956,13 @@
             const heatingCurveShift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
             const supplyTempMax = findNested(`${circuitPrefix}.temperature.levels`, 'max');
 
-            // Get program temperatures (normal, comfort, reduced)
-            const normalTemp = find([`${circuitPrefix}.operating.programs.normal.temperature`]);
-            const normalHeatingTemp = find([`${circuitPrefix}.operating.programs.normalHeating.temperature`]);
-            const comfortTemp = find([`${circuitPrefix}.operating.programs.comfort.temperature`]);
-            const comfortHeatingTemp = find([`${circuitPrefix}.operating.programs.comfortHeating.temperature`]);
-            const reducedTemp = find([`${circuitPrefix}.operating.programs.reduced.temperature`]);
-            const reducedHeatingTemp = find([`${circuitPrefix}.operating.programs.reducedHeating.temperature`]);
+            // Get program temperatures (normal, comfort, reduced) - these are nested properties
+            const normalTemp = findNested(`${circuitPrefix}.operating.programs.normal`, 'temperature');
+            const normalHeatingTemp = findNested(`${circuitPrefix}.operating.programs.normalHeating`, 'temperature');
+            const comfortTemp = findNested(`${circuitPrefix}.operating.programs.comfort`, 'temperature');
+            const comfortHeatingTemp = findNested(`${circuitPrefix}.operating.programs.comfortHeating`, 'temperature');
+            const reducedTemp = findNested(`${circuitPrefix}.operating.programs.reduced`, 'temperature');
+            const reducedHeatingTemp = findNested(`${circuitPrefix}.operating.programs.reducedHeating`, 'temperature');
 
             // Check if circuit has any relevant data
             if (!operatingMode && !operatingProgram && !circuitTemp && !heatingCurveSlope && !supplyTempMax) {
@@ -1047,38 +1064,76 @@
                 `;
             }
 
-            // Room temperature setpoints for different programs
-            if (normalTemp || normalHeatingTemp || comfortTemp || comfortHeatingTemp || reducedTemp || reducedHeatingTemp) {
-                html += '<div class="status-item"><span class="status-label">Raumtemperatur-Sollwerte</span><span class="status-value"></span></div>';
+            // Room temperature setpoints - simplified to 3 main programs
+            // Priority: Use heating variant if both exist
+            const reducedProg = reducedHeatingTemp || reducedTemp;
+            const reducedApiName = reducedHeatingTemp ? 'reducedHeating' : 'reduced';
+            const normalProg = normalHeatingTemp || normalTemp;
+            const normalApiName = normalHeatingTemp ? 'normalHeating' : 'normal';
+            const comfortProg = comfortHeatingTemp || comfortTemp;
+            const comfortApiName = comfortHeatingTemp ? 'comfortHeating' : 'comfort';
 
-                const programTemps = [
-                    { name: 'Normal', apiName: 'normal', temp: normalTemp },
-                    { name: 'Normal (Heizen)', apiName: 'normalHeating', temp: normalHeatingTemp },
-                    { name: 'Komfort', apiName: 'comfort', temp: comfortTemp },
-                    { name: 'Komfort (Heizen)', apiName: 'comfortHeating', temp: comfortHeatingTemp },
-                    { name: 'Reduziert', apiName: 'reduced', temp: reducedTemp },
-                    { name: 'Reduziert (Heizen)', apiName: 'reducedHeating', temp: reducedHeatingTemp },
-                ];
+            console.log(`Circuit ${circuitId} room temps:`, {
+                reducedTemp: reducedTemp?.value,
+                reducedHeatingTemp: reducedHeatingTemp?.value,
+                normalTemp: normalTemp?.value,
+                normalHeatingTemp: normalHeatingTemp?.value,
+                comfortTemp: comfortTemp?.value,
+                comfortHeatingTemp: comfortHeatingTemp?.value
+            });
 
-                for (const prog of programTemps) {
-                    if (prog.temp) {
-                        html += `
-                            <div class="status-item" style="padding-left: 20px;">
-                                <span class="status-label">${prog.name}</span>
-                                <span class="status-value">
-                                    <select onchange="changeRoomTemp(${circuitId}, '${prog.apiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
-                        `;
-                        for (let temp = 10; temp <= 30; temp++) {
-                            const selected = Math.round(prog.temp.value) === temp ? 'selected' : '';
-                            html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
-                        }
-                        html += `
-                                    </select>
-                                </span>
-                            </div>
-                        `;
-                    }
+            if (reducedProg) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Raumtemperatur Reduziert</span>
+                        <span class="status-value">
+                            <select onchange="changeRoomTemp(${circuitId}, '${reducedApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                `;
+                for (let temp = 10; temp <= 30; temp++) {
+                    const selected = Math.round(reducedProg.value) === temp ? 'selected' : '';
+                    html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
                 }
+                html += `
+                            </select>
+                        </span>
+                    </div>
+                `;
+            }
+
+            if (normalProg) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Raumtemperatur Normal</span>
+                        <span class="status-value">
+                            <select onchange="changeRoomTemp(${circuitId}, '${normalApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                `;
+                for (let temp = 10; temp <= 30; temp++) {
+                    const selected = Math.round(normalProg.value) === temp ? 'selected' : '';
+                    html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
+                }
+                html += `
+                            </select>
+                        </span>
+                    </div>
+                `;
+            }
+
+            if (comfortProg) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Raumtemperatur Komfort</span>
+                        <span class="status-value">
+                            <select onchange="changeRoomTemp(${circuitId}, '${comfortApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                `;
+                for (let temp = 10; temp <= 30; temp++) {
+                    const selected = Math.round(comfortProg.value) === temp ? 'selected' : '';
+                    html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
+                }
+                html += `
+                            </select>
+                        </span>
+                    </div>
+                `;
             }
 
             // Circuit temperature
@@ -1386,8 +1441,8 @@
                 return;
             }
 
-            const {slope, shift, currentOutside, currentSupply, maxSupply, minSupply} = data;
-            console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply});
+            const {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint} = data;
+            console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint});
 
             // Clear any existing content
             chartElement.innerHTML = '';
@@ -1396,7 +1451,7 @@
             // VT = RTSoll + Niveau - Neigung * DAR * (1.4347 + 0.021 * DAR + 247.9 * 10^-6 * DAR^2)
             // with DAR = AT - RTSoll
             function calculateSupplyTemp(outsideTemp) {
-                const RTSoll = 20;  // Raumtemperatursollwert (room temperature setpoint)
+                const RTSoll = roomTempSetpoint || 20;  // Use room temp from active program, fallback to 20
                 const DAR = outsideTemp - RTSoll;
                 let VT = RTSoll + shift - slope * DAR * (1.4347 + 0.021 * DAR + 247.9 * 1e-6 * DAR * DAR);
 
@@ -1561,6 +1616,7 @@
                 .text('Vorlauftemperatur (°C)');
 
             // Formula text - Viessmann official formula (simplified display)
+            const RTSoll = roomTempSetpoint || 20;
             const shiftText = shift >= 0 ? '+ ' + shift : '- ' + Math.abs(shift);
             svg.append('text')
                 .attr('x', 10)
@@ -1568,7 +1624,7 @@
                 .attr('fill', '#667eea')
                 .attr('font-size', '11px')
                 .attr('font-family', 'monospace')
-                .text('VL = 20 ' + shiftText + ' - ' + slope.toFixed(1) + ' × DAR × (1.4347 + 0.021×DAR + 247.9×10⁻⁶×DAR²)   mit DAR = AT - 20');
+                .text('VL = ' + RTSoll + ' ' + shiftText + ' - ' + slope.toFixed(1) + ' × DAR × (1.4347 + 0.021×DAR + 247.9×10⁻⁶×DAR²)   mit DAR = AT - ' + RTSoll);
 
             // Add hover functionality
             // Create tooltip
