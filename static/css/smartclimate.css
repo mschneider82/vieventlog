@@ -209,8 +209,8 @@ button:active {
 
 .device-header {
     display: flex;
-    justify-content: space-between;
-    align-items: start;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -226,6 +226,7 @@ button:active {
     color: #fff;
     margin: 0;
     word-wrap: break-word;
+    line-height: 1.3;
 }
 
 .device-name-edit {
@@ -249,10 +250,17 @@ button:active {
 .device-header-actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.device-header-actions .button-group {
+    display: flex;
     gap: 8px;
 }
 
-.edit-name-btn {
+.edit-name-btn, .child-lock-btn {
     padding: 4px 8px;
     border: none;
     background: rgba(102, 126, 234, 0.2);
@@ -262,14 +270,22 @@ button:active {
     transition: all 0.2s;
 }
 
-.edit-name-btn:hover:not(:disabled) {
+.edit-name-btn:hover:not(:disabled), .child-lock-btn:hover:not(:disabled) {
     background: rgba(102, 126, 234, 0.4);
     transform: scale(1.1);
 }
 
-.edit-name-btn:disabled {
+.edit-name-btn:disabled, .child-lock-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.child-lock-btn.active {
+    background: rgba(255, 193, 7, 0.3);
+}
+
+.child-lock-btn.active:hover:not(:disabled) {
+    background: rgba(255, 193, 7, 0.5);
 }
 
 .device-id {
