@@ -163,8 +163,8 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 		// Iterate through gateways and their devices
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				// Include heating and zigbee devices (SmartClimate)
-				if gwDevice.DeviceType != "heating" && gwDevice.DeviceType != "zigbee" {
+				// Only include heating devices (exclude SmartClimate zigbee/roomControl devices)
+				if gwDevice.DeviceType != "heating" {
 					continue
 				}
 

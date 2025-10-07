@@ -21,6 +21,7 @@ type SmartClimateDevice struct {
 	Features       map[string]interface{} `json:"features"`
 	Battery        *int                   `json:"battery,omitempty"`        // Battery level in percent
 	SignalStrength *int                   `json:"signalStrength,omitempty"` // Zigbee LQI
+	LQITimestamp   string                 `json:"lqiTimestamp,omitempty"`   // Last LQI update timestamp
 }
 
 // SmartClimateCategory represents a category with its devices
@@ -55,8 +56,12 @@ func categorizeDevice(deviceType, modelID string) string {
 		return "radiator_thermostats"
 	}
 
-	// Fußboden-Thermostate
+	// Fußboden-Thermostate (exclude zones, only include FHT actuators)
 	if strings.Contains(modelLower, "fht") || strings.Contains(modelLower, "floor") {
+		// Skip FHT_Zone devices - these are virtual zone devices without sensors
+		if strings.Contains(modelLower, "fht_zone") || strings.Contains(modelLower, "zone") {
+			return ""
+		}
 		return "floor_thermostats"
 	}
 
@@ -155,6 +160,18 @@ func extractSmartClimateFeatures(rawFeatures []Feature) map[string]interface{} {
 				features["operating_mode"] = val["value"]
 			}
 
+		// Floor heating damage protection threshold (max supply temperature)
+		case f.Feature == "fht.configuration.floorHeatingDamageProtectionThreshold":
+			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
+				features["damage_protection_threshold"] = val["value"]
+			}
+
+		// Floor cooling condensation threshold
+		case f.Feature == "fht.configuration.floorCoolingCondensationThreshold":
+			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
+				features["condensation_threshold"] = val["value"]
+			}
+
 		// Heating circuit ID
 		case f.Feature == "device.heatingCircuitId":
 			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
@@ -237,9 +254,10 @@ func smartClimateDevicesHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				// Extract battery level
+				// Extract battery level, signal strength and LQI timestamp
 				var batteryLevel *int
 				var signalStrength *int
+				var lqiTimestamp string
 				for _, f := range features.RawFeatures {
 					if f.Feature == "device.power.battery" {
 						if level, ok := f.Properties["level"].(map[string]interface{}); ok {
@@ -256,6 +274,8 @@ func smartClimateDevicesHandler(w http.ResponseWriter, r *http.Request) {
 								signalStrength = &intStrength
 							}
 						}
+						// Extract timestamp
+						lqiTimestamp = f.Timestamp
 					}
 				}
 
@@ -275,6 +295,7 @@ func smartClimateDevicesHandler(w http.ResponseWriter, r *http.Request) {
 					Features:       extractedFeatures,
 					Battery:        batteryLevel,
 					SignalStrength: signalStrength,
+					LQITimestamp:   lqiTimestamp,
 				}
 
 				categoriesMap[category] = append(categoriesMap[category], scDevice)
@@ -387,8 +408,8 @@ func trvSetTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/trv.temperature/commands/setTargetTemperature",
+	// Build API URL (ZigBee devices use v1 API)
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/trv.temperature/commands/setTargetTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -514,8 +535,8 @@ func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/device.name/commands/setName",
+	// Build API URL (ZigBee devices use v1 API)
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/device.name/commands/setName",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -576,6 +597,114 @@ func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 	featuresCacheMutex.Unlock()
 
 	log.Printf("Set device name for %s to: %s\n", req.DeviceID, req.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// ChildLockToggleRequest represents the request to toggle child lock
+type ChildLockToggleRequest struct {
+	AccountID      string `json:"accountId"`
+	InstallationID string `json:"installationId"`
+	GatewaySerial  string `json:"gatewaySerial"`
+	DeviceID       string `json:"deviceId"`
+	Active         bool   `json:"active"`
+}
+
+// childLockToggleHandler toggles the child lock for a TRV
+func childLockToggleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ChildLockToggleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Get account
+	account, err := GetAccount(req.AccountID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Account not found: " + err.Error(),
+		})
+		return
+	}
+
+	// Ensure authenticated
+	token, err := ensureAccountAuthenticated(account)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Authentication failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Determine command based on desired state
+	command := "deactivate"
+	if req.Active {
+		command = "activate"
+	}
+
+	// Build API URL (ZigBee devices use v1 API)
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/trv.childLock/commands/%s",
+		req.InstallationID, req.GatewaySerial, req.DeviceID, command)
+
+	// Create HTTP request (empty body for these commands)
+	httpReq, err := http.NewRequest("POST", url, strings.NewReader("{}"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	client := &http.Client{}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "API request failed: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("API returned status %d", resp.StatusCode),
+		})
+		return
+	}
+
+	// Invalidate features cache for this device
+	cacheKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
+	featuresCacheMutex.Lock()
+	delete(featuresCache, cacheKey)
+	featuresCacheMutex.Unlock()
+
+	log.Printf("Set child lock for device %s to: %v\n", req.DeviceID, req.Active)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
