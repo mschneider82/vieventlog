@@ -180,13 +180,11 @@ func extractSmartClimateFeatures(rawFeatures []Feature) map[string]interface{} {
 		}
 	}
 
-	// Fallback for OPTO2 devices: If trv_setpoint is missing but temperature exists,
-	// use temperature as setpoint (older devices store setpoint in device.sensors.temperature)
-	if _, hasTrvSetpoint := features["trv_setpoint"]; !hasTrvSetpoint {
-		if temp, hasTemp := features["temperature"]; hasTemp {
-			features["trv_setpoint"] = temp
-		}
-	}
+	// Note: temperature vs trv_setpoint
+	// - device.sensors.temperature = Ist-Temperatur (OPTO2 devices have this)
+	// - trv.temperature = Soll-Temperatur (all TRVs have this)
+	// - E3 devices get Ist-Temperatur from Room Control (rooms.X.sensors.temperature)
+	//   which is not directly available at the device level
 
 	return features
 }
