@@ -675,12 +675,23 @@
                     installationInfo = `<span class="device-info" style="background: rgba(102, 126, 234, 0.15); border-color: rgba(102, 126, 234, 0.3);">📍 ${inst.location}</span>`;
                 }
 
+                // Build event type display
+                let eventTypeDisplay = event.errorCode ? `<strong>${event.errorCode}</strong>` : event.eventType;
+
+                // Special handling for feature-changed events
+                if (event.eventType === 'feature-changed' && event.featureName) {
+                    eventTypeDisplay = `<strong>feature-changed</strong>: ${event.featureName}`;
+                    if (event.featureValue) {
+                        eventTypeDisplay += ` <span style="color: #a0a0b0; font-size: 12px;">(${event.featureValue})</span>`;
+                    }
+                }
+
                 return `
                     <div class="event-item" onclick="toggleEvent(${index})">
                         <div class="event-header">
                             <div class="event-time">${formatTimestamp(event.eventTimestamp || event.createdAt)}</div>
                             <div class="event-type">
-                                ${event.errorCode ? `<strong>${event.errorCode}</strong>` : event.eventType}
+                                ${eventTypeDisplay}
                                 ${statusIndicator}
                                 ${deviceInfo}
                                 ${accountInfo}
@@ -691,6 +702,8 @@
                         </div>
                         <div class="event-details" id="details-${index}">
 Event Type: ${event.eventType}
+${event.featureName ? 'Feature: ' + event.featureName + '\n' : ''}
+${event.featureValue ? 'Wert: ' + event.featureValue + '\n' : ''}
 ${event.errorCode ? 'Error Code: ' + event.errorCode + '\n' : ''}
 ${event.humanReadable ? 'Bedeutung: ' + event.humanReadable + '\n' : ''}
 ${event.errorDescription ? 'System-Beschreibung: ' + event.errorDescription + '\n' : ''}
