@@ -54,6 +54,7 @@ func main() {
 	http.HandleFunc("/login", loginPageHandler)
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
+	http.HandleFunc("/smartclimate", smartClimatePageHandler)
 
 	// Static files handler
 	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
@@ -95,6 +96,11 @@ func main() {
 	http.HandleFunc("/api/status", statusHandler)
 	http.HandleFunc("/api/devices", devicesHandler)
 	http.HandleFunc("/api/features", featuresHandler)
+
+	// SmartClimate endpoints
+	http.HandleFunc("/api/smartclimate/devices", smartClimateDevicesHandler)
+	http.HandleFunc("/api/smartclimate/trv/temperature/set", trvSetTemperatureHandler)
+	http.HandleFunc("/api/smartclimate/device/name/set", deviceSetNameHandler)
 
 	// Debug endpoints
 	http.HandleFunc("/api/debug/devices", debugDevicesHandler)

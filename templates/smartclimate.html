@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartClimate - ViEventLog</title>
+    <link rel="stylesheet" href="/static/css/smartclimate.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>🏠 SmartClimate Geräte</h1>
+                    <div class="breadcrumb">
+                        <a href="/">← Events</a>
+                        <span>/</span>
+                        <a href="/dashboard">Dashboard</a>
+                        <span>/</span>
+                        <span id="currentInstallation">Loading...</span>
+                    </div>
+                </div>
+                <div class="last-update">
+                    Letzte Aktualisierung: <span id="lastUpdate">-</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="install-select">
+                <label>Installation:</label>
+                <select id="installationSelect">
+                    <option>Lade...</option>
+                </select>
+            </div>
+            <button id="refreshBtn">🔄 Aktualisieren</button>
+        </div>
+
+        <div id="errorContainer"></div>
+        <div id="smartclimateContent" class="loading">
+            <div class="spinner"></div>
+            <p>Lade SmartClimate-Geräte...</p>
+        </div>
+    </div>
+
+    <script src="/static/js/smartclimate.js"></script>
+</body>
+</html>

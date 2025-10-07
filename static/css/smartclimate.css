@@ -1,0 +1,549 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #e0e0e0;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+header {
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 20px 30px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    color: #fff;
+    margin-bottom: 10px;
+    font-size: 24px;
+}
+
+.breadcrumb {
+    color: #a0a0b0;
+    font-size: 14px;
+}
+
+.breadcrumb a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.last-update {
+    text-align: right;
+    color: #a0a0b0;
+    font-size: 14px;
+}
+
+.controls {
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 15px 30px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.install-select {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.install-select label {
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+select {
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.05);
+    color: #e0e0e0;
+    min-width: 300px;
+}
+
+select:focus {
+    outline: none;
+    border-color: #667eea;
+    background: rgba(255,255,255,0.1);
+}
+
+select option {
+    background: #1e1e2e;
+    color: #e0e0e0;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+button:hover {
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.loading {
+    text-align: center;
+    padding: 60px 20px;
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #e0e0e0;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.smartclimate-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.category-section {
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 20px;
+}
+
+.category-icon {
+    font-size: 28px;
+}
+
+.device-count {
+    margin-left: auto;
+    background: #667eea;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.devices-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.device-card {
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    padding: 15px;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: all 0.3s;
+}
+
+.device-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    border-color: #667eea;
+    background: rgba(255,255,255,0.05);
+}
+
+.device-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.device-name-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.device-header h3 {
+    font-size: 16px;
+    color: #fff;
+    margin: 0;
+    word-wrap: break-word;
+}
+
+.device-name-edit {
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid #667eea;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+.device-name-edit:focus {
+    outline: none;
+    border-color: #667eea;
+    background: rgba(255,255,255,0.15);
+}
+
+.device-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.edit-name-btn {
+    padding: 4px 8px;
+    border: none;
+    background: rgba(102, 126, 234, 0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.edit-name-btn:hover:not(:disabled) {
+    background: rgba(102, 126, 234, 0.4);
+    transform: scale(1.1);
+}
+
+.edit-name-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.device-id {
+    font-size: 11px;
+    color: #a0a0b0;
+    font-family: monospace;
+}
+
+.child-lock-indicator {
+    font-size: 18px;
+    margin-left: 8px;
+}
+
+.device-body {
+    margin-bottom: 15px;
+}
+
+.sensor-reading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sensor-reading.main {
+    font-size: 24px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.sensor-reading .icon {
+    font-size: 24px;
+}
+
+.sensor-reading .value {
+    font-weight: 700;
+    color: #667eea;
+}
+
+.sensor-reading .label {
+    font-size: 12px;
+    color: #a0a0b0;
+    margin-left: auto;
+}
+
+.valve-indicator {
+    margin-top: 10px;
+}
+
+.valve-bar {
+    width: 100%;
+    height: 10px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.valve-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.3s;
+}
+
+.valve-label {
+    font-size: 12px;
+    color: #a0a0b0;
+}
+
+.mode-indicator {
+    margin-top: 10px;
+}
+
+.mode-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.mode-badge.heating {
+    background: #ffc107;
+    color: #fff;
+}
+
+.mode-badge.cooling {
+    background: #2196f3;
+    color: #fff;
+}
+
+.mode-badge.standby {
+    background: #9e9e9e;
+    color: #fff;
+}
+
+.mode-badge.off {
+    background: rgba(255,255,255,0.2);
+    color: #a0a0b0;
+}
+
+.device-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #a0a0b0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.battery, .signal {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.battery.good, .signal.good {
+    color: #4caf50;
+}
+
+.battery.medium, .signal.medium {
+    color: #ff9800;
+}
+
+.battery.low, .signal.low {
+    color: #f44336;
+}
+
+.circuit-id {
+    background: #667eea;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.status-indicator {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.status-indicator.online {
+    background: #4caf50;
+    color: white;
+}
+
+.no-devices {
+    text-align: center;
+    padding: 60px 20px;
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #a0a0b0;
+    font-size: 18px;
+}
+
+.error-message {
+    background: #f44336;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.error {
+    text-align: center;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #f44336;
+}
+
+.success-message {
+    background: #4caf50;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.sensor-reading.editable {
+    background: rgba(255,255,255,0.05);
+    padding: 10px;
+    border-radius: 8px;
+    margin: 10px 0;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.temp-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.temp-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.temp-btn:hover:not(:disabled) {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.temp-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.temp-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.temp-btn.minus {
+    background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
+}
+
+.temp-btn.plus {
+    background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+}
+
+.editable-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #667eea;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .devices-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header-top {
+        flex-direction: column;
+        align-items: start;
+        gap: 15px;
+    }
+
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+
+    .install-select {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    select {
+        min-width: auto;
+        width: 100%;
+    }
+}
