@@ -227,7 +227,7 @@ function renderRadiatorThermostatCard(device) {
                 <span class="battery ${getBatteryClass(device.battery)}">🔋 ${battery}%</span>
                 <span class="signal ${getSignalClass(device.signalStrength)}">📶 ${signal}%</span>
                 ${device.features.heating_circuit_id !== undefined ?
-                    `<span class="circuit-id">HK${device.features.heating_circuit_id}</span>` : ''}
+                    `<span class="circuit-id">HK${device.features.heating_circuit_id + 1}</span>` : ''}
             </div>
         </div>
     `;
@@ -257,7 +257,7 @@ function renderFloorThermostatCard(device) {
             <div class="device-footer">
                 <span class="signal ${getSignalClass(device.signalStrength)}">📶 ${signal}%</span>
                 ${device.features.heating_circuit_id !== undefined ?
-                    `<span class="circuit-id">HK${device.features.heating_circuit_id}</span>` : ''}
+                    `<span class="circuit-id">HK${device.features.heating_circuit_id + 1}</span>` : ''}
             </div>
         </div>
     `;
