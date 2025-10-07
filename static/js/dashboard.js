@@ -344,10 +344,38 @@
 
                     const slope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
                     const shift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
+                    const circuitSupplyTemp = find(`${circuitPrefix}.sensors.temperature.supply`);
+                    const maxSupply = findNested(`${circuitPrefix}.temperature.levels`, 'max');
+                    const minSupply = findNested(`${circuitPrefix}.temperature.levels`, 'min');
+
+                    // Get room temperature setpoint from active program for this circuit
+                    let circuitRoomTempSetpoint = 20; // Default fallback
+                    const operatingProgram = find(`${circuitPrefix}.operating.programs.active`);
+                    if (operatingProgram && operatingProgram.value) {
+                        const activeProgram = operatingProgram.value;
+                        const programFeatureName = `${circuitPrefix}.operating.programs.${activeProgram}`;
+                        for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                            if (category && category[programFeatureName]) {
+                                const programFeature = category[programFeatureName];
+                                if (programFeature.value && programFeature.value.temperature) {
+                                    const tempProp = programFeature.value.temperature;
+                                    if (tempProp.value !== undefined && tempProp.value !== null) {
+                                        circuitRoomTempSetpoint = tempProp.value;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     window.heatingCurveData[circuitId] = {
                         slope: slope,
-                        shift: shift
+                        shift: shift,
+                        currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
+                        currentSupply: circuitSupplyTemp ? circuitSupplyTemp.value : null,
+                        maxSupply: maxSupply,
+                        minSupply: minSupply,
+                        roomTempSetpoint: circuitRoomTempSetpoint
                     };
                 }
 
@@ -387,9 +415,21 @@
 
             contentDiv.innerHTML = html;
 
-            // Render D3 chart after DOM is updated (only for heating devices)
-            if (deviceType !== 'zigbee' && window.heatingCurveData && (window.heatingCurveData.slope !== null || window.heatingCurveData.shift !== null)) {
-                setTimeout(() => renderHeatingCurveChart(), 100);
+            // Render D3 charts after DOM is updated (only for heating devices)
+            if (deviceType !== 'zigbee' && window.heatingCurveData) {
+                setTimeout(() => {
+                    // Render chart for each circuit that has heating curve data
+                    for (const circuitId in window.heatingCurveData) {
+                        if (circuitId !== 'slope' && circuitId !== 'shift' && circuitId !== 'currentOutside' &&
+                            circuitId !== 'currentSupply' && circuitId !== 'maxSupply' && circuitId !== 'minSupply' &&
+                            circuitId !== 'roomTempSetpoint') {
+                            const data = window.heatingCurveData[circuitId];
+                            if (data && (data.slope !== null || data.shift !== null)) {
+                                renderHeatingCurveChart(parseInt(circuitId));
+                            }
+                        }
+                    }
+                }, 100);
             }
         }
 
@@ -500,6 +540,26 @@
                 compressorOilTemp: find(['heating.compressors.0.sensors.temperature.oil']),
                 compressorMotorTemp: find(['heating.compressors.0.sensors.temperature.motorChamber']),
                 compressorPressure: find(['heating.compressors.0.sensors.pressure.inlet']),
+
+                // Noise reduction (heat pump - Vitocal)
+                noiseReductionMode: find(['heating.noise.reduction.operating.programs.active']),
+
+                // Also check if noise reduction feature exists (even without value)
+                noiseReductionExists: (() => {
+                    // Check in categories first
+                    for (const category of [features.operatingModes, features.other]) {
+                        if (category && category['heating.noise.reduction.operating.programs.active']) {
+                            return true;
+                        }
+                    }
+                    // Check in raw features as fallback
+                    if (features.rawFeatures) {
+                        return features.rawFeatures.some(f =>
+                            f.feature === 'heating.noise.reduction.operating.programs.active'
+                        );
+                    }
+                    return false;
+                })(),
 
                 // Burner (gas heating - Vitodens)
                 burnerModulation: find(['heating.burners.0.modulation']),
@@ -1231,10 +1291,10 @@
                     </div>
             `;
 
-            // Add heating curve chart for circuit 0 only (to avoid duplicate charts)
-            if (circuitId === 0 && (heatingCurveSlope || heatingCurveShift)) {
+            // Add heating curve chart for circuits with heating curve data
+            if (heatingCurveSlope || heatingCurveShift) {
                 html += `
-                    <div id="heatingCurveChart" style="width: 100%; height: 400px; margin-top: 15px;"></div>
+                    <div id="heatingCurveChart_${circuitId}" style="width: 100%; height: 400px; margin-top: 15px;"></div>
                 `;
             }
 
@@ -1428,10 +1488,10 @@
             `;
         }
 
-        function renderHeatingCurveChart() {
-            console.log('📈 Starting to render heating curve chart...');
+        function renderHeatingCurveChart(circuitId) {
+            console.log('📈 Starting to render heating curve chart for circuit', circuitId);
 
-            const chartId = 'heatingCurveChart';
+            const chartId = 'heatingCurveChart_' + circuitId;
             const chartElement = document.getElementById(chartId);
 
             if (!chartElement) {
@@ -1447,9 +1507,9 @@
             }
             console.log('✅ D3.js is loaded, version:', d3.version);
 
-            const data = window.heatingCurveData;
+            const data = window.heatingCurveData && window.heatingCurveData[circuitId];
             if (!data) {
-                console.error('❌ No heating curve data available');
+                console.error('❌ No heating curve data available for circuit', circuitId);
                 return;
             }
 
@@ -1856,6 +1916,23 @@
                     <div class="status-item">
                         <span class="status-label">Zusatzheizung</span>
                         <span class="status-value">${isActive ? '🟢' : '⚪'} ${heaterStatus}</span>
+                    </div>
+                `;
+            }
+
+            // Noise Reduction (heat pump)
+            if (kf.noiseReductionExists) {
+                const currentApiMode = kf.noiseReductionMode ? kf.noiseReductionMode.value : 'notReduced';
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Geräuschreduzierung</span>
+                        <span class="status-value">
+                            <select id="noiseReductionModeSelect" onchange="changeNoiseReductionMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                                <option value="notReduced" ${currentApiMode === 'notReduced' ? 'selected' : ''}>Aus</option>
+                                <option value="slightlyReduced" ${currentApiMode === 'slightlyReduced' ? 'selected' : ''}>Leicht reduziert</option>
+                                <option value="maxReduced" ${currentApiMode === 'maxReduced' ? 'selected' : ''}>Maximal reduziert</option>
+                            </select>
+                        </span>
                     </div>
                 `;
             }
@@ -3175,6 +3252,66 @@
 
         // Make changeDhwMode available globally
         window.changeDhwMode = changeDhwMode;
+
+        // Noise Reduction Mode Change Function
+        async function changeNoiseReductionMode(newMode) {
+            const select = document.getElementById('noiseReductionModeSelect');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/noise-reduction/mode/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        mode: newMode
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Noise reduction mode changed to:', newMode);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Geräuschreduzierung: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Geräuschreduzierung: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
+        // Make changeNoiseReductionMode available globally
+        window.changeNoiseReductionMode = changeNoiseReductionMode;
 
         // DHW Temperature Change Function
         async function changeDhwTemperature(newTemp) {
