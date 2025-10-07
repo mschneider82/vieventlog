@@ -56,49 +56,84 @@ async function loadDevices() {
 async function loadSmartClimateDevices(forceRefresh = false) {
     const contentDiv = document.getElementById('smartclimateContent');
     contentDiv.className = 'loading';
-    contentDiv.innerHTML = '<div class="spinner"></div><p>Lade SmartClimate-Geräte...</p>';
+    contentDiv.innerHTML = '<div class="spinner"></div><p>Lade SmartClimate-Geräte & Räume...</p>';
 
     try {
-        const response = await fetch(`/api/smartclimate/devices?installationId=${currentInstallationId}`);
-        if (!response.ok) {
-            throw new Error('API Fehler: ' + response.status);
+        // Load devices and rooms in parallel
+        const [devicesResponse, roomsResponse] = await Promise.all([
+            fetch(`/api/smartclimate/devices?installationId=${currentInstallationId}`),
+            fetch(`/api/rooms?installationId=${currentInstallationId}`)
+        ]);
+
+        if (!devicesResponse.ok) {
+            throw new Error('API Fehler (Devices): ' + devicesResponse.status);
         }
 
-        const data = await response.json();
-        renderSmartClimateDevices(data);
+        const devicesData = await devicesResponse.json();
+        let roomsData = null;
+
+        if (roomsResponse.ok) {
+            roomsData = await roomsResponse.json();
+        } else {
+            console.warn('Could not load rooms:', roomsResponse.status);
+        }
+
+        renderSmartClimateDevices(devicesData, roomsData);
         updateLastUpdate();
 
     } catch (error) {
-        showError('Fehler beim Laden der SmartClimate-Geräte: ' + error.message);
+        showError('Fehler beim Laden der Daten: ' + error.message);
         contentDiv.innerHTML = '<div class="error">Fehler beim Laden der Daten: ' + error.message + '</div>';
     }
 }
 
-function renderSmartClimateDevices(data) {
+function renderSmartClimateDevices(devicesData, roomsData) {
     const contentDiv = document.getElementById('smartclimateContent');
     contentDiv.className = 'smartclimate-container';
 
-    if (!data.categories || data.categories.length === 0) {
-        contentDiv.innerHTML = '<div class="no-devices">Keine SmartClimate-Geräte gefunden</div>';
+    const hasDevices = devicesData.categories && devicesData.categories.length > 0;
+    const hasRooms = roomsData && roomsData.rooms && roomsData.rooms.length > 0;
+
+    if (!hasDevices && !hasRooms) {
+        contentDiv.innerHTML = '<div class="no-devices">Keine SmartClimate-Geräte oder Räume gefunden</div>';
         return;
     }
 
     let html = '';
 
-    data.categories.forEach(category => {
+    // Add rooms category first
+    if (hasRooms) {
         html += `
             <div class="category-section">
                 <h2 class="category-header">
-                    <span class="category-icon">${category.icon}</span>
-                    ${category.name}
-                    <span class="device-count">${category.devices.length}</span>
+                    <span class="category-icon">🚪</span>
+                    Räume
+                    <span class="device-count">${roomsData.rooms.length}</span>
                 </h2>
                 <div class="devices-grid">
-                    ${category.devices.map(device => renderDeviceCard(device)).join('')}
+                    ${roomsData.rooms.map(room => renderRoomCard(room)).join('')}
                 </div>
             </div>
         `;
-    });
+    }
+
+    // Add device categories
+    if (hasDevices) {
+        devicesData.categories.forEach(category => {
+            html += `
+                <div class="category-section">
+                    <h2 class="category-header">
+                        <span class="category-icon">${category.icon}</span>
+                        ${category.name}
+                        <span class="device-count">${category.devices.length}</span>
+                    </h2>
+                    <div class="devices-grid">
+                        ${category.devices.map(device => renderDeviceCard(device)).join('')}
+                    </div>
+                </div>
+            `;
+        });
+    }
 
     contentDiv.innerHTML = html;
     attachEventListeners();
@@ -352,6 +387,82 @@ function renderGenericCard(device) {
     `;
 }
 
+function renderRoomCard(room) {
+    const temp = room.temperature !== null && room.temperature !== undefined ? room.temperature.toFixed(1) : '-';
+    const tempStatus = room.temperatureStatus || '';
+    const humidity = room.humidity !== null && room.humidity !== undefined ? Math.round(room.humidity) : '-';
+    const humidityStatus = room.humidityStatus || '';
+    const co2 = room.co2 !== null && room.co2 !== undefined ? Math.round(room.co2) : '-';
+    const heatingSetpoint = room.heatingSetpoint !== null && room.heatingSetpoint !== undefined ? room.heatingSetpoint.toFixed(1) : '-';
+    const coolingSetpoint = room.coolingSetpoint !== null && room.coolingSetpoint !== undefined ? room.coolingSetpoint.toFixed(1) : '-';
+
+    const hasTemp = temp !== '-' && tempStatus === 'connected';
+    const hasHumidity = humidity !== '-' && humidityStatus === 'connected';
+    const hasCO2 = co2 !== '-';
+
+    return `
+        <div class="device-card room-card" data-room-id="${room.roomId}">
+            <div class="device-header">
+                <div class="device-name-container">
+                    <h3 class="device-name-display room-name-display" id="room-name-display-${room.roomId}">${room.roomName}</h3>
+                    <input type="text" class="device-name-edit room-name-edit" id="room-name-edit-${room.roomId}" value="${room.roomName}" style="display: none;" maxlength="40">
+                </div>
+                <div class="device-header-actions">
+                    <span class="device-id">Raum ${room.roomId}</span>
+                    <button class="edit-room-name-btn"
+                            data-room-id="${room.roomId}"
+                            data-installation="${room.installationId}"
+                            data-account="${room.accountId}"
+                            title="Namen bearbeiten">✏️</button>
+                </div>
+            </div>
+            <div class="device-body">
+                ${hasTemp ? `
+                <div class="sensor-reading main">
+                    <span class="icon">🌡️</span>
+                    <span class="value">${temp}°C</span>
+                    <span class="label">Ist</span>
+                </div>
+                ` : ''}
+                ${heatingSetpoint !== '-' ? `
+                <div class="sensor-reading">
+                    <span class="icon">🔥</span>
+                    <span class="value">${heatingSetpoint}°C</span>
+                    <span class="label">Soll (Heizen)</span>
+                </div>
+                ` : ''}
+                ${coolingSetpoint !== '-' ? `
+                <div class="sensor-reading">
+                    <span class="icon">❄️</span>
+                    <span class="value">${coolingSetpoint}°C</span>
+                    <span class="label">Soll (Kühlen)</span>
+                </div>
+                ` : ''}
+                ${hasHumidity ? `
+                <div class="sensor-reading">
+                    <span class="icon">💧</span>
+                    <span class="value">${humidity}%</span>
+                    <span class="label">Luftfeuchte</span>
+                </div>
+                ` : ''}
+                ${hasCO2 ? `
+                <div class="sensor-reading">
+                    <span class="icon">🌫️</span>
+                    <span class="value">${co2} ppm</span>
+                    <span class="label">CO₂</span>
+                </div>
+                ` : ''}
+            </div>
+            <div class="device-footer">
+                ${room.windowOpen ? '<span class="status-badge warning">🪟 Fenster offen</span>' : ''}
+                ${room.condensationRisk ? '<span class="status-badge alert">💧 Kondensationsgefahr</span>' : ''}
+                ${room.childLock === 'active' ? '<span class="status-badge">🔒 Kindersicherung</span>' : ''}
+                ${!hasTemp ? '<span class="status-badge inactive">Kein Sensor</span>' : ''}
+            </div>
+        </div>
+    `;
+}
+
 // Helper functions
 function getBatteryClass(battery) {
     if (battery === null || battery === '-') return '';
@@ -378,6 +489,60 @@ function translateMode(mode) {
 }
 
 function attachEventListeners() {
+    // Room name edit buttons
+    document.querySelectorAll('.edit-room-name-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const button = e.target;
+            const roomId = parseInt(button.dataset.roomId);
+            const installation = button.dataset.installation;
+            const accountId = button.dataset.account;
+
+            const displayElem = document.getElementById(`room-name-display-${roomId}`);
+            const editElem = document.getElementById(`room-name-edit-${roomId}`);
+
+            if (editElem.style.display === 'none') {
+                // Switch to edit mode
+                displayElem.style.display = 'none';
+                editElem.style.display = 'block';
+                editElem.focus();
+                editElem.select();
+                button.textContent = '💾';
+                button.title = 'Speichern';
+            } else {
+                // Save the name
+                const newName = editElem.value.trim();
+                if (newName === '' || newName.length > 40) {
+                    showError('Name muss zwischen 1 und 40 Zeichen lang sein');
+                    return;
+                }
+
+                button.disabled = true;
+                try {
+                    await setRoomName(accountId, installation, roomId, newName);
+
+                    // Update display
+                    displayElem.textContent = newName;
+                    displayElem.style.display = 'block';
+                    editElem.style.display = 'none';
+                    button.textContent = '✏️';
+                    button.title = 'Namen bearbeiten';
+
+                    showSuccess(`Raumname geändert zu: ${newName}`);
+
+                    // Reload after 2 seconds
+                    setTimeout(() => {
+                        loadSmartClimateDevices();
+                    }, 2000);
+
+                } catch (error) {
+                    showError('Fehler beim Ändern des Raumnamens: ' + error.message);
+                } finally {
+                    button.disabled = false;
+                }
+            }
+        });
+    });
+
     // Child lock toggle buttons
     document.querySelectorAll('.child-lock-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
@@ -586,6 +751,32 @@ async function toggleChildLock(accountId, installationId, gatewaySerial, deviceI
             gatewaySerial,
             deviceId,
             active
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('API request failed: ' + response.status);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Unknown error');
+    }
+
+    return data;
+}
+
+async function setRoomName(accountId, installationId, roomId, name) {
+    const response = await fetch('/api/rooms/name/set', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            accountId,
+            installationId,
+            roomId,
+            name
         })
     });
 

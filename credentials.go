@@ -38,6 +38,10 @@ type DeviceSettings struct {
 	CompressorRpmMax int `json:"compressorRpmMax,omitempty"`
 }
 
+type RoomSettings struct {
+	Name string `json:"name"` // User-defined room name (e.g., "Badezimmer", "Wohnzimmer")
+}
+
 type Account struct {
 	ID             string                     `json:"id"`   // Unique identifier (email)
 	Name           string                     `json:"name"` // User-friendly name
@@ -47,6 +51,7 @@ type Account struct {
 	ClientSecret   string                     `json:"clientSecret"`
 	Active         bool                       `json:"active"`                   // Whether this account is currently active
 	DeviceSettings map[string]*DeviceSettings `json:"deviceSettings,omitempty"` // Key: "{installationId}_{deviceId}"
+	RoomSettings   map[string]*RoomSettings   `json:"roomSettings,omitempty"`   // Key: "{installationId}:{roomId}"
 }
 
 type AccountStore struct {
