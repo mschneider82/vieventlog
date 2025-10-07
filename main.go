@@ -1237,15 +1237,23 @@ func processEvent(raw map[string]interface{}) Event {
 	if body, ok := raw["body"].(map[string]interface{}); ok {
 		event.Body = body
 
+		// Extract errorDescription first
+		var errorDescription string
+		if errorDesc, ok := body["errorDescription"].(string); ok {
+			event.ErrorDescription = errorDesc
+			errorDescription = errorDesc
+		}
+
 		if errorCode, ok := body["errorCode"].(string); ok {
 			event.ErrorCode = errorCode
 			event.HumanReadable = getErrorDescription(errorCode)
 			event.CodeCategory = getCodeCategory(errorCode)
 			event.Severity = getSeverity(errorCode)
-		}
 
-		if errorDesc, ok := body["errorDescription"].(string); ok {
-			event.ErrorDescription = errorDesc
+			// If description is "Unbekannter..." and we have errorDescription from API, use that instead
+			if strings.Contains(event.HumanReadable, "Unbekannter") && errorDescription != "" {
+				event.HumanReadable = errorCode + " - " + errorDescription
+			}
 		}
 
 		if deviceID, ok := body["deviceId"].(string); ok {
