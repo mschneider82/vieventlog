@@ -187,7 +187,13 @@ function renderRadiatorThermostatCard(device) {
                             data-installation="${device.installationId}"
                             data-account="${device.accountId}"
                             title="Namen bearbeiten">✏️</button>
-                    ${childLock ? '<span class="child-lock-indicator">🔒</span>' : ''}
+                    <button class="child-lock-btn ${childLock ? 'active' : ''}"
+                            data-device-id="${device.deviceId}"
+                            data-gateway="${device.gatewaySerial}"
+                            data-installation="${device.installationId}"
+                            data-account="${device.accountId}"
+                            data-active="${childLock}"
+                            title="Kindersicherung ${childLock ? 'deaktivieren' : 'aktivieren'}">${childLock ? '🔒' : '🔓'}</button>
                     <span class="device-id">${device.deviceId}</span>
                 </div>
             </div>
@@ -234,9 +240,24 @@ function renderRadiatorThermostatCard(device) {
 }
 
 function renderFloorThermostatCard(device) {
-    const supplyTemp = device.features.supply_temperature ? device.features.supply_temperature.toFixed(1) : '-';
+    const supplyTemp = device.features.supply_temperature !== undefined ? device.features.supply_temperature.toFixed(1) : '-';
     const mode = device.features.operating_mode || '-';
     const signal = device.signalStrength !== null ? device.signalStrength : '-';
+    const maxTemp = device.features.damage_protection_threshold !== undefined ? device.features.damage_protection_threshold : '-';
+    const condensation = device.features.condensation_threshold !== undefined ? device.features.condensation_threshold : '-';
+
+    // Format LQI timestamp
+    let lqiTimestampFormatted = '';
+    if (device.lqiTimestamp) {
+        const date = new Date(device.lqiTimestamp);
+        lqiTimestampFormatted = date.toLocaleString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
 
     return `
         <div class="device-card floor-thermostat">
@@ -250,12 +271,23 @@ function renderFloorThermostatCard(device) {
                     <span class="value">${supplyTemp}°C</span>
                     <span class="label">Vorlauf</span>
                 </div>
+                <div class="sensor-reading">
+                    <span class="icon">🔥</span>
+                    <span class="value">${maxTemp}°C</span>
+                    <span class="label">Max. Vorlauf</span>
+                </div>
+                <div class="sensor-reading">
+                    <span class="icon">💧</span>
+                    <span class="value">${condensation}%</span>
+                    <span class="label">Kondensation</span>
+                </div>
                 <div class="mode-indicator">
                     <span class="mode-badge ${mode.toLowerCase()}">${translateMode(mode)}</span>
                 </div>
             </div>
             <div class="device-footer">
                 <span class="signal ${getSignalClass(device.signalStrength)}">📶 ${signal}%</span>
+                ${lqiTimestampFormatted ? `<span class="timestamp" title="Zuletzt empfangene Daten">🕐 ${lqiTimestampFormatted}</span>` : ''}
                 ${device.features.heating_circuit_id !== undefined ?
                     `<span class="circuit-id">HK${device.features.heating_circuit_id + 1}</span>` : ''}
             </div>
@@ -344,6 +376,42 @@ function translateMode(mode) {
 }
 
 function attachEventListeners() {
+    // Child lock toggle buttons
+    document.querySelectorAll('.child-lock-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const button = e.target;
+            const deviceId = button.dataset.deviceId;
+            const gateway = button.dataset.gateway;
+            const installation = button.dataset.installation;
+            const accountId = button.dataset.account;
+            const currentlyActive = button.dataset.active === 'true';
+            const newState = !currentlyActive;
+
+            button.disabled = true;
+            try {
+                await toggleChildLock(accountId, installation, gateway, deviceId, newState);
+
+                // Update button
+                button.dataset.active = newState;
+                button.textContent = newState ? '🔒' : '🔓';
+                button.title = `Kindersicherung ${newState ? 'deaktivieren' : 'aktivieren'}`;
+                button.classList.toggle('active', newState);
+
+                showSuccess(`Kindersicherung ${newState ? 'aktiviert' : 'deaktiviert'}`);
+
+                // Reload after 2 seconds
+                setTimeout(() => {
+                    loadSmartClimateDevices();
+                }, 2000);
+
+            } catch (error) {
+                showError('Fehler beim Umschalten der Kindersicherung: ' + error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+
     // Name edit buttons
     document.querySelectorAll('.edit-name-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
@@ -489,6 +557,33 @@ async function setDeviceName(accountId, installationId, gatewaySerial, deviceId,
             gatewaySerial,
             deviceId,
             name
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('API request failed: ' + response.status);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Unknown error');
+    }
+
+    return data;
+}
+
+async function toggleChildLock(accountId, installationId, gatewaySerial, deviceId, active) {
+    const response = await fetch('/api/smartclimate/trv/childlock/toggle', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            accountId,
+            installationId,
+            gatewaySerial,
+            deviceId,
+            active
         })
     });
 

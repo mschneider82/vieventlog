@@ -101,6 +101,7 @@ func main() {
 	http.HandleFunc("/api/smartclimate/devices", smartClimateDevicesHandler)
 	http.HandleFunc("/api/smartclimate/trv/temperature/set", trvSetTemperatureHandler)
 	http.HandleFunc("/api/smartclimate/device/name/set", deviceSetNameHandler)
+	http.HandleFunc("/api/smartclimate/trv/childlock/toggle", childLockToggleHandler)
 
 	// Debug endpoints
 	http.HandleFunc("/api/debug/devices", debugDevicesHandler)
