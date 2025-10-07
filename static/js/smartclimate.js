@@ -138,13 +138,13 @@ function renderClimateSensorCard(device) {
                     <input type="text" class="device-name-edit" id="name-edit-${device.deviceId}" value="${device.name}" style="display: none;" maxlength="40">
                 </div>
                 <div class="device-header-actions">
+                    <span class="device-id">${device.deviceId}</span>
                     <button class="edit-name-btn"
                             data-device-id="${device.deviceId}"
                             data-gateway="${device.gatewaySerial}"
                             data-installation="${device.installationId}"
                             data-account="${device.accountId}"
                             title="Namen bearbeiten">✏️</button>
-                    <span class="device-id">${device.deviceId}</span>
                 </div>
             </div>
             <div class="device-body">
@@ -181,20 +181,22 @@ function renderRadiatorThermostatCard(device) {
                     <input type="text" class="device-name-edit" id="name-edit-${device.deviceId}" value="${device.name}" style="display: none;" maxlength="40">
                 </div>
                 <div class="device-header-actions">
-                    <button class="edit-name-btn"
-                            data-device-id="${device.deviceId}"
-                            data-gateway="${device.gatewaySerial}"
-                            data-installation="${device.installationId}"
-                            data-account="${device.accountId}"
-                            title="Namen bearbeiten">✏️</button>
-                    <button class="child-lock-btn ${childLock ? 'active' : ''}"
-                            data-device-id="${device.deviceId}"
-                            data-gateway="${device.gatewaySerial}"
-                            data-installation="${device.installationId}"
-                            data-account="${device.accountId}"
-                            data-active="${childLock}"
-                            title="Kindersicherung ${childLock ? 'deaktivieren' : 'aktivieren'}">${childLock ? '🔒' : '🔓'}</button>
                     <span class="device-id">${device.deviceId}</span>
+                    <div class="button-group">
+                        <button class="edit-name-btn"
+                                data-device-id="${device.deviceId}"
+                                data-gateway="${device.gatewaySerial}"
+                                data-installation="${device.installationId}"
+                                data-account="${device.accountId}"
+                                title="Namen bearbeiten">✏️</button>
+                        <button class="child-lock-btn ${childLock ? 'active' : ''}"
+                                data-device-id="${device.deviceId}"
+                                data-gateway="${device.gatewaySerial}"
+                                data-installation="${device.installationId}"
+                                data-account="${device.accountId}"
+                                data-active="${childLock}"
+                                title="Kindersicherung ${childLock ? 'deaktivieren' : 'aktivieren'}">${childLock ? '🔒' : '🔓'}</button>
+                    </div>
                 </div>
             </div>
             <div class="device-body">
