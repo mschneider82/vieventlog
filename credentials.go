@@ -39,13 +39,13 @@ type DeviceSettings struct {
 }
 
 type Account struct {
-	ID             string                     `json:"id"`             // Unique identifier (email)
-	Name           string                     `json:"name"`           // User-friendly name
+	ID             string                     `json:"id"`   // Unique identifier (email)
+	Name           string                     `json:"name"` // User-friendly name
 	Email          string                     `json:"email"`
 	Password       string                     `json:"password"`
 	ClientID       string                     `json:"clientId"`
 	ClientSecret   string                     `json:"clientSecret"`
-	Active         bool                       `json:"active"`         // Whether this account is currently active
+	Active         bool                       `json:"active"`                   // Whether this account is currently active
 	DeviceSettings map[string]*DeviceSettings `json:"deviceSettings,omitempty"` // Key: "{installationId}_{deviceId}"
 }
 
