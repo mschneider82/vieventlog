@@ -35,3 +35,6 @@ Thumbs.db
 # GoReleaser
 dist/
 vitocal.txt
+
+events/
+CLAUDE.md

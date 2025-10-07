@@ -49,15 +49,22 @@
                     installSelect.value = currentInstallationId;
                 }
 
-                // If gatewaySerial not set yet, get it from first device BEFORE updating dropdown
+                // If gatewaySerial not set yet, get it from first heating device (not SmartClimate)
                 if (!currentGatewaySerial && currentInstallationId) {
                     const currentInstall = devicesByInstall.find(i => i.installationId === currentInstallationId);
                     if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
-                        // Just take the first device and initialize both deviceId AND gatewaySerial
-                        const firstDevice = currentInstall.devices[0];
-                        currentDeviceId = firstDevice.deviceId;
-                        currentGatewaySerial = firstDevice.gatewaySerial || '';
-                        console.log('Initialized with first device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                        // Filter to heating devices only
+                        const heatingDevices = currentInstall.devices.filter(device => {
+                            return device.deviceType !== 'zigbee' && device.deviceType !== 'roomControl';
+                        });
+
+                        if (heatingDevices.length > 0) {
+                            // Take the first heating device and initialize both deviceId AND gatewaySerial
+                            const firstDevice = heatingDevices[0];
+                            currentDeviceId = firstDevice.deviceId;
+                            currentGatewaySerial = firstDevice.gatewaySerial || '';
+                            console.log('Initialized with first heating device:', currentDeviceId, 'Gateway:', currentGatewaySerial);
+                        }
                     }
                 }
 
@@ -88,7 +95,14 @@
             if (currentInstall && currentInstall.devices && currentInstall.devices.length > 0) {
                 console.log('Found', currentInstall.devices.length, 'devices:', currentInstall.devices);
 
-                currentInstall.devices.forEach(device => {
+                // Filter out SmartClimate devices (zigbee and roomControl)
+                const heatingDevices = currentInstall.devices.filter(device => {
+                    return device.deviceType !== 'zigbee' && device.deviceType !== 'roomControl';
+                });
+
+                console.log('Filtered to', heatingDevices.length, 'heating devices (excluding SmartClimate)');
+
+                heatingDevices.forEach(device => {
                     const option = document.createElement('option');
                     // Create a unique value from gatewaySerial and deviceId
                     const uniqueKey = `${device.gatewaySerial}_${device.deviceId}`;
@@ -108,9 +122,9 @@
 
                 // If current device not in list, select first
                 const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
-                const deviceExists = currentInstall.devices.some(d => `${d.gatewaySerial}_${d.deviceId}` === currentKey);
-                if (!deviceExists && currentInstall.devices.length > 0) {
-                    const firstDevice = currentInstall.devices[0];
+                const deviceExists = heatingDevices.some(d => `${d.gatewaySerial}_${d.deviceId}` === currentKey);
+                if (!deviceExists && heatingDevices.length > 0) {
+                    const firstDevice = heatingDevices[0];
                     currentDeviceId = firstDevice.deviceId;
                     currentGatewaySerial = firstDevice.gatewaySerial;
                     deviceSelect.value = `${currentGatewaySerial}_${currentDeviceId}`;
