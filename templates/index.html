@@ -416,6 +416,10 @@
                 Auto-Refresh: Aus
             </button>
 
+            <button id="exportBtn" onclick="exportEvents()" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                💾 Export Events
+            </button>
+
             <button id="dashboardBtn" onclick="openDashboard()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
                 📊 Dashboard
             </button>
@@ -951,32 +955,14 @@ ${formatEventBody(event.body)}
                 return;
             }
 
-            // Calculate timeline dimensions
-            const width = Math.max(1400, sortedEvents.length * 6);
-            const height = 400;
-            const margin = { top: 30, right: 40, bottom: 70, left: 280 }; // Increased left margin for longer labels
-
             // Clear container
             container.innerHTML = '';
-
-            // Create SVG
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', width);
-            svg.setAttribute('height', height);
-            svg.style.display = 'block';
-            container.appendChild(svg);
 
             // Parse timestamps
             const timeExtent = [
                 new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt),
                 new Date(sortedEvents[sortedEvents.length - 1].eventTimestamp || sortedEvents[sortedEvents.length - 1].createdAt)
             ];
-
-            // Create scale
-            const xScale = (date) => {
-                const t = (new Date(date) - timeExtent[0]) / (timeExtent[1] - timeExtent[0]);
-                return margin.left + t * (width - margin.left - margin.right);
-            };
 
             // Group events by device and status code to create state spans
             const lanes = {};
@@ -1018,9 +1004,9 @@ ${formatEventBody(event.body)}
                     };
 
                     if (valvePositionMap[code]) {
-                        if (event.active) {
+                        if (event.active === true) {
                             currentValvePosition = valvePositionMap[code];
-                        } else {
+                        } else if (event.active === false) {
                             // When valve position ends, terminate any active S.125-WARMWATER spans
                             if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
                                 lane.spans.push({
@@ -1044,7 +1030,7 @@ ${formatEventBody(event.body)}
                         effectiveCode = 'S.125-WARMWATER'; // Virtual code for heating during hot water mode
                     }
 
-                    if (event.active) {
+                    if (event.active === true) {
                         // Start of a new state
                         activeStates[effectiveCode] = {
                             startTime: event.eventTimestamp || event.createdAt,
@@ -1052,7 +1038,7 @@ ${formatEventBody(event.body)}
                             originalCode: code,
                             valvePosition: currentValvePosition
                         };
-                    } else {
+                    } else if (event.active === false) {
                         // End of a state
                         if (activeStates[effectiveCode]) {
                             lane.spans.push({
@@ -1066,6 +1052,20 @@ ${formatEventBody(event.body)}
                             });
                             delete activeStates[effectiveCode];
                         }
+                    } else if (event.active === null || event.active === undefined) {
+                        // Fallback: Treat events without active field as instant events with minimum duration
+                        const eventTime = event.eventTimestamp || event.createdAt;
+                        const endTime = new Date(new Date(eventTime).getTime() + 5 * 60 * 1000).toISOString(); // 5 min default duration
+                        lane.spans.push({
+                            code: effectiveCode,
+                            originalCode: code,
+                            startTime: eventTime,
+                            endTime: endTime,
+                            startEvent: event,
+                            endEvent: null,
+                            fallback: true,
+                            valvePosition: currentValvePosition
+                        });
                     }
                 });
 
@@ -1085,7 +1085,26 @@ ${formatEventBody(event.body)}
             });
 
             const laneArray = Object.values(lanes);
+
+            // Calculate timeline dimensions based on number of lanes
+            const width = Math.max(1400, sortedEvents.length * 6);
+            const minLaneHeight = 60; // Minimum height per lane for visibility
+            const height = Math.max(400, minLaneHeight * laneArray.length + 100); // Dynamic height based on lane count
+            const margin = { top: 30, right: 40, bottom: 70, left: 280 }; // Increased left margin for longer labels
             const laneHeight = (height - margin.top - margin.bottom) / Math.max(laneArray.length, 1);
+
+            // Create scale
+            const xScale = (date) => {
+                const t = (new Date(date) - timeExtent[0]) / (timeExtent[1] - timeExtent[0]);
+                return margin.left + t * (width - margin.left - margin.right);
+            };
+
+            // Create SVG
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+            svg.style.display = 'block';
+            container.appendChild(svg);
 
             // Draw grid and time axis with intelligent intervals
             const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1266,18 +1285,23 @@ ${formatEventBody(event.body)}
                 lane.spans.forEach((span, spanIdx) => {
                     const x1 = xScale(span.startTime);
                     const x2 = xScale(span.endTime);
-                    const spanWidth = Math.max(x2 - x1, 3);
+                    const actualWidth = x2 - x1;
+                    const spanWidth = Math.max(actualWidth, 2); // Minimum 2px width, but we'll use visual tricks for very small spans
 
                     const eventInfo = eventTypes[span.code];
                     const color = eventInfo?.color || '#6b7280';
                     const gradient = eventInfo?.gradient || color;
 
+                    // Calculate bar dimensions
+                    const barHeight = Math.max(laneHeight - 30, 20); // Minimum 20px bar height
+                    const barY = y + (laneHeight - barHeight) / 2; // Center bar vertically in lane
+
                     // Shadow/glow effect
                     const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                     shadow.setAttribute('x', x1 - 1);
-                    shadow.setAttribute('y', y + 13);
+                    shadow.setAttribute('y', barY - 2);
                     shadow.setAttribute('width', spanWidth + 2);
-                    shadow.setAttribute('height', laneHeight - 26);
+                    shadow.setAttribute('height', barHeight + 4);
                     shadow.setAttribute('fill', color);
                     shadow.setAttribute('opacity', '0.2');
                     shadow.setAttribute('rx', '6');
@@ -1313,11 +1337,17 @@ ${formatEventBody(event.body)}
                     // Main state span bar
                     const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                     bar.setAttribute('x', x1);
-                    bar.setAttribute('y', y + 15);
+                    bar.setAttribute('y', barY);
                     bar.setAttribute('width', spanWidth);
-                    bar.setAttribute('height', laneHeight - 30);
+                    bar.setAttribute('height', barHeight);
                     bar.setAttribute('fill', `url(#${gradientId})`);
                     bar.setAttribute('rx', '6');
+                    if (span.fallback) {
+                        bar.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+                        bar.setAttribute('stroke-width', '1');
+                        bar.setAttribute('stroke-dasharray', '4,2');
+                        bar.setAttribute('opacity', '0.7');
+                    }
                     bar.style.cursor = 'pointer';
                     bar.style.transition = 'all 0.2s';
 
@@ -1347,6 +1377,9 @@ ${formatEventBody(event.body)}
                     if (span.code === 'S.125-WARMWATER') {
                         tooltipText += '\n(Wärmepumpe heizt bei Ventilstellung Warmwasser)';
                     }
+                    if (span.fallback) {
+                        tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
+                    }
                     tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
                     title.textContent = tooltipText;
                     bar.appendChild(title);
@@ -1354,17 +1387,18 @@ ${formatEventBody(event.body)}
                     svg.appendChild(bar);
 
                     // Add icon and duration label if span is wide enough
+                    const labelY = barY + barHeight / 2;
                     if (spanWidth > 60) {
                         const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                         iconLabel.setAttribute('x', x1 + 8);
-                        iconLabel.setAttribute('y', y + laneHeight / 2 - 6);
+                        iconLabel.setAttribute('y', labelY - 6);
                         iconLabel.setAttribute('font-size', '14');
                         iconLabel.textContent = eventInfo?.icon || '';
                         svg.appendChild(iconLabel);
 
                         const durationLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                         durationLabel.setAttribute('x', x1 + spanWidth / 2);
-                        durationLabel.setAttribute('y', y + laneHeight / 2);
+                        durationLabel.setAttribute('y', labelY);
                         durationLabel.setAttribute('text-anchor', 'middle');
                         durationLabel.setAttribute('dominant-baseline', 'middle');
                         durationLabel.setAttribute('font-size', '11');
@@ -1376,7 +1410,7 @@ ${formatEventBody(event.body)}
                     } else if (spanWidth > 30) {
                         const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                         miniLabel.setAttribute('x', x1 + spanWidth / 2);
-                        miniLabel.setAttribute('y', y + laneHeight / 2);
+                        miniLabel.setAttribute('y', labelY);
                         miniLabel.setAttribute('text-anchor', 'middle');
                         miniLabel.setAttribute('dominant-baseline', 'middle');
                         miniLabel.setAttribute('font-size', '9');
@@ -1389,9 +1423,9 @@ ${formatEventBody(event.body)}
                     // Shine effect on top
                     const shine = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                     shine.setAttribute('x', x1);
-                    shine.setAttribute('y', y + 15);
+                    shine.setAttribute('y', barY);
                     shine.setAttribute('width', spanWidth);
-                    shine.setAttribute('height', (laneHeight - 30) / 3);
+                    shine.setAttribute('height', barHeight / 3);
                     shine.setAttribute('fill', 'rgba(255,255,255,0.15)');
                     shine.setAttribute('rx', '6');
                     svg.appendChild(shine);
@@ -1515,6 +1549,56 @@ ${formatEventBody(event.body)}
                     window.location.href = '/dashboard';
                 }
             }
+        }
+
+        // ========================================
+        // EXPORT FUNCTION
+        // ========================================
+
+        /**
+         * Export filtered events as JSON file for debugging
+         */
+        function exportEvents() {
+            const filteredEvents = applyFilters(allEvents);
+
+            if (filteredEvents.length === 0) {
+                alert('Keine Events zum Exportieren vorhanden');
+                return;
+            }
+
+            // Create export data with metadata
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                filters: {
+                    days: globalFilters.days,
+                    device: globalFilters.device,
+                    type: globalFilters.type,
+                    search: globalFilters.search
+                },
+                eventCount: filteredEvents.length,
+                events: filteredEvents
+            };
+
+            // Convert to JSON with pretty formatting
+            const jsonString = JSON.stringify(exportData, null, 2);
+
+            // Create blob and download
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            link.download = `vicare-events-${timestamp}.json`;
+            link.href = url;
+
+            // Trigger download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log(`Exported ${filteredEvents.length} events`);
         }
 
         // Initial load

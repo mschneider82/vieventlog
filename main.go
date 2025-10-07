@@ -257,6 +257,9 @@ func main() {
 	http.HandleFunc("/api/dhw/hysteresis/set", dhwHysteresisSetHandler)
 	http.HandleFunc("/api/dhw/oneTimeCharge/activate", dhwOneTimeChargeHandler)
 
+	// Noise reduction control
+	http.HandleFunc("/api/noise-reduction/mode/set", noiseReductionModeSetHandler)
+
 	// Heating curve control
 	http.HandleFunc("/api/heating/curve/set", heatingCurveSetHandler)
 	http.HandleFunc("/api/heating/mode/set", heatingModeSetHandler)
@@ -2420,6 +2423,139 @@ func dhwModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("DHW mode changed to '%s' for device %s (account: %s)", req.Mode, req.DeviceID, req.AccountID)
+
+	// Clear features cache to force refresh
+	featuresCacheMutex.Lock()
+	cacheKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
+	delete(featuresCache, cacheKey)
+	featuresCacheMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// Noise Reduction Mode Set Handler
+func noiseReductionModeSetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		AccountID      string `json:"accountId"`
+		InstallationID string `json:"installationId"`
+		GatewaySerial  string `json:"gatewaySerial"`
+		DeviceID       string `json:"deviceId"`
+		Mode           string `json:"mode"` // notReduced, slightlyReduced, maxReduced
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.AccountID == "" || req.InstallationID == "" || req.GatewaySerial == "" || req.DeviceID == "" || req.Mode == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "accountId, installationId, gatewaySerial, deviceId, and mode are required",
+		})
+		return
+	}
+
+	// Validate mode
+	validModes := map[string]bool{
+		"notReduced":       true,
+		"slightlyReduced": true,
+		"maxReduced":      true,
+	}
+	if !validModes[req.Mode] {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid mode. Must be one of: notReduced, slightlyReduced, maxReduced",
+		})
+		return
+	}
+
+	// Get access token for the account
+	accountsMutex.RLock()
+	token, exists := accountTokens[req.AccountID]
+	accountsMutex.RUnlock()
+
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Account not found or not authenticated",
+		})
+		return
+	}
+
+	// Build Viessmann API URL
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/heating.noise.reduction.operating.programs.active/commands/setMode",
+		req.InstallationID, req.GatewaySerial, req.DeviceID)
+
+	// Prepare request body
+	requestBody := map[string]string{
+		"mode": req.Mode,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Make API call
+	client := &http.Client{Timeout: 30 * time.Second}
+	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to call Viessmann API: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("Viessmann API error: status=%d, body=%s", resp.StatusCode, string(bodyBytes))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Viessmann API returned status %d: %s", resp.StatusCode, string(bodyBytes)),
+		})
+		return
+	}
+
+	log.Printf("Noise reduction mode changed to '%s' for device %s (account: %s)", req.Mode, req.DeviceID, req.AccountID)
 
 	// Clear features cache to force refresh
 	featuresCacheMutex.Lock()
