@@ -260,7 +260,7 @@ button:active {
     gap: 8px;
 }
 
-.edit-name-btn, .child-lock-btn {
+.edit-name-btn, .child-lock-btn, .edit-room-name-btn {
     padding: 4px 8px;
     border: none;
     background: rgba(102, 126, 234, 0.2);
@@ -270,12 +270,12 @@ button:active {
     transition: all 0.2s;
 }
 
-.edit-name-btn:hover:not(:disabled), .child-lock-btn:hover:not(:disabled) {
+.edit-name-btn:hover:not(:disabled), .child-lock-btn:hover:not(:disabled), .edit-room-name-btn:hover:not(:disabled) {
     background: rgba(102, 126, 234, 0.4);
     transform: scale(1.1);
 }
 
-.edit-name-btn:disabled, .child-lock-btn:disabled {
+.edit-name-btn:disabled, .child-lock-btn:disabled, .edit-room-name-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -433,6 +433,46 @@ button:active {
 .status-indicator.online {
     background: #4caf50;
     color: white;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-block;
+    margin-right: 4px;
+    background: rgba(102, 126, 234, 0.2);
+    color: #667eea;
+}
+
+.status-badge.warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+}
+
+.status-badge.alert {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+
+.status-badge.inactive {
+    background: rgba(158, 158, 158, 0.2);
+    color: #9e9e9e;
+}
+
+.room-card {
+    border-left: 3px solid #667eea;
+}
+
+.room-card:hover {
+    border-left-color: #764ba2;
+}
+
+.timestamp {
+    font-size: 11px;
+    color: #a0a0b0;
+    font-family: monospace;
 }
 
 .no-devices {

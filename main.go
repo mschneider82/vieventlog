@@ -103,6 +103,10 @@ func main() {
 	http.HandleFunc("/api/smartclimate/device/name/set", deviceSetNameHandler)
 	http.HandleFunc("/api/smartclimate/trv/childlock/toggle", childLockToggleHandler)
 
+	// Rooms endpoints
+	http.HandleFunc("/api/rooms", roomsHandler)
+	http.HandleFunc("/api/rooms/name/set", setRoomNameHandler)
+
 	// Debug endpoints
 	http.HandleFunc("/api/debug/devices", debugDevicesHandler)
 
