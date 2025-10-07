@@ -1895,8 +1895,8 @@
                     'defrost': 'Abtauen',
                     'standby': 'Standby',
                     'off': 'Aus',
-                    'climateCircuitOne': 'Integrierter Pufferspeicher',
-                    'climatCircuitTwoDefrost': 'Leerlauf'
+                    'climateCircuitOne': 'Heiz-/Kühlkreis 1',
+                    'climatCircuitTwoDefrost': 'Integrierter Pufferspeicher'
                 };
                 const valveValue = kf.fourWayValve.value;
                 const valveDisplay = valveLabels[valveValue] || valveValue;
