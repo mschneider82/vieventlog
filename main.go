@@ -101,6 +101,8 @@ type Event struct {
 	InstallationID   string                 `json:"installationId"`
 	AccountID        string                 `json:"accountId"`   // Which account this event belongs to
 	AccountName      string                 `json:"accountName"` // User-friendly account name
+	FeatureName      string                 `json:"featureName,omitempty"` // For feature-changed events
+	FeatureValue     string                 `json:"featureValue,omitempty"` // Value from commandBody
 }
 
 type EventsResponse struct {
@@ -1284,6 +1286,30 @@ func processEvent(raw map[string]interface{}) Event {
 
 		if active, ok := body["active"].(bool); ok {
 			event.Active = &active
+		}
+
+		// Handle gateway-online/offline distinction
+		if event.EventType == "gateway-online" {
+			if online, ok := body["online"].(bool); ok && !online {
+				event.EventType = "gateway-offline"
+			}
+		}
+
+		// Handle feature-changed events
+		if event.EventType == "feature-changed" {
+			if featureName, ok := body["featureName"].(string); ok {
+				event.FeatureName = featureName
+			}
+
+			// Extract value from commandBody
+			if commandBody, ok := body["commandBody"].(map[string]interface{}); ok && len(commandBody) > 0 {
+				// Convert commandBody to a readable string
+				values := []string{}
+				for key, val := range commandBody {
+					values = append(values, fmt.Sprintf("%s: %v", key, val))
+				}
+				event.FeatureValue = strings.Join(values, ", ")
+			}
 		}
 	}
 
