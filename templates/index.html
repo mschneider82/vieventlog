@@ -912,11 +912,10 @@ ${formatEventBody(event.body)}
                 return;
             }
 
-            // Apply timeline type filter (which event types to show)
-            const filteredEvents = events.filter(event => {
-                const code = event.errorCode || 'other';
-                return globalFilters.timelineTypes[code] !== false && globalFilters.timelineTypes['other'] !== false;
-            });
+            // NOTE: We don't filter events here anymore because valve position events (S.115, S.116, etc.)
+            // are needed for the state machine logic even though they don't create their own bars.
+            // The filter will be applied later when rendering bars, not when processing state transitions.
+            const filteredEvents = events;
 
             // Setup filter buttons
             const eventTypes = {
@@ -1364,12 +1363,22 @@ ${formatEventBody(event.body)}
 
                 // Draw state spans (duration bars)
                 lane.spans.forEach((span, spanIdx) => {
+                    // Apply timeline filter: only render spans that should be displayed
+                    if (globalFilters.timelineTypes[span.code] === false) {
+                        return; // Skip this span
+                    }
+
+                    // Check if this span type has a visual representation
+                    const eventInfo = eventTypes[span.code];
+                    if (!eventInfo) {
+                        return; // Skip spans without visual definition (e.g., raw valve position events)
+                    }
+
                     const x1 = xScale(span.startTime);
                     const x2 = xScale(span.endTime);
                     const actualWidth = x2 - x1;
                     const spanWidth = Math.max(actualWidth, 2); // Minimum 2px width, but we'll use visual tricks for very small spans
 
-                    const eventInfo = eventTypes[span.code];
                     const color = eventInfo?.color || '#6b7280';
                     const gradient = eventInfo?.gradient || color;
 
