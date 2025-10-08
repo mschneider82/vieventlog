@@ -106,6 +106,7 @@ func main() {
 	// Rooms endpoints
 	http.HandleFunc("/api/rooms", roomsHandler)
 	http.HandleFunc("/api/rooms/name/set", setRoomNameHandler)
+	http.HandleFunc("/api/rooms/temperature/set", setRoomTemperatureHandler)
 
 	// Debug endpoints
 	http.HandleFunc("/api/debug/devices", debugDevicesHandler)

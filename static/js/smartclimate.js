@@ -425,9 +425,23 @@ function renderRoomCard(room) {
                 </div>
                 ` : ''}
                 ${heatingSetpoint !== '-' ? `
-                <div class="sensor-reading">
+                <div class="sensor-reading editable">
                     <span class="icon">🔥</span>
-                    <span class="value">${heatingSetpoint}°C</span>
+                    <div class="temp-control">
+                        <button class="temp-btn minus room-temp-btn"
+                                data-room-id="${room.roomId}"
+                                data-gateway="${room.gatewaySerial}"
+                                data-installation="${room.installationId}"
+                                data-account="${room.accountId}"
+                                data-current="${heatingSetpoint}">−</button>
+                        <span class="value editable-value" id="room-setpoint-${room.roomId}">${heatingSetpoint}°C</span>
+                        <button class="temp-btn plus room-temp-btn"
+                                data-room-id="${room.roomId}"
+                                data-gateway="${room.gatewaySerial}"
+                                data-installation="${room.installationId}"
+                                data-account="${room.accountId}"
+                                data-current="${heatingSetpoint}">+</button>
+                    </div>
                     <span class="label">Soll (Heizen)</span>
                 </div>
                 ` : ''}
@@ -634,8 +648,8 @@ function attachEventListeners() {
         });
     });
 
-    // Temperature control buttons
-    document.querySelectorAll('.temp-btn').forEach(btn => {
+    // Temperature control buttons for TRVs
+    document.querySelectorAll('.temp-btn:not(.room-temp-btn)').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const button = e.target;
             const deviceId = button.dataset.deviceId;
@@ -683,6 +697,56 @@ function attachEventListeners() {
             }
         });
     });
+
+    // Temperature control buttons for Rooms
+    document.querySelectorAll('.room-temp-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const button = e.target;
+            const roomId = parseInt(button.dataset.roomId);
+            const gateway = button.dataset.gateway;
+            const installation = button.dataset.installation;
+            const accountId = button.dataset.account;
+            const currentTemp = parseFloat(button.dataset.current);
+
+            // Determine new temperature
+            let newTemp;
+            if (button.classList.contains('plus')) {
+                newTemp = Math.min(30, currentTemp + 0.5);
+            } else {
+                newTemp = Math.max(10, currentTemp - 0.5);
+            }
+
+            // Disable buttons during request
+            const card = button.closest('.device-card');
+            card.querySelectorAll('.room-temp-btn').forEach(b => b.disabled = true);
+
+            try {
+                await setRoomTemperature(accountId, installation, gateway, roomId, newTemp);
+
+                // Update display
+                document.getElementById(`room-setpoint-${roomId}`).textContent = newTemp.toFixed(1) + '°C';
+
+                // Update data attributes
+                card.querySelectorAll('.room-temp-btn').forEach(b => {
+                    b.dataset.current = newTemp;
+                });
+
+                // Show success
+                showSuccess(`Raumtemperatur auf ${newTemp.toFixed(1)}°C gesetzt`);
+
+                // Reload after 2 seconds to get actual value
+                setTimeout(() => {
+                    loadSmartClimateDevices();
+                }, 2000);
+
+            } catch (error) {
+                showError('Fehler beim Setzen der Raumtemperatur: ' + error.message);
+            } finally {
+                // Re-enable buttons
+                card.querySelectorAll('.room-temp-btn').forEach(b => b.disabled = false);
+            }
+        });
+    });
 }
 
 async function setTRVTemperature(accountId, installationId, gatewaySerial, deviceId, temperature) {
@@ -697,6 +761,33 @@ async function setTRVTemperature(accountId, installationId, gatewaySerial, devic
             gatewaySerial,
             deviceId,
             temperature
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('API request failed: ' + response.status);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Unknown error');
+    }
+
+    return data;
+}
+
+async function setRoomTemperature(accountId, installationId, gatewaySerial, roomId, temperature) {
+    const response = await fetch('/api/rooms/temperature/set', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            accountId,
+            installationId,
+            gatewaySerial,
+            roomId,
+            targetTemperature: temperature
         })
     });
 
