@@ -182,8 +182,8 @@ func fetchEventsLegacy(daysBack int) ([]Event, error) {
 
 // fetchFeaturesForDevice fetches features for a specific installation/gateway/device
 func fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
-	// Build API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features",
+	// Build API URL with includeDeviceFeatures parameter to get array-based statistics
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features?includeDeviceFeatures=true",
 		installationID, gatewayID, deviceID)
 
 	log.Printf("Fetching features from API: %s\n", url)
