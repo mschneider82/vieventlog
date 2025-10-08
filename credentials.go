@@ -34,7 +34,7 @@ type Credentials struct {
 }
 
 type DeviceSettings struct {
-	Name             string `json:"name,omitempty"`             // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
+	Name             string `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
 	CompressorRpmMin int    `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax int    `json:"compressorRpmMax,omitempty"`
 }

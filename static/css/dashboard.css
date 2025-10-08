@@ -486,3 +486,174 @@
             color: #e0e0e0;
             white-space: pre;
         }
+
+        /* Consumption Statistics Tabs */
+        .stat-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 15px 20px 0 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-tabs-main {
+            /* Main period selector (Tag, Woche, Monat, Jahr) - no scroll */
+            flex-wrap: wrap;
+        }
+
+        .stat-tabs-scrollable {
+            /* Scrollable tabs for many items (days, weeks, months) */
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-wrap: nowrap;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(102, 126, 234, 0.5) rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-tabs-scrollable::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .stat-tabs-scrollable::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        .stat-tabs-scrollable::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 3px;
+        }
+
+        .stat-tabs-scrollable::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.7);
+        }
+
+        .stat-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: #a0a0b0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .stat-tab:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .stat-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .stat-content {
+            padding: 20px;
+        }
+
+        .stat-tab-content {
+            display: none;
+        }
+
+        .stat-period-content {
+            /* Period container (month, week, day views) */
+        }
+
+        .stat-dual-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .stat-dual-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-section {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .stat-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-jaz-section {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .stat-jaz-section .stat-item {
+            min-width: 300px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-item.stat-power {
+            border-left-color: #f59e0b;
+        }
+
+        .stat-item.stat-heat {
+            border-left-color: #10b981;
+        }
+
+        .stat-item.stat-total {
+            border-left-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .stat-item.stat-cop {
+            border-left-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .stat-item.stat-heat-total {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 13px;
+            color: #a0a0b0;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-avg {
+            display: block;
+            font-size: 12px;
+            color: #667eea;
+            margin-top: 4px;
+        }

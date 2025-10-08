@@ -210,6 +210,9 @@
             const contentDiv = document.getElementById('dashboardContent');
             contentDiv.className = 'dashboard-grid';
 
+            // Store features globally for debugging
+            window.currentFeaturesData = features;
+
             // Extract key features
             const keyFeatures = extractKeyFeatures(features);
 
@@ -411,6 +414,9 @@
 
                 // Consumption
                 html += renderConsumption(keyFeatures);
+
+                // Consumption/Production Statistics
+                html += renderConsumptionStatistics(keyFeatures);
 
                 // Additional sensors & pumps
                 html += renderAdditionalSensors(keyFeatures);
@@ -630,6 +636,55 @@
                 fhtHeatingActive: find(['fht.operating.modes.heating']),
                 fhtCoolingActive: find(['fht.operating.modes.cooling']),
                 fhtStandbyActive: find(['fht.operating.modes.standby']),
+
+                // Consumption/Production Statistics (Arrays with history)
+                // With includeDeviceFeatures=true, these features have day/week/month/year arrays
+                powerConsumptionDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.dhw');
+                    return f || null;
+                })(),
+                powerConsumptionHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.heating');
+                    return f || null;
+                })(),
+                powerConsumptionTotal: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.total');
+                    return f || null;
+                })(),
+                heatProductionDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.heat.production.dhw');
+                    return f || null;
+                })(),
+                heatProductionHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.heat.production.heating');
+                    return f || null;
+                })(),
+                // Keep summary features as fallback
+                powerConsumptionSummaryDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.summary.dhw');
+                    return f || null;
+                })(),
+                powerConsumptionSummaryHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.summary.heating');
+                    return f || null;
+                })(),
+                heatProductionSummaryDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.heat.production.summary.dhw');
+                    return f || null;
+                })(),
+                heatProductionSummaryHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.heat.production.summary.heating');
+                    return f || null;
+                })(),
 
             };
         }
@@ -1847,6 +1902,386 @@
                     </div>
                     <div class="status-list">
                         ${consumption}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderConsumptionStatistics(kf) {
+            // Check for array-based features (with includeDeviceFeatures=true)
+            const hasArrayFeatures = kf.powerConsumptionDhw || kf.powerConsumptionHeating ||
+                                     kf.heatProductionDhw || kf.heatProductionHeating;
+
+            // Fallback to summary features
+            const hasSummaryFeatures = kf.powerConsumptionSummaryDhw || kf.powerConsumptionSummaryHeating;
+
+            if (!hasArrayFeatures && !hasSummaryFeatures) return '';
+
+            // Use array features if available (gives us historical data)
+            if (hasArrayFeatures) {
+                console.log('📊 Using array-based consumption statistics');
+                return renderConsumptionStatisticsArrays(kf);
+            } else {
+                console.log('📊 Using summary-based consumption statistics (fallback)');
+                return renderConsumptionStatisticsSummary(kf);
+            }
+        }
+
+        // NEW: Render statistics using array-based features - split into two cards
+        function renderConsumptionStatisticsArrays(kf) {
+            // Helper to get array value safely
+            const getArrayValue = (feature, period, index = 0) => {
+                if (!feature || !feature.properties || !feature.properties[period]) return null;
+                const arr = feature.properties[period].value;
+                if (!Array.isArray(arr) || index >= arr.length) return null;
+                return arr[index];
+            };
+
+            // Helper to get summary value
+            const getSummaryValue = (feature, period) => {
+                if (!feature || !feature.properties || !feature.properties[period]) return null;
+                const prop = feature.properties[period];
+                if (prop && prop.value !== undefined) {
+                    return prop.value;
+                }
+                return null;
+            };
+
+            // Check what data is available
+            const hasPowerConsumptionArrays = kf.powerConsumptionDhw || kf.powerConsumptionHeating;
+            const hasHeatProductionArrays = kf.heatProductionDhw && kf.heatProductionHeating;
+            const hasHeatProductionSummary = kf.heatProductionSummaryDhw || kf.heatProductionSummaryHeating;
+
+            console.log('Power consumption arrays:', hasPowerConsumptionArrays);
+            console.log('Heat production arrays:', hasHeatProductionArrays);
+            console.log('Heat production summary:', hasHeatProductionSummary);
+
+            let html = '';
+
+            // Card 1: Power Consumption (always with arrays if available)
+            if (hasPowerConsumptionArrays) {
+                html += renderPowerConsumptionCard(kf, getArrayValue);
+            }
+
+            // Card 2: Heat Production (arrays if available, otherwise summary)
+            if (hasHeatProductionArrays) {
+                html += renderHeatProductionArrayCard(kf, getArrayValue);
+            } else if (hasHeatProductionSummary) {
+                html += renderHeatProductionSummaryCard(kf, getSummaryValue);
+            }
+
+            return html;
+        }
+
+        // Render Power Consumption Card with full array history
+        // Power Consumption Card (Stromverbrauch) - separate Kachel
+        function renderPowerConsumptionCard(kf, getArrayValue) {
+            const getMonthName = (index) => {
+                const now = new Date();
+                const d = new Date(now.getFullYear(), now.getMonth() - index, 1);
+                return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+            };
+        
+            const getWeekLabel = (index) => {
+                const now = new Date();
+                const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
+                const onejan = new Date(d.getFullYear(), 0, 1);
+                const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+                return `KW ${week}`;
+            };
+        
+            const getDayLabel = (index) => {
+                const now = new Date();
+                const d = new Date(now.getTime() - (index * 24 * 60 * 60 * 1000));
+                return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            };
+        
+            let mainTabsHtml = `
+                <button class="stat-tab active" onclick="switchStatPeriod(event, 'power-period-day')">Tag</button>
+                <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-week')">Woche</button>
+                <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-month')">Monat</button>
+                <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-year')">Jahr</button>
+            `;
+        
+            // Build days
+            const dayArray = kf.powerConsumptionDhw?.properties?.day?.value || kf.powerConsumptionHeating?.properties?.day?.value || [];
+            const maxDays = Math.min(dayArray.length, 8);
+            let dayTabsHtml = '', dayContentHtml = '';
+        
+            for (let i = 0; i < maxDays; i++) {
+                const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'day', i);
+                const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'day', i);
+                if (powerDhw === null && powerHeating === null) continue;
+        
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                dayTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-day-${i}')">${getDayLabel(i)}</button>`;
+                dayContentHtml += `
+                    <div id="power-day-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                            ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                            ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        
+            // Build weeks
+            const weekArray = kf.powerConsumptionDhw?.properties?.week?.value || kf.powerConsumptionHeating?.properties?.week?.value || [];
+            const maxWeeks = Math.min(weekArray.length, 6);
+            let weekTabsHtml = '', weekContentHtml = '';
+        
+            for (let i = 0; i < maxWeeks; i++) {
+                const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'week', i);
+                const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'week', i);
+                if (powerDhw === null && powerHeating === null) continue;
+        
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                weekTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-week-${i}')">${getWeekLabel(i)}</button>`;
+                weekContentHtml += `
+                    <div id="power-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                            ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                            ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        
+            // Build months
+            const monthArray = kf.powerConsumptionDhw?.properties?.month?.value || kf.powerConsumptionHeating?.properties?.month?.value || [];
+            const maxMonths = Math.min(monthArray.length, 13);
+            let monthTabsHtml = '', monthContentHtml = '';
+        
+            for (let i = 0; i < maxMonths; i++) {
+                const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'month', i);
+                const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'month', i);
+                if (powerDhw === null && powerHeating === null) continue;
+        
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                monthTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-month-${i}')">${getMonthName(i)}</button>`;
+                monthContentHtml += `
+                    <div id="power-month-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                            ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                            ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        
+            // Build years
+            const yearArray = kf.powerConsumptionDhw?.properties?.year?.value || kf.powerConsumptionHeating?.properties?.year?.value || [];
+            const maxYears = Math.min(yearArray.length, 2);
+            let yearTabsHtml = '', yearContentHtml = '';
+        
+            for (let i = 0; i < maxYears; i++) {
+                const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'year', i);
+                const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'year', i);
+                if (powerDhw === null && powerHeating === null) continue;
+        
+                const now = new Date();
+                const yearLabel = now.getFullYear() - i;
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                yearTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-year-${i}')">${yearLabel}</button>`;
+                yearContentHtml += `
+                    <div id="power-year-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                            ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                            ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        
+            if (!dayTabsHtml && !weekTabsHtml && !monthTabsHtml && !yearTabsHtml) return '';
+        
+            return `
+                <div class="card">
+                    <div class="card-header"><h2>⚡ Stromverbrauch</h2></div>
+                    <div class="stat-tabs stat-tabs-main">${mainTabsHtml}</div>
+                    <div id="power-period-day" class="stat-period-content" style="display: block;">
+                        <div class="stat-tabs stat-tabs-scrollable">${dayTabsHtml}</div>
+                        <div class="stat-content">${dayContentHtml}</div>
+                    </div>
+                    <div id="power-period-week" class="stat-period-content" style="display: none;">
+                        <div class="stat-tabs stat-tabs-scrollable">${weekTabsHtml}</div>
+                        <div class="stat-content">${weekContentHtml}</div>
+                    </div>
+                    <div id="power-period-month" class="stat-period-content" style="display: none;">
+                        <div class="stat-tabs stat-tabs-scrollable">${monthTabsHtml}</div>
+                        <div class="stat-content">${monthContentHtml}</div>
+                    </div>
+                    <div id="power-period-year" class="stat-period-content" style="display: none;">
+                        <div class="stat-tabs stat-tabs-scrollable">${yearTabsHtml}</div>
+                        <div class="stat-content">${yearContentHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Heat Production Summary Card (Erzeugte Wärmeenergie) - separate Kachel mit Summary-Daten
+        function renderHeatProductionSummaryCard(kf, getSummaryValue) {
+            const periods = [
+                {key: 'currentDay', label: 'Heute'},
+                {key: 'lastSevenDays', label: 'Letzte 7 Tage'},
+                {key: 'currentMonth', label: 'Aktueller Monat'},
+                {key: 'lastMonth', label: 'Letzter Monat'},
+                {key: 'currentYear', label: 'Aktuelles Jahr'},
+                {key: 'lastYear', label: 'Letztes Jahr'}
+            ];
+        
+            let tabsHtml = '';
+            let contentHtml = '';
+        
+            periods.forEach((period, index) => {
+                const heatDhw = getSummaryValue(kf.heatProductionSummaryDhw, period.key);
+                const heatHeating = getSummaryValue(kf.heatProductionSummaryHeating, period.key);
+        
+                if (heatDhw === null && heatHeating === null) return;
+        
+                const totalHeat = (heatDhw || 0) + (heatHeating || 0);
+        
+                tabsHtml += `<button class="stat-tab ${index === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'heat-${period.key}')">${period.label}</button>`;
+                contentHtml += `
+                    <div id="heat-${period.key}" class="stat-tab-content" style="${index === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${heatDhw !== null ? `<div class="stat-item stat-heat"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(heatDhw)} kWh</span></div>` : ''}
+                            ${heatHeating !== null ? `<div class="stat-item stat-heat"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(heatHeating)} kWh</span></div>` : ''}
+                            ${totalHeat > 0 ? `<div class="stat-item stat-heat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalHeat)} kWh</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        
+            if (!tabsHtml) return '';
+        
+            return `
+                <div class="card">
+                    <div class="card-header"><h2>🌡️ Erzeugte Wärmeenergie</h2></div>
+                    <div class="stat-tabs stat-tabs-scrollable">${tabsHtml}</div>
+                    <div class="stat-content">${contentHtml}</div>
+                </div>
+            `;
+        }
+
+        // Fallback: Render statistics using summary features
+        function renderConsumptionStatisticsSummary(kf) {
+
+            // Helper to extract property from summary feature
+            const getProp = (summary, prop) => {
+                if (!summary || !summary.properties || !summary.properties[prop]) return null;
+                const property = summary.properties[prop];
+                // The property structure is {type: "number", value: X, unit: "kilowattHour"}
+                if (property && property.value !== undefined) {
+                    return property.value;
+                }
+                return null;
+            };
+
+            // Collect data for each time period
+            const periods = [
+                {key: 'currentDay', label: 'Heute', divider: 1},
+                {key: 'lastSevenDays', label: '7 Tage', divider: 7},
+                {key: 'currentMonth', label: 'Monat', divider: 30},
+                {key: 'currentYear', label: 'Jahr', divider: 365}
+            ];
+
+            let tabsHtml = '';
+            let contentHtml = '';
+
+            periods.forEach((period, index) => {
+                const powerDhw = getProp(kf.powerConsumptionSummaryDhw, period.key);
+                const powerHeating = getProp(kf.powerConsumptionSummaryHeating, period.key);
+                const heatDhw = getProp(kf.heatProductionSummaryDhw, period.key);
+                const heatHeating = getProp(kf.heatProductionSummaryHeating, period.key);
+
+                // Debug log
+                if (period.key === 'currentDay') {
+                    console.log(`📊 ${period.label} raw data:`, {
+                        powerDhw,
+                        powerHeating,
+                        heatDhw,
+                        heatHeating,
+                        powerDhwFeature: kf.powerConsumptionSummaryDhw,
+                        powerHeatingFeature: kf.powerConsumptionSummaryHeating
+                    });
+                }
+
+                // Skip if no data
+                if (powerDhw === null && powerHeating === null && heatDhw === null && heatHeating === null) return;
+
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                const totalHeat = (heatDhw || 0) + (heatHeating || 0);
+                const cop = totalPower > 0 ? (totalHeat / totalPower).toFixed(2) : '-';
+                const avgPerWeek = period.divider > 1 ? (totalPower / period.divider * 7).toFixed(1) : null;
+
+                tabsHtml += `
+                    <button class="stat-tab ${index === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'stat-${period.key}')">
+                        ${period.label}
+                    </button>
+                `;
+
+                contentHtml += `
+                    <div id="stat-${period.key}" class="stat-tab-content" style="${index === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `
+                                <div class="stat-item stat-power">
+                                    <span class="stat-label">💧 Warmwasser/Verdichter</span>
+                                    <span class="stat-value">${formatNum(powerDhw)} kWh</span>
+                                    ${avgPerWeek && period.key !== 'currentDay' ? `<span class="stat-avg">≈ ${avgPerWeek} kWh/Woche</span>` : ''}
+                                </div>
+                            ` : ''}
+                            ${powerHeating !== null ? `
+                                <div class="stat-item stat-power">
+                                    <span class="stat-label">🔥 Heizen/Verdichter</span>
+                                    <span class="stat-value">${formatNum(powerHeating)} kWh</span>
+                                </div>
+                            ` : ''}
+                            ${totalPower > 0 ? `
+                                <div class="stat-item stat-total">
+                                    <span class="stat-label">⚡ Strom Gesamt</span>
+                                    <span class="stat-value">${formatNum(totalPower)} kWh</span>
+                                </div>
+                            ` : ''}
+                            ${heatDhw !== null ? `
+                                <div class="stat-item stat-heat">
+                                    <span class="stat-label">🌡️ Wärme Warmwasser</span>
+                                    <span class="stat-value">${formatNum(heatDhw)} kWh</span>
+                                </div>
+                            ` : ''}
+                            ${heatHeating !== null ? `
+                                <div class="stat-item stat-heat">
+                                    <span class="stat-label">🏠 Wärme Heizen</span>
+                                    <span class="stat-value">${formatNum(heatHeating)} kWh</span>
+                                </div>
+                            ` : ''}
+                            ${totalHeat > 0 && totalPower > 0 ? `
+                                <div class="stat-item stat-cop">
+                                    <span class="stat-label">📊 JAZ (${period.label})</span>
+                                    <span class="stat-value">${cop}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (!tabsHtml) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📈 Verbrauchsstatistik</h2>
+                    </div>
+                    <div class="stat-tabs">
+                        ${tabsHtml}
+                    </div>
+                    <div class="stat-content">
+                        ${contentHtml}
                     </div>
                 </div>
             `;
@@ -3716,6 +4151,68 @@
         window.changeHeatingCurve = changeHeatingCurve;
         window.changeSupplyTempMax = changeSupplyTempMax;
         window.changeRoomTemp = changeRoomTemp;
+
+        // Tab switching function for consumption statistics
+        function switchStatTab(event, tabId) {
+            // Find the parent card to scope operations to current card only
+            const card = event.currentTarget.closest('.card');
+
+            // Hide all tab contents within this card only
+            const contents = card.querySelectorAll('.stat-tab-content');
+            contents.forEach(content => content.style.display = 'none');
+
+            // Remove active class from all tabs in current period
+            const parentTabs = event.currentTarget.parentElement;
+            const tabs = parentTabs.querySelectorAll('.stat-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Show selected tab content
+            document.getElementById(tabId).style.display = 'block';
+
+            // Add active class to clicked tab
+            event.currentTarget.classList.add('active');
+        }
+        window.switchStatTab = switchStatTab;
+
+        function switchStatPeriod(event, periodId) {
+            // Find the parent card to scope operations to current card only
+            const card = event.currentTarget.closest('.card');
+
+            // Hide all period contents within this card only
+            const contents = card.querySelectorAll('.stat-period-content');
+            contents.forEach(content => content.style.display = 'none');
+
+            // Remove active class from period tabs
+            const parentTabs = event.currentTarget.parentElement;
+            const tabs = parentTabs.querySelectorAll('.stat-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Show selected period content
+            const periodElement = document.getElementById(periodId);
+            periodElement.style.display = 'block';
+
+            // Add active class to clicked period tab
+            event.currentTarget.classList.add('active');
+
+            // Show first tab content in the new period and activate first tab
+            const firstTabContent = periodElement.querySelector('.stat-tab-content');
+            const allTabContents = periodElement.querySelectorAll('.stat-tab-content');
+            const subTabs = periodElement.querySelectorAll('.stat-tabs-scrollable .stat-tab');
+
+            // Hide all tab contents in this period
+            allTabContents.forEach(content => content.style.display = 'none');
+            // Remove active from all sub-tabs
+            subTabs.forEach(tab => tab.classList.remove('active'));
+
+            // Show first tab content and mark first tab as active
+            if (firstTabContent) {
+                firstTabContent.style.display = 'block';
+            }
+            if (subTabs.length > 0) {
+                subTabs[0].classList.add('active');
+            }
+        }
+        window.switchStatPeriod = switchStatPeriod;
 
         // Heating Mode Change Function
         async function changeHeatingMode(circuitIdOrMode, modeValue = null) {
