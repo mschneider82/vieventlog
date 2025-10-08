@@ -247,14 +247,26 @@ func smartClimateDevicesHandler(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-				// Get device name from features
+				// Get device name from local settings first, then from features
 				deviceName := device.DeviceID
-				for _, f := range features.RawFeatures {
-					if f.Feature == "device.name" {
-						if name, ok := f.Properties["name"].(map[string]interface{}); ok {
-							if nameStr, ok := name["value"].(string); ok {
-								deviceName = nameStr
-								break
+				deviceKey := fmt.Sprintf("%s:%s:%s", installationID, gateway.Serial, device.DeviceID)
+
+				// Check for local name
+				if account.DeviceSettings != nil {
+					if settings, ok := account.DeviceSettings[deviceKey]; ok && settings.Name != "" {
+						deviceName = settings.Name
+					}
+				}
+
+				// Fallback to API name if no local name is set
+				if deviceName == device.DeviceID {
+					for _, f := range features.RawFeatures {
+						if f.Feature == "device.name" {
+							if name, ok := f.Properties["name"].(map[string]interface{}); ok {
+								if nameStr, ok := name["value"].(string); ok {
+									deviceName = nameStr
+									break
+								}
 							}
 						}
 					}
@@ -287,6 +299,22 @@ func smartClimateDevicesHandler(w http.ResponseWriter, r *http.Request) {
 
 				// Extract relevant features
 				extractedFeatures := extractSmartClimateFeatures(features.RawFeatures)
+
+				// Skip floor thermostats without any relevant features (zones)
+				if category == "floor_thermostats" {
+					hasRelevantFeature := false
+					relevantKeys := []string{"supply_temperature", "operating_mode", "damage_protection_threshold", "condensation_threshold"}
+					for _, key := range relevantKeys {
+						if _, ok := extractedFeatures[key]; ok {
+							hasRelevantFeature = true
+							break
+						}
+					}
+					if !hasRelevantFeature {
+						log.Printf("Skipping floor thermostat zone device %s (no relevant features)\n", device.DeviceID)
+						continue
+					}
+				}
 
 				// Create SmartClimateDevice
 				scDevice := SmartClimateDevice{
@@ -492,7 +520,7 @@ type DeviceSetNameRequest struct {
 	Name           string `json:"name"`
 }
 
-// deviceSetNameHandler sets the name for a device
+// deviceSetNameHandler sets the name for a device (stored locally)
 func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -509,7 +537,7 @@ func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate name (API constraints: 1-40 chars, alphanumeric + spaces)
+	// Validate name
 	if len(req.Name) < 1 || len(req.Name) > 40 {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -530,79 +558,29 @@ func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure authenticated
-	token, err := ensureAccountAuthenticated(account)
-	if err != nil {
+	// Initialize DeviceSettings map if needed
+	if account.DeviceSettings == nil {
+		account.DeviceSettings = make(map[string]*DeviceSettings)
+	}
+
+	// Set device name (key format: installationId:gatewaySerial:deviceId)
+	deviceKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
+	if account.DeviceSettings[deviceKey] == nil {
+		account.DeviceSettings[deviceKey] = &DeviceSettings{}
+	}
+	account.DeviceSettings[deviceKey].Name = req.Name
+
+	// Save account
+	if err := UpdateAccount(account); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"error":   "Authentication failed: " + err.Error(),
+			"error":   "Failed to save device name: " + err.Error(),
 		})
 		return
 	}
 
-	// Build API URL (ZigBee devices use v2 API)
-	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/device.name/commands/setName",
-		req.InstallationID, req.GatewaySerial, req.DeviceID)
-
-	// Prepare request body
-	commandBody := map[string]interface{}{
-		"name": req.Name,
-	}
-
-	bodyBytes, err := json.Marshal(commandBody)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Failed to marshal request: " + err.Error(),
-		})
-		return
-	}
-
-	// Create HTTP request
-	httpReq, err := http.NewRequest("POST", url, strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Failed to create request: " + err.Error(),
-		})
-		return
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "API request failed: " + err.Error(),
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("API returned status %d", resp.StatusCode),
-		})
-		return
-	}
-
-	// Invalidate features cache for this device
-	cacheKey := fmt.Sprintf("%s:%s:%s", req.InstallationID, req.GatewaySerial, req.DeviceID)
-	featuresCacheMutex.Lock()
-	delete(featuresCache, cacheKey)
-	featuresCacheMutex.Unlock()
-
-	log.Printf("Set device name for %s to: %s\n", req.DeviceID, req.Name)
+	log.Printf("Set local device name for %s to: %s\n", req.DeviceID, req.Name)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
