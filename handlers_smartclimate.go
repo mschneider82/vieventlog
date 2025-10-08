@@ -81,12 +81,12 @@ func categorizeDevice(deviceType, modelID string) string {
 // getCategoryDisplayName returns the German display name for a category
 func getCategoryDisplayName(category string) string {
 	names := map[string]string{
-		"climate_sensors":       "Klimasensoren",
-		"radiator_thermostats":  "Heizkörper-Thermostate",
-		"floor_thermostats":     "Fußboden-Thermostate",
-		"repeaters":             "Repeater",
-		"room_control":          "Raumsteuerung",
-		"other":                 "Sonstige Geräte",
+		"climate_sensors":      "Klimasensoren",
+		"radiator_thermostats": "Heizkörper-Thermostate",
+		"floor_thermostats":    "Fußboden-Thermostate",
+		"repeaters":            "Repeater",
+		"room_control":         "Raumsteuerung",
+		"other":                "Sonstige Geräte",
 	}
 	if name, ok := names[category]; ok {
 		return name
@@ -541,8 +541,8 @@ func deviceSetNameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build API URL (ZigBee devices use v1 API)
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/device.name/commands/setName",
+	// Build API URL (ZigBee devices use v2 API)
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/device.name/commands/setName",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
