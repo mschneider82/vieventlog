@@ -15,6 +15,7 @@ type Room struct {
 	RoomName          string                 `json:"roomName"` // User-defined name or default "Raum X"
 	InstallationID    string                 `json:"installationId"`
 	AccountID         string                 `json:"accountId"`
+	GatewaySerial     string                 `json:"gatewaySerial"` // Required for API calls
 	Temperature       *float64               `json:"temperature,omitempty"`
 	TemperatureStatus string                 `json:"temperatureStatus,omitempty"` // "connected" or "notConnected"
 	Humidity          *float64               `json:"humidity,omitempty"`
@@ -43,8 +44,17 @@ type SetRoomNameRequest struct {
 	Name           string `json:"name"`
 }
 
+// SetRoomTemperatureRequest represents the request to set a room temperature
+type SetRoomTemperatureRequest struct {
+	AccountID         string  `json:"accountId"`
+	InstallationID    string  `json:"installationId"`
+	GatewaySerial     string  `json:"gatewaySerial"`
+	RoomID            int     `json:"roomId"`
+	TargetTemperature float64 `json:"targetTemperature"`
+}
+
 // extractRoomData extracts room data from RoomControl features
-func extractRoomData(installationID, accountID string, features []Feature) []Room {
+func extractRoomData(installationID, accountID, gatewaySerial string, features []Feature) []Room {
 	roomsMap := make(map[int]*Room)
 
 	for _, f := range features {
@@ -71,6 +81,7 @@ func extractRoomData(installationID, accountID string, features []Feature) []Roo
 				RoomName:       fmt.Sprintf("Raum %d", roomID),
 				InstallationID: installationID,
 				AccountID:      accountID,
+				GatewaySerial:  gatewaySerial,
 				RawFeatures:    make(map[string]interface{}),
 			}
 		}
@@ -229,7 +240,7 @@ func roomsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// Extract room data
-				rooms := extractRoomData(installationID, account.ID, features.RawFeatures)
+				rooms := extractRoomData(installationID, account.ID, gateway.Serial, features.RawFeatures)
 
 				// Apply user-defined room names
 				for i := range rooms {
@@ -316,6 +327,115 @@ func setRoomNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Set room name for %s room %d to: %s\n", req.InstallationID, req.RoomID, req.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// setRoomTemperatureHandler sets the target temperature for a room
+func setRoomTemperatureHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SetRoomTemperatureRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate temperature range (typical range for room temperature)
+	if req.TargetTemperature < 10 || req.TargetTemperature > 30 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Temperature must be between 10°C and 30°C",
+		})
+		return
+	}
+
+	// Get account and ensure authenticated
+	account, err := GetAccount(req.AccountID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Account not found: " + err.Error(),
+		})
+		return
+	}
+
+	token, err := ensureAccountAuthenticated(account)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Authentication failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Build API URL
+	// Format: /installations/{id}/gateways/{gateway}/devices/RoomControl-1/features/rooms.{roomId}.temperature.levels.normal.perceived/commands/setTemperature
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/RoomControl-1/features/rooms.%d.temperature.levels.normal.perceived/commands/setTemperature",
+		req.InstallationID, req.GatewaySerial, req.RoomID)
+
+	// Create request body
+	body := map[string]interface{}{
+		"targetTemperature": req.TargetTemperature,
+	}
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Make API request
+	apiReq, err := http.NewRequest("POST", url, strings.NewReader(string(bodyJSON)))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	apiReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	apiReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(apiReq)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "API request failed: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("API returned status %d", resp.StatusCode),
+		})
+		return
+	}
+
+	log.Printf("Set room temperature for installation %s room %d to %.1f°C\n", req.InstallationID, req.RoomID, req.TargetTemperature)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
