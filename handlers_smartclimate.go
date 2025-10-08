@@ -116,18 +116,12 @@ func extractSmartClimateFeatures(rawFeatures []Feature) map[string]interface{} {
 
 	for _, f := range rawFeatures {
 		// Extract key features based on feature name
+		// NOTE: Specific cases must come before generic cases!
 		switch {
-		// Temperature sensors
-		case strings.Contains(f.Feature, "sensors.temperature"):
+		// Floor heating supply temperature (specific - must come before generic temperature)
+		case f.Feature == "fht.sensors.temperature.supply":
 			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
-				features["temperature"] = val["value"]
-				features["temperature_unit"] = val["unit"]
-			}
-
-		// Humidity sensors
-		case strings.Contains(f.Feature, "sensors.humidity"):
-			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
-				features["humidity"] = val["value"]
+				features["supply_temperature"] = val["value"]
 			}
 
 		// TRV temperature (setpoint)
@@ -148,10 +142,17 @@ func extractSmartClimateFeatures(rawFeatures []Feature) map[string]interface{} {
 				features["child_lock"] = val["value"]
 			}
 
-		// Floor heating supply temperature
-		case f.Feature == "fht.sensors.temperature.supply":
+		// Temperature sensors (generic - must come after specific temperature cases)
+		case strings.Contains(f.Feature, "sensors.temperature"):
 			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
-				features["supply_temperature"] = val["value"]
+				features["temperature"] = val["value"]
+				features["temperature_unit"] = val["unit"]
+			}
+
+		// Humidity sensors
+		case strings.Contains(f.Feature, "sensors.humidity"):
+			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
+				features["humidity"] = val["value"]
 			}
 
 		// Floor heating operating mode
