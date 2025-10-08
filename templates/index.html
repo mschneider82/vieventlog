@@ -1021,21 +1021,86 @@ ${formatEventBody(event.body)}
 
                     if (valvePositionMap[code]) {
                         if (event.active === true) {
-                            currentValvePosition = valvePositionMap[code];
-                        } else if (event.active === false) {
-                            // When valve position ends, terminate any active S.125-WARMWATER spans
-                            if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
+                            const newValvePosition = valvePositionMap[code];
+                            const eventTime = event.eventTimestamp || event.createdAt;
+
+                            // Migration: If S.125 is already running when valve switches to warmwater
+                            if (code === 'S.115' && activeStates['S.125']) {
+                                // End the normal S.125 span
+                                lane.spans.push({
+                                    code: 'S.125',
+                                    originalCode: 'S.125',
+                                    startTime: activeStates['S.125'].startTime,
+                                    endTime: eventTime,
+                                    startEvent: activeStates['S.125'].startEvent,
+                                    endEvent: event,
+                                    valvePosition: null
+                                });
+
+                                // Start new S.125-WARMWATER span
+                                activeStates['S.125-WARMWATER'] = {
+                                    startTime: eventTime,
+                                    startEvent: event,
+                                    originalCode: 'S.125',
+                                    valvePosition: 'warmwater'
+                                };
+
+                                delete activeStates['S.125'];
+                            }
+
+                            // Migration: If S.125 is already running when valve switches to heating circuit
+                            if ((code === 'S.116' || code === 'S.117') && activeStates['S.125-WARMWATER']) {
+                                // End the S.125-WARMWATER span
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
                                     startTime: activeStates['S.125-WARMWATER'].startTime,
-                                    endTime: event.eventTimestamp || event.createdAt,
+                                    endTime: eventTime,
                                     startEvent: activeStates['S.125-WARMWATER'].startEvent,
                                     endEvent: event,
                                     valvePosition: 'warmwater'
                                 });
+
+                                // Start new normal S.125 span
+                                activeStates['S.125'] = {
+                                    startTime: eventTime,
+                                    startEvent: event,
+                                    originalCode: 'S.125',
+                                    valvePosition: newValvePosition
+                                };
+
                                 delete activeStates['S.125-WARMWATER'];
                             }
+
+                            currentValvePosition = newValvePosition;
+                        } else if (event.active === false) {
+                            const eventTime = event.eventTimestamp || event.createdAt;
+
+                            // Inverse Migration: When warmwater valve ends, convert S.125-WARMWATER back to S.125
+                            if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
+                                // End the S.125-WARMWATER span
+                                lane.spans.push({
+                                    code: 'S.125-WARMWATER',
+                                    originalCode: 'S.125',
+                                    startTime: activeStates['S.125-WARMWATER'].startTime,
+                                    endTime: eventTime,
+                                    startEvent: activeStates['S.125-WARMWATER'].startEvent,
+                                    endEvent: event,
+                                    valvePosition: 'warmwater'
+                                });
+
+                                delete activeStates['S.125-WARMWATER'];
+
+                                // Note: We don't start a new S.125 here because typically S.125
+                                // ends at the same time or shortly after S.115 ends
+                            }
+
+                            // Inverse Migration: When heating circuit valve ends, convert S.125 back if needed
+                            if ((code === 'S.116' || code === 'S.117') && activeStates['S.125']) {
+                                // Just end the current S.125 - typically heating stops when valve switches
+                                // We don't create a span here, just let normal S.125 end handling take care of it
+                            }
+
                             currentValvePosition = null;
                         }
                     }
