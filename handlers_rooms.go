@@ -145,7 +145,7 @@ func extractRoomData(installationID, accountID, gatewaySerial string, features [
 
 		case "temperature.levels.normal.perceived":
 			// Normal heating setpoint (used by ViGuide)
-			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
+			if val, ok := f.Properties["temperature"].(map[string]interface{}); ok {
 				if heatVal, ok := val["value"].(float64); ok {
 					room.HeatingSetpoint = &heatVal
 				}
