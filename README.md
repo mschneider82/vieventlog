@@ -12,6 +12,13 @@ Mit der [Abschaltung von ViGuide](https://community.viessmann.de/t5/Konnektivita
 
 ![ViEventLog Screenshot](screenshot1.png)
 
+![ViEventLog Dashboard](screenshot_dashboard_top.png)
+
+![ViEventLog Heizkurve](screenshot_dashboard_heizkurve.png)
+
+![ViEventLog SmartClimate](screenshot_smartclimate.png)
+
+
 ## Lizenz
 
 Dieses Projekt ist unter der MIT-Lizenz lizenziert.
