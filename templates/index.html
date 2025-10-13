@@ -353,6 +353,230 @@
             padding: 60px;
             color: #a0a0b0;
         }
+
+        /* Mobile Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            header {
+                padding: 15px;
+                border-radius: 8px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            .header-top > div:last-child {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .status {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+                font-size: 13px;
+            }
+
+            .controls {
+                padding: 15px;
+                gap: 12px;
+                border-radius: 8px;
+            }
+
+            .control-group {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                gap: 5px;
+            }
+
+            select, input, .filter-input {
+                width: 100%;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            button {
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 15px;
+            }
+
+            .timeline-container {
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+            }
+
+            .timeline-container h2 {
+                font-size: 18px;
+            }
+
+            .timeline-container p {
+                font-size: 11px;
+            }
+
+            #timelineControls {
+                gap: 6px;
+            }
+
+            #timelineControls button {
+                padding: 6px 10px;
+                font-size: 11px;
+                width: auto;
+            }
+
+            #timeline {
+                height: 300px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Fix timeline SVG width for mobile */
+            #timeline svg {
+                max-width: none;
+                height: auto;
+            }
+
+            .events-container {
+                border-radius: 8px;
+            }
+
+            .events-header {
+                padding: 12px 15px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .events-header h2 {
+                font-size: 18px;
+            }
+
+            .event-count {
+                font-size: 13px;
+            }
+
+            .events-list {
+                max-height: 500px;
+            }
+
+            .event-item {
+                padding: 12px 15px;
+            }
+
+            .event-header {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .event-time {
+                font-size: 12px;
+            }
+
+            .event-type {
+                font-size: 13px;
+            }
+
+            .device-info {
+                display: block;
+                margin: 5px 0;
+            }
+
+            .event-badge {
+                font-size: 11px;
+                padding: 3px 10px;
+            }
+
+            .code-description {
+                font-size: 12px;
+                margin-top: 6px;
+            }
+
+            .event-details {
+                font-size: 12px;
+                max-height: 200px;
+                padding: 12px;
+            }
+
+            .loading {
+                padding: 30px;
+            }
+
+            .loading-spinner {
+                width: 30px;
+                height: 30px;
+            }
+
+            .no-events {
+                padding: 40px 20px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            h1 {
+                font-size: 18px;
+            }
+
+            .header-top > div:last-child {
+                font-size: 12px;
+            }
+
+            .header-link {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+
+            .controls {
+                padding: 12px;
+            }
+
+            button {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            #timelineControls button {
+                padding: 5px 8px;
+                font-size: 10px;
+            }
+
+            .timeline-container h2 {
+                font-size: 16px;
+            }
+
+            .event-item {
+                padding: 10px 12px;
+            }
+
+            .event-type {
+                font-size: 12px;
+            }
+
+            .event-time {
+                font-size: 11px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1166,11 +1390,14 @@ ${formatEventBody(event.body)}
 
             const laneArray = Object.values(lanes);
 
-            // Calculate timeline dimensions based on number of lanes
-            const width = Math.max(1400, sortedEvents.length * 6);
-            const minLaneHeight = 60; // Minimum height per lane for visibility
-            const height = Math.max(400, minLaneHeight * laneArray.length + 100); // Dynamic height based on lane count
-            const margin = { top: 30, right: 40, bottom: 70, left: 280 }; // Increased left margin for longer labels
+            // Calculate timeline dimensions based on number of lanes and screen size
+            const isMobile = window.innerWidth <= 768;
+            const containerWidth = container.offsetWidth || window.innerWidth;
+            const minWidth = isMobile ? containerWidth - 40 : 1400;
+            const width = Math.max(minWidth, sortedEvents.length * (isMobile ? 3 : 6));
+            const minLaneHeight = isMobile ? 50 : 60; // Minimum height per lane for visibility
+            const height = Math.max(isMobile ? 300 : 400, minLaneHeight * laneArray.length + 100); // Dynamic height based on lane count
+            const margin = { top: 30, right: isMobile ? 20 : 40, bottom: 70, left: isMobile ? 120 : 280 }; // Reduced left margin for mobile
             const laneHeight = (height - margin.top - margin.bottom) / Math.max(laneArray.length, 1);
 
             // Create scale
@@ -1255,7 +1482,7 @@ ${formatEventBody(event.body)}
                 label.setAttribute('x', x);
                 label.setAttribute('y', height - margin.bottom + 22);
                 label.setAttribute('text-anchor', 'middle');
-                label.setAttribute('font-size', '11');
+                label.setAttribute('font-size', isMobile ? '9' : '11');
                 label.setAttribute('font-weight', '500');
                 label.setAttribute('fill', '#a0a0b0');
 
@@ -1335,7 +1562,7 @@ ${formatEventBody(event.body)}
                 laneLabel.setAttribute('x', margin.left - 15);
                 laneLabel.setAttribute('y', y + laneHeight / 2);
                 laneLabel.setAttribute('text-anchor', 'end');
-                laneLabel.setAttribute('font-size', '11');
+                laneLabel.setAttribute('font-size', isMobile ? '9' : '11');
                 laneLabel.setAttribute('fill', '#e0e0e0');
                 laneLabel.setAttribute('font-weight', '600');
 
@@ -1346,9 +1573,9 @@ ${formatEventBody(event.body)}
                 line1.textContent = lane.name;
                 laneLabel.appendChild(line1);
 
-                // Line 2: Installation location
+                // Line 2: Installation location (skip on mobile to save space)
                 const installation = installations[lane.installationId];
-                if (installation && installation.location) {
+                if (!isMobile && installation && installation.location) {
                     const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
                     line2.setAttribute('x', margin.left - 15);
                     line2.setAttribute('dy', '1.2em');
@@ -1478,11 +1705,14 @@ ${formatEventBody(event.body)}
 
                     // Add icon and duration label if span is wide enough
                     const labelY = barY + barHeight / 2;
-                    if (spanWidth > 60) {
+                    const minWidthForLabel = isMobile ? 40 : 60;
+                    const minWidthForMini = isMobile ? 20 : 30;
+
+                    if (spanWidth > minWidthForLabel) {
                         const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                        iconLabel.setAttribute('x', x1 + 8);
-                        iconLabel.setAttribute('y', labelY - 6);
-                        iconLabel.setAttribute('font-size', '14');
+                        iconLabel.setAttribute('x', x1 + (isMobile ? 4 : 8));
+                        iconLabel.setAttribute('y', labelY - (isMobile ? 4 : 6));
+                        iconLabel.setAttribute('font-size', isMobile ? '10' : '14');
                         iconLabel.textContent = eventInfo?.icon || '';
                         svg.appendChild(iconLabel);
 
@@ -1491,19 +1721,19 @@ ${formatEventBody(event.body)}
                         durationLabel.setAttribute('y', labelY);
                         durationLabel.setAttribute('text-anchor', 'middle');
                         durationLabel.setAttribute('dominant-baseline', 'middle');
-                        durationLabel.setAttribute('font-size', '11');
+                        durationLabel.setAttribute('font-size', isMobile ? '9' : '11');
                         durationLabel.setAttribute('fill', 'white');
                         durationLabel.setAttribute('font-weight', '700');
                         durationLabel.setAttribute('style', 'text-shadow: 0 1px 3px rgba(0,0,0,0.5);');
                         durationLabel.textContent = durationText;
                         svg.appendChild(durationLabel);
-                    } else if (spanWidth > 30) {
+                    } else if (spanWidth > minWidthForMini) {
                         const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                         miniLabel.setAttribute('x', x1 + spanWidth / 2);
                         miniLabel.setAttribute('y', labelY);
                         miniLabel.setAttribute('text-anchor', 'middle');
                         miniLabel.setAttribute('dominant-baseline', 'middle');
-                        miniLabel.setAttribute('font-size', '9');
+                        miniLabel.setAttribute('font-size', isMobile ? '7' : '9');
                         miniLabel.setAttribute('fill', 'white');
                         miniLabel.setAttribute('font-weight', '700');
                         miniLabel.textContent = durationText;

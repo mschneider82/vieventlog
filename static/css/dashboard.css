@@ -10,11 +10,15 @@
             min-height: 100vh;
             padding: 20px;
             color: #e0e0e0;
+            overflow-x: hidden;
+            width: 100%;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            width: 100%;
+            overflow-x: hidden;
         }
 
         /* Header */
@@ -57,6 +61,28 @@
             text-decoration: underline;
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .smartclimate-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 8px 16px;
+            border: 1px solid #667eea;
+            border-radius: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .smartclimate-link:hover {
+            background: #667eea;
+            color: white;
+        }
+
         /* Controls */
         .controls {
             background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
@@ -97,6 +123,38 @@
             padding: 8px;
         }
 
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-smartclimate {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-smartclimate:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            transform: translateY(-1px);
+        }
+
+        .btn-debug {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .btn-debug:hover {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        }
+
         button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -119,6 +177,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 20px;
+            width: 100%;
         }
 
         .card {
@@ -127,6 +186,9 @@
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         .card.wide {
@@ -169,6 +231,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
+            width: 100%;
         }
 
         .temp-item {
@@ -177,6 +240,8 @@
             border-radius: 8px;
             border: 1px solid rgba(255,255,255,0.05);
             text-align: center;
+            min-width: 0;
+            width: 100%;
         }
 
         .temp-label {
@@ -223,6 +288,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            width: 100%;
         }
 
         .status-item {
@@ -232,17 +298,26 @@
             padding: 10px 15px;
             background: rgba(0,0,0,0.2);
             border-radius: 6px;
+            width: 100%;
+            min-width: 0;
         }
 
         .status-label {
             color: #a0a0b0;
             font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .status-value {
             color: #fff;
             font-weight: 500;
             font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         /* Mode Selector */
@@ -656,4 +731,394 @@
             font-size: 12px;
             color: #667eea;
             margin-top: 4px;
+        }
+
+        /* Mobile Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                width: 100vw;
+                overflow-x: hidden;
+            }
+
+            .container {
+                max-width: 100%;
+                width: 100%;
+                overflow-x: hidden;
+            }
+
+            * {
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+
+            header {
+                padding: 15px;
+                border-radius: 8px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .header-top > div {
+                width: 100%;
+            }
+
+            .header-top > div:last-child {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .header-right {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+                width: 100%;
+            }
+
+            .smartclimate-link {
+                font-size: 13px;
+                padding: 6px 12px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .breadcrumb {
+                font-size: 13px;
+                flex-wrap: wrap;
+            }
+
+            .last-update {
+                font-size: 12px;
+                text-align: left;
+            }
+
+            .controls {
+                padding: 15px;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .install-select {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                width: 100%;
+            }
+
+            .install-select label {
+                font-size: 14px;
+            }
+
+            select {
+                width: 100%;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+            }
+
+            .btn-smartclimate, .btn-debug {
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 15px;
+                text-align: center;
+            }
+
+            button {
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 15px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .card {
+                padding: 15px;
+                border-radius: 8px;
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                overflow-x: hidden;
+            }
+
+            .card.wide {
+                grid-column: span 1;
+            }
+
+            .card-header {
+                margin-bottom: 15px;
+                padding-bottom: 8px;
+            }
+
+            .card-header h2 {
+                font-size: 16px;
+            }
+
+            .badge {
+                font-size: 11px;
+                padding: 3px 10px;
+            }
+
+            .temp-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                width: 100%;
+            }
+
+            .temp-item {
+                padding: 15px;
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            .temp-label {
+                font-size: 10px;
+            }
+
+            .temp-value {
+                font-size: 28px;
+            }
+
+            .temp-unit {
+                font-size: 16px;
+            }
+
+            .temp-display-large {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .temp-display-large .temp-item {
+                padding: 20px 15px;
+            }
+
+            .temp-display-large .temp-value {
+                font-size: 36px;
+            }
+
+            .status-list {
+                gap: 10px;
+            }
+
+            .status-item {
+                padding: 8px 12px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .status-label {
+                font-size: 13px;
+            }
+
+            .status-value {
+                font-size: 13px;
+            }
+
+            .mode-display {
+                padding: 12px;
+            }
+
+            .mode-display .mode-label {
+                font-size: 11px;
+            }
+
+            .mode-display .mode-value {
+                font-size: 16px;
+            }
+
+            .feature-list {
+                max-height: 300px;
+            }
+
+            .feature-item {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .debug-modal {
+                padding: 15px;
+            }
+
+            .debug-content {
+                padding: 20px;
+                max-width: 100%;
+                max-height: 90vh;
+            }
+
+            .debug-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .debug-header h2 {
+                font-size: 18px;
+            }
+
+            .debug-summary {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .debug-stat-value {
+                font-size: 20px;
+            }
+
+            .debug-device {
+                padding: 12px;
+                font-size: 12px;
+            }
+
+            .debug-device-details {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+
+            .debug-device-detail-label {
+                min-width: 100px;
+            }
+
+            .json-view {
+                padding: 12px;
+                font-size: 11px;
+                max-height: 300px;
+            }
+
+            .stat-tabs {
+                padding: 10px 15px 0 15px;
+                gap: 8px;
+            }
+
+            .stat-tab {
+                padding: 8px 15px;
+                font-size: 13px;
+            }
+
+            .stat-content {
+                padding: 15px;
+            }
+
+            .stat-dual-section {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .stat-section {
+                padding: 15px;
+            }
+
+            .stat-section-title {
+                font-size: 15px;
+                margin-bottom: 12px;
+            }
+
+            .stat-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                width: 100%;
+            }
+
+            .stat-item {
+                padding: 12px;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .stat-label {
+                font-size: 12px;
+            }
+
+            .stat-value {
+                font-size: 20px;
+            }
+
+            .stat-avg {
+                font-size: 11px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            header {
+                padding: 12px;
+            }
+
+            h1 {
+                font-size: 18px;
+            }
+
+            .breadcrumb {
+                font-size: 12px;
+            }
+
+            .controls {
+                padding: 12px;
+            }
+
+            .smartclimate-link {
+                font-size: 12px;
+                padding: 5px 10px;
+            }
+
+            .btn-smartclimate, .btn-debug {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            button {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .card {
+                padding: 12px;
+            }
+
+            .card-header h2 {
+                font-size: 15px;
+            }
+
+            .temp-value {
+                font-size: 24px;
+            }
+
+            .temp-display-large .temp-value {
+                font-size: 32px;
+            }
+
+            .stat-tab {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .stat-value {
+                font-size: 18px;
+            }
+
+            .debug-content {
+                padding: 15px;
+            }
+
+            .debug-header h2 {
+                font-size: 16px;
+            }
         }
