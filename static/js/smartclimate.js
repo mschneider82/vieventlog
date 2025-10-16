@@ -397,6 +397,10 @@ function renderRoomCard(room) {
     const coolingSetpoint = room.coolingSetpoint !== null && room.coolingSetpoint !== undefined ? room.coolingSetpoint.toFixed(1) : '-';
     const operatingState = room.operatingState || '';
 
+    // Use systemName if available, otherwise fall back to roomName
+    const displayName = room.systemName || room.roomName;
+    const roomTypeLabel = room.roomTypeDE || '';
+
     const hasTemp = temp !== '-' && tempStatus === 'connected';
     const hasHumidity = humidity !== '-' && humidityStatus === 'connected';
     const hasCO2 = co2 !== '-';
@@ -406,11 +410,11 @@ function renderRoomCard(room) {
         <div class="device-card room-card" data-room-id="${room.roomId}">
             <div class="device-header">
                 <div class="device-name-container">
-                    <h3 class="device-name-display room-name-display" id="room-name-display-${room.roomId}">${room.roomName}</h3>
+                    <h3 class="device-name-display room-name-display" id="room-name-display-${room.roomId}">${displayName}</h3>
                     <input type="text" class="device-name-edit room-name-edit" id="room-name-edit-${room.roomId}" value="${room.roomName}" style="display: none;" maxlength="40">
                 </div>
                 <div class="device-header-actions">
-                    <span class="device-id">Raum ${room.roomId}</span>
+                    <span class="device-id">${roomTypeLabel ? roomTypeLabel + ' · ' : ''}Raum ${room.roomId}</span>
                     <button class="edit-room-name-btn"
                             data-room-id="${room.roomId}"
                             data-installation="${room.installationId}"

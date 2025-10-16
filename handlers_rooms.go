@@ -12,7 +12,10 @@ import (
 // Room represents aggregated data for a room from RoomControl
 type Room struct {
 	RoomID            int                    `json:"roomId"`
-	RoomName          string                 `json:"roomName"` // User-defined name or default "Raum X"
+	RoomName          string                 `json:"roomName"`          // User-defined name or default "Raum X"
+	SystemName        string                 `json:"systemName"`        // Name from rooms.N.properties.name.value
+	RoomType          string                 `json:"roomType"`          // Type from rooms.N.properties.type.value (hallway, livingroom, etc.)
+	RoomTypeDE        string                 `json:"roomTypeDE"`        // German translation of room type
 	InstallationID    string                 `json:"installationId"`
 	AccountID         string                 `json:"accountId"`
 	GatewaySerial     string                 `json:"gatewaySerial"` // Required for API calls
@@ -54,6 +57,25 @@ type SetRoomTemperatureRequest struct {
 	TargetTemperature float64 `json:"targetTemperature"`
 }
 
+// translateRoomType translates English room types to German
+func translateRoomType(roomType string) string {
+	translations := map[string]string{
+		"hallway":    "Flur",
+		"livingroom": "Wohnzimmer",
+		"bathroom":   "Badezimmer",
+		"toilet":     "WC",
+		"kitchen":    "Küche",
+		"office":     "Büro",
+		"nursery":    "Kinderzimmer",
+		"bedroom":    "Schlafzimmer",
+		"other":      "Sonstiges",
+	}
+	if translated, ok := translations[roomType]; ok {
+		return translated
+	}
+	return roomType
+}
+
 // extractRoomData extracts room data from RoomControl features
 func extractRoomData(installationID, accountID, gatewaySerial string, features []Feature) []Room {
 	roomsMap := make(map[int]*Room)
@@ -65,7 +87,7 @@ func extractRoomData(installationID, accountID, gatewaySerial string, features [
 		}
 
 		parts := strings.Split(f.Feature, ".")
-		if len(parts) < 3 {
+		if len(parts) < 2 {
 			continue
 		}
 
@@ -88,6 +110,25 @@ func extractRoomData(installationID, accountID, gatewaySerial string, features [
 		}
 
 		room := roomsMap[roomID]
+
+		// Handle "rooms.N" (base properties like name and type)
+		if len(parts) == 2 {
+			// This is rooms.N with properties like name and type
+			if name, ok := f.Properties["name"].(map[string]interface{}); ok {
+				if nameVal, ok := name["value"].(string); ok {
+					room.SystemName = nameVal
+				}
+			}
+			if roomType, ok := f.Properties["type"].(map[string]interface{}); ok {
+				if typeVal, ok := roomType["value"].(string); ok {
+					room.RoomType = typeVal
+					room.RoomTypeDE = translateRoomType(typeVal)
+				}
+			}
+			room.RawFeatures["base"] = f.Properties
+			continue
+		}
+
 		featureType := strings.Join(parts[2:], ".")
 
 		// Extract relevant values
