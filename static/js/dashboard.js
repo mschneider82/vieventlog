@@ -2369,19 +2369,19 @@
                 `;
             }
 
-            // Noise Reduction (heat pump)
+            // Noise Reduction (heat pump) - Read-only display
             if (kf.noiseReductionExists) {
                 const currentApiMode = kf.noiseReductionMode ? kf.noiseReductionMode.value : 'notReduced';
+                const modeLabels = {
+                    'notReduced': 'Aus',
+                    'slightlyReduced': 'Leicht reduziert',
+                    'maxReduced': 'Maximal reduziert'
+                };
+                const modeLabel = modeLabels[currentApiMode] || currentApiMode;
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Geräuschreduzierung</span>
-                        <span class="status-value">
-                            <select id="noiseReductionModeSelect" onchange="changeNoiseReductionMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
-                                <option value="notReduced" ${currentApiMode === 'notReduced' ? 'selected' : ''}>Aus</option>
-                                <option value="slightlyReduced" ${currentApiMode === 'slightlyReduced' ? 'selected' : ''}>Leicht reduziert</option>
-                                <option value="maxReduced" ${currentApiMode === 'maxReduced' ? 'selected' : ''}>Maximal reduziert</option>
-                            </select>
-                        </span>
+                        <span class="status-value">${modeLabel}</span>
                     </div>
                 `;
             }
@@ -3701,66 +3701,6 @@
 
         // Make changeDhwMode available globally
         window.changeDhwMode = changeDhwMode;
-
-        // Noise Reduction Mode Change Function
-        async function changeNoiseReductionMode(newMode) {
-            const select = document.getElementById('noiseReductionModeSelect');
-            const originalValue = select.value;
-
-            try {
-                // Get current device info
-                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
-                if (!currentInstall || !currentInstall.devices) {
-                    throw new Error('Installation nicht gefunden');
-                }
-
-                const currentDevice = currentInstall.devices.find(d =>
-                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
-                );
-
-                if (!currentDevice) {
-                    throw new Error('Gerät nicht gefunden');
-                }
-
-                // Disable select while changing
-                select.disabled = true;
-
-                const response = await fetch('/api/noise-reduction/mode/set', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        accountId: currentDevice.accountId,
-                        installationId: currentInstallationId,
-                        gatewaySerial: currentGatewaySerial,
-                        deviceId: currentDeviceId,
-                        mode: newMode
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    console.log('Noise reduction mode changed to:', newMode);
-                    // Wait a bit then reload to show new status
-                    setTimeout(() => {
-                        loadDashboard(true); // Force refresh
-                    }, 2000);
-                } else {
-                    alert('Fehler beim Ändern der Geräuschreduzierung: ' + data.error);
-                    select.value = originalValue;
-                    select.disabled = false;
-                }
-            } catch (error) {
-                alert('Fehler beim Ändern der Geräuschreduzierung: ' + error.message);
-                select.value = originalValue;
-                select.disabled = false;
-            }
-        }
-
-        // Make changeNoiseReductionMode available globally
-        window.changeNoiseReductionMode = changeNoiseReductionMode;
 
         // DHW Temperature Change Function
         async function changeDhwTemperature(newTemp) {
