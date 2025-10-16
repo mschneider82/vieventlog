@@ -25,7 +25,8 @@ type Room struct {
 	WindowOpen        bool                   `json:"windowOpen"`
 	HeatingSetpoint   *float64               `json:"heatingSetpoint,omitempty"`
 	CoolingSetpoint   *float64               `json:"coolingSetpoint,omitempty"`
-	ChildLock         string                 `json:"childLock,omitempty"` // "active" or "inactive"
+	ChildLock         string                 `json:"childLock,omitempty"`     // "active" or "inactive"
+	OperatingState    string                 `json:"operatingState,omitempty"` // "energySaving" or "heating"
 	RawFeatures       map[string]interface{} `json:"rawFeatures,omitempty"`
 }
 
@@ -162,6 +163,13 @@ func extractRoomData(installationID, accountID, gatewaySerial string, features [
 			if val, ok := f.Properties["status"].(map[string]interface{}); ok {
 				if lockVal, ok := val["value"].(string); ok {
 					room.ChildLock = lockVal
+				}
+			}
+
+		case "operating.state":
+			if val, ok := f.Properties["demand"].(map[string]interface{}); ok {
+				if demandVal, ok := val["value"].(string); ok {
+					room.OperatingState = demandVal
 				}
 			}
 		}

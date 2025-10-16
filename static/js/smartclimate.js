@@ -395,10 +395,12 @@ function renderRoomCard(room) {
     const co2 = room.co2 !== null && room.co2 !== undefined ? Math.round(room.co2) : '-';
     const heatingSetpoint = room.heatingSetpoint !== null && room.heatingSetpoint !== undefined ? room.heatingSetpoint.toFixed(1) : '-';
     const coolingSetpoint = room.coolingSetpoint !== null && room.coolingSetpoint !== undefined ? room.coolingSetpoint.toFixed(1) : '-';
+    const operatingState = room.operatingState || '';
 
     const hasTemp = temp !== '-' && tempStatus === 'connected';
     const hasHumidity = humidity !== '-' && humidityStatus === 'connected';
     const hasCO2 = co2 !== '-';
+    const isHeating = operatingState === 'heating';
 
     return `
         <div class="device-card room-card" data-room-id="${room.roomId}">
@@ -468,6 +470,9 @@ function renderRoomCard(room) {
                 ` : ''}
             </div>
             <div class="device-footer">
+                ${isHeating ? '<span class="status-badge heating">🔥 Heizt</span>' :
+                  operatingState === 'energySaving' ? '<span class="status-badge energy-saving">💤 Energiesparen</span>' :
+                  operatingState === 'cooling' ? '<span class="status-badge cooling">❄️ Kühlt</span>' : ''}
                 ${room.windowOpen ? '<span class="status-badge warning">🪟 Fenster offen</span>' : ''}
                 ${room.condensationRisk ? '<span class="status-badge alert">💧 Kondensationsgefahr</span>' : ''}
                 ${room.childLock === 'active' ? '<span class="status-badge">🔒 Kindersicherung</span>' : ''}
