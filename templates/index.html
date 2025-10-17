@@ -561,6 +561,11 @@
                 font-size: 10px;
             }
 
+            #saveFiltersBtn, #resetFiltersBtn {
+                padding: 5px 8px !important;
+                font-size: 10px !important;
+            }
+
             .timeline-container h2 {
                 font-size: 16px;
             }
@@ -663,6 +668,24 @@
                     <p style="margin: 5px 0 0 14px; font-size: 12px; color: #a0a0b0;">Visualisierung der Betriebszustände</p>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <button id="saveFiltersBtn" onclick="saveTimelineFilters()"
+                            style="padding: 7px 13px; border: 1px solid rgba(255,255,255,0.3);
+                                   background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+                                   color: white; border-radius: 6px; cursor: pointer; font-size: 12px;
+                                   font-weight: 500; transition: all 0.2s; display: inline-flex;
+                                   align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);"
+                            title="Aktuelle Timeline-Filter-Auswahl im Browser speichern">
+                        💾 Auswahl speichern
+                    </button>
+                    <button id="resetFiltersBtn" onclick="resetTimelineFilters()"
+                            style="padding: 7px 13px; border: 1px solid rgba(255,255,255,0.2);
+                                   background: rgba(255,255,255,0.05);
+                                   color: #a0a0b0; border-radius: 6px; cursor: pointer; font-size: 12px;
+                                   font-weight: 500; transition: all 0.2s; display: inline-flex;
+                                   align-items: center; gap: 6px;"
+                            title="Timeline-Filter auf Standardwerte zurücksetzen">
+                        🔄 Reset
+                    </button>
                     <div id="timelineControls" style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <!-- Filter buttons will be added here -->
                     </div>
@@ -1790,8 +1813,65 @@ ${formatEventBody(event.body)}
         }
 
         // ========================================
-        // TIMELINE CONTROLS
+        // TIMELINE CONTROLS & PERSISTENCE
         // ========================================
+
+        /**
+         * Save timeline filter settings to localStorage
+         */
+        function saveTimelineFilters() {
+            try {
+                localStorage.setItem('vicare_timeline_filters', JSON.stringify(globalFilters.timelineTypes));
+                // Show success feedback
+                const btn = document.getElementById('saveFiltersBtn');
+                if (btn) {
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Gespeichert!';
+                    btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error('Failed to save timeline filters:', e);
+                alert('Fehler beim Speichern der Filter-Einstellungen');
+            }
+        }
+
+        /**
+         * Load timeline filter settings from localStorage
+         */
+        function loadTimelineFilters() {
+            try {
+                const saved = localStorage.getItem('vicare_timeline_filters');
+                if (saved) {
+                    const savedFilters = JSON.parse(saved);
+                    // Merge saved filters with defaults (in case new filters were added)
+                    globalFilters.timelineTypes = { ...globalFilters.timelineTypes, ...savedFilters };
+                    console.log('Loaded timeline filters from localStorage');
+                }
+            } catch (e) {
+                console.error('Failed to load timeline filters:', e);
+            }
+        }
+
+        /**
+         * Reset timeline filters to defaults
+         */
+        function resetTimelineFilters() {
+            if (confirm('Möchtest du alle Timeline-Filter auf die Standardwerte zurücksetzen?')) {
+                // Reset to all true
+                Object.keys(globalFilters.timelineTypes).forEach(key => {
+                    globalFilters.timelineTypes[key] = true;
+                });
+                // Clear from localStorage
+                localStorage.removeItem('vicare_timeline_filters');
+                // Re-render timeline
+                const filteredEvents = applyFilters(allEvents);
+                renderTimeline(filteredEvents);
+            }
+        }
 
         /**
          * Toggle timeline event type filter
@@ -1923,6 +2003,8 @@ ${formatEventBody(event.body)}
 
         // Initial load
         window.onload = async () => {
+            // Load saved timeline filters from localStorage BEFORE initializing UI
+            loadTimelineFilters();
             initializeUI();
             await loadStatus();
             await loadEvents();

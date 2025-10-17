@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - ViEventLog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .breadcrumb {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .breadcrumb a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        select, input, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .method-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .method-btn {
+            padding: 10px 20px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .method-btn:hover {
+            border-color: #667eea;
+        }
+
+        .method-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .method-btn.get { border-color: #10b981; color: #10b981; }
+        .method-btn.get.active { background: #10b981; border-color: #10b981; color: white; }
+        .method-btn.post { border-color: #3b82f6; color: #3b82f6; }
+        .method-btn.post.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .method-btn.put { border-color: #f59e0b; color: #f59e0b; }
+        .method-btn.put.active { background: #f59e0b; border-color: #f59e0b; color: white; }
+        .method-btn.delete { border-color: #ef4444; color: #ef4444; }
+        .method-btn.delete.active { background: #ef4444; border-color: #ef4444; color: white; }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .response-header h3 {
+            color: #374151;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-badge.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .response-body {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        pre {
+            margin: 0;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-indicator {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .quick-urls {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .quick-urls h4 {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 10px;
+        }
+
+        .quick-url {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-url:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>API Test Tool</h1>
+            <div class="breadcrumb">
+                <a href="/">← Events</a>
+                <span> / </span>
+                <span>API Test</span>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="errorContainer"></div>
+
+            <div class="form-group">
+                <label>Account auswählen:</label>
+                <select id="accountSelect">
+                    <option value="">Lade Accounts...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>HTTP Methode:</label>
+                <div class="method-selector">
+                    <button class="method-btn get active" data-method="GET">GET</button>
+                    <button class="method-btn post" data-method="POST">POST</button>
+                    <button class="method-btn put" data-method="PUT">PUT</button>
+                    <button class="method-btn delete" data-method="DELETE">DELETE</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>API URL:</label>
+                <input type="text" id="apiUrl" placeholder="https://api.viessmann-climatesolutions.com/iot/v1/...">
+                <div class="quick-urls">
+                    <h4>Schnellauswahl:</h4>
+                    <span class="quick-url" data-url="https://api.viessmann-climatesolutions.com/iot/v1/analytics-api/dataLake/hems/v0/timeseries">HEMS Timeseries</span>
+                    <span class="quick-url" data-url="https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations">Installations</span>
+                    <span class="quick-url" data-url="https://api.viessmann-climatesolutions.com/iot/v1/features/installations">Features</span>
+                </div>
+            </div>
+
+            <div class="form-group" id="requestBodyGroup" style="display: none;">
+                <label>Request Body (JSON):</label>
+                <textarea id="requestBody" placeholder='{"gateway_id":"...","device_id":"0",...}'></textarea>
+            </div>
+
+            <button class="submit-btn" id="submitBtn">🚀 Request senden</button>
+
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="spinner"></div>
+                <span>Sende Request...</span>
+            </div>
+
+            <div class="response-container" id="responseContainer">
+                <div class="response-header">
+                    <h3>Antwort</h3>
+                    <span class="status-badge" id="statusBadge"></span>
+                </div>
+                <div class="response-body">
+                    <pre id="responseBody"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedMethod = 'GET';
+        let accounts = [];
+
+        // Load accounts on page load
+        async function loadAccounts() {
+            try {
+                const response = await fetch('/api/accounts');
+                const data = await response.json();
+                accounts = data.accounts || [];
+
+                const select = document.getElementById('accountSelect');
+                select.innerHTML = '';
+
+                if (accounts.length === 0) {
+                    select.innerHTML = '<option value="">Keine Accounts verfügbar</option>';
+                } else {
+                    accounts.forEach(account => {
+                        const option = document.createElement('option');
+                        option.value = account.id;
+                        option.textContent = account.name || account.id;
+                        if (account.active) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading accounts:', error);
+                showError('Fehler beim Laden der Accounts: ' + error.message);
+            }
+        }
+
+        // Method selector
+        document.querySelectorAll('.method-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedMethod = btn.dataset.method;
+
+                // Show/hide request body based on method
+                const bodyGroup = document.getElementById('requestBodyGroup');
+                if (selectedMethod === 'POST' || selectedMethod === 'PUT') {
+                    bodyGroup.style.display = 'block';
+                } else {
+                    bodyGroup.style.display = 'none';
+                }
+            });
+        });
+
+        // Quick URL selection
+        document.querySelectorAll('.quick-url').forEach(span => {
+            span.addEventListener('click', () => {
+                document.getElementById('apiUrl').value = span.dataset.url;
+            });
+        });
+
+        // Submit request
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const accountId = document.getElementById('accountSelect').value;
+            const url = document.getElementById('apiUrl').value.trim();
+            const requestBody = document.getElementById('requestBody').value.trim();
+
+            // Clear previous error
+            document.getElementById('errorContainer').innerHTML = '';
+
+            // Validation
+            if (!accountId) {
+                showError('Bitte wähle einen Account aus.');
+                return;
+            }
+            if (!url) {
+                showError('Bitte gib eine URL ein.');
+                return;
+            }
+
+            // Validate JSON if method requires body
+            let parsedBody = null;
+            if ((selectedMethod === 'POST' || selectedMethod === 'PUT') && requestBody) {
+                try {
+                    parsedBody = JSON.parse(requestBody);
+                } catch (error) {
+                    showError('Ungültiges JSON im Request Body: ' + error.message);
+                    return;
+                }
+            }
+
+            // Show loading
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('loadingIndicator').style.display = 'flex';
+            document.getElementById('responseContainer').style.display = 'none';
+
+            try {
+                const response = await fetch('/api/test-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        account_id: accountId,
+                        method: selectedMethod,
+                        url: url,
+                        body: parsedBody
+                    })
+                });
+
+                const data = await response.json();
+
+                // Hide loading
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+
+                if (data.success) {
+                    showResponse(data.status_code, data.response);
+                } else {
+                    showError('Fehler: ' + (data.error || 'Unbekannter Fehler'));
+                }
+            } catch (error) {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+                showError('Request fehlgeschlagen: ' + error.message);
+            }
+        });
+
+        function showResponse(statusCode, responseBody) {
+            const container = document.getElementById('responseContainer');
+            const badge = document.getElementById('statusBadge');
+            const body = document.getElementById('responseBody');
+
+            // Set status badge
+            badge.textContent = 'Status: ' + statusCode;
+            if (statusCode >= 200 && statusCode < 300) {
+                badge.className = 'status-badge success';
+            } else {
+                badge.className = 'status-badge error';
+            }
+
+            // Format and display response
+            try {
+                let formatted;
+                if (typeof responseBody === 'string') {
+                    try {
+                        formatted = JSON.stringify(JSON.parse(responseBody), null, 2);
+                    } catch {
+                        formatted = responseBody;
+                    }
+                } else {
+                    formatted = JSON.stringify(responseBody, null, 2);
+                }
+                body.textContent = formatted;
+            } catch (error) {
+                body.textContent = String(responseBody);
+            }
+
+            container.style.display = 'block';
+        }
+
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // Initialize
+        loadAccounts();
+    </script>
+</body>
+</html>
