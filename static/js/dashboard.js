@@ -270,19 +270,11 @@
             } else {
                 // Standard heating device (Vitocal/Vitodens)
 
-                // Device info header (if available)
-                if (features.deviceInfo) {
-                    html += renderDeviceHeader(features.deviceInfo, keyFeatures);
-                }
-
-                // Main temperature displays (outside, supply)
-                html += renderMainTemperatures(keyFeatures);
-
                 // Detect heating circuits first
                 const circuits = detectHeatingCircuits(features);
                 console.log('Rendering circuits:', circuits);
 
-                // Store heating curve data per circuit for later use
+                // Store heating curve data per circuit for later use (BEFORE rendering header)
                 if (!window.heatingCurveData) {
                     window.heatingCurveData = {};
                 }
@@ -332,6 +324,14 @@
                 window.heatingCurveData.maxSupply = window.heatingCurveData[0].maxSupply;
                 window.heatingCurveData.minSupply = window.heatingCurveData[0].minSupply;
                 window.heatingCurveData.roomTempSetpoint = window.heatingCurveData[0].roomTempSetpoint;
+
+                // Device info header (if available) - NOW with heatingCurveData available
+                if (features.deviceInfo) {
+                    html += renderDeviceHeader(features.deviceInfo, keyFeatures);
+                }
+
+                // Main temperature displays (outside, supply)
+                html += renderMainTemperatures(keyFeatures);
 
                 // Store data for each circuit
                 for (const circuitId of circuits) {
@@ -797,6 +797,40 @@
                         <div>
                             <span class="temp-value">${value}</span>
                             <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Calculate and show heating curve target temperature
+            if (kf.outsideTemp && kf.heatingCurveSlope && kf.heatingCurveShift) {
+                const outsideTemp = kf.outsideTemp.value;
+                const slope = kf.heatingCurveSlope.value;
+                const shift = kf.heatingCurveShift.value;
+
+                // Get room setpoint temperature (default: 20°C)
+                let roomSetpoint = 20;
+                if (window.heatingCurveData && window.heatingCurveData.roomTempSetpoint) {
+                    roomSetpoint = window.heatingCurveData.roomTempSetpoint;
+                }
+
+                // Calculate target supply temperature using official Viessmann formula:
+                // VT = RTSoll + Niveau - Neigung * DAR * (1.4347 + 0.021 * DAR + 247.9 * 10^-6 * DAR^2)
+                // with DAR = AT - RTSoll
+                const DAR = outsideTemp - roomSetpoint;
+                let targetTemp = roomSetpoint + shift - slope * DAR * (1.4347 + 0.021 * DAR + 247.9 * 1e-6 * DAR * DAR);
+
+                // Cap at max supply temperature if available
+                const maxSupply = window.heatingCurveData && window.heatingCurveData.maxSupply;
+                if (maxSupply !== null && maxSupply !== undefined && targetTemp > maxSupply) {
+                    targetTemp = maxSupply;
+                }
+
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Solltemperatur (Heizkurve)</span>
+                        <div>
+                            <span class="temp-value">${formatNum(targetTemp)}</span>
+                            <span class="temp-unit">°C</span>
                         </div>
                     </div>
                 `;
