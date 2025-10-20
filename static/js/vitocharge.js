@@ -118,6 +118,10 @@ async function loadVitochargeData(forceRefresh = false) {
         const vitochargeDevice = currentInstall.devices.find(d => d.modelId && d.modelId.includes('VitoCharge'));
         const wallboxDevice = currentInstall.devices.find(d => d.deviceType === 'vehicleChargingStation');
 
+        console.log('Devices in installation:', currentInstall.devices);
+        console.log('Vitocharge device found:', vitochargeDevice);
+        console.log('Wallbox device found:', wallboxDevice);
+
         if (!vitochargeDevice) {
             contentDiv.innerHTML = '<div class="no-devices">Kein Vitocharge-Gerät gefunden in dieser Installation.</div>';
             return;
