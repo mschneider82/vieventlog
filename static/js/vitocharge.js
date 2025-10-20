@@ -85,7 +85,25 @@ async function loadVitochargeData(forceRefresh = false) {
                 deviceId: 'mock',
                 gatewaySerial: 'mock'
             };
-            renderVitocharge(features, mockDevice);
+
+            // Try to load wallbox debug data
+            let wallboxFeatures = null;
+            try {
+                const wallboxResponse = await fetch('/api/wallbox/debug');
+                if (wallboxResponse.ok) {
+                    wallboxFeatures = await wallboxResponse.json();
+                }
+            } catch (err) {
+                console.warn('No wallbox debug data available');
+            }
+
+            const mockWallboxDevice = wallboxFeatures ? {
+                modelId: 'E3_HEMS_VCS',
+                deviceId: 'eebus-1',
+                deviceType: 'vehicleChargingStation'
+            } : null;
+
+            renderVitocharge(features, mockDevice, wallboxFeatures, mockWallboxDevice);
             updateLastUpdate();
             return;
         }
@@ -98,6 +116,7 @@ async function loadVitochargeData(forceRefresh = false) {
 
         // Find Vitocharge device (electricityStorage)
         const vitochargeDevice = currentInstall.devices.find(d => d.modelId && d.modelId.includes('VitoCharge'));
+        const wallboxDevice = currentInstall.devices.find(d => d.deviceType === 'vehicleChargingStation');
 
         if (!vitochargeDevice) {
             contentDiv.innerHTML = '<div class="no-devices">Kein Vitocharge-Gerät gefunden in dieser Installation.</div>';
@@ -121,7 +140,21 @@ async function loadVitochargeData(forceRefresh = false) {
         }
 
         const features = await response.json();
-        renderVitocharge(features, vitochargeDevice);
+
+        // Load wallbox data if available
+        let wallboxFeatures = null;
+        if (wallboxDevice) {
+            try {
+                const wallboxResponse = await fetch(`/api/features?installationId=${currentInstallationId}&gatewaySerial=${wallboxDevice.gatewaySerial || gatewaySerial}&deviceId=${wallboxDevice.deviceId}${refreshParam}`);
+                if (wallboxResponse.ok) {
+                    wallboxFeatures = await wallboxResponse.json();
+                }
+            } catch (err) {
+                console.warn('Could not load wallbox data:', err);
+            }
+        }
+
+        renderVitocharge(features, vitochargeDevice, wallboxFeatures, wallboxDevice);
         updateLastUpdate();
 
     } catch (error) {
@@ -130,14 +163,26 @@ async function loadVitochargeData(forceRefresh = false) {
     }
 }
 
-function renderVitocharge(features, deviceInfo) {
+function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxDevice = null) {
     const contentDiv = document.getElementById('vitochargeContent');
     contentDiv.className = 'vitocharge-container';
 
-    // Helper function to extract feature value
+    // Helper function to extract feature value from Vitocharge
     const getValue = (featureName) => {
         for (const category of [features.temperatures, features.dhw, features.circuits,
                                features.operatingModes, features.other]) {
+            if (category && category[featureName]) {
+                return category[featureName];
+            }
+        }
+        return null;
+    };
+
+    // Helper function to extract feature value from Wallbox
+    const getWallboxValue = (featureName) => {
+        if (!wallboxFeatures) return null;
+        for (const category of [wallboxFeatures.temperatures, wallboxFeatures.dhw, wallboxFeatures.circuits,
+                               wallboxFeatures.operatingModes, wallboxFeatures.other]) {
             if (category && category[featureName]) {
                 return category[featureName];
             }
@@ -185,12 +230,68 @@ function renderVitocharge(features, deviceInfo) {
     const batteryChargeLifeCycle = getNestedValue('ess.transfer.charge.cumulated', 'lifeCycle') || 0;
     const batteryDischargeLifeCycle = getNestedValue('ess.transfer.discharge.cumulated', 'lifeCycle') || 0;
 
+    // Helper function to format energy values (Wh -> kWh -> MWh)
+    const formatEnergy = (wh) => {
+        if (wh >= 10000000) { // >= 10000 kWh
+            return `${(wh / 1000000).toFixed(1)} MWh`;
+        } else {
+            return `${(wh / 1000).toFixed(1)} kWh`;
+        }
+    };
+
+    // Extract wallbox data if available
+    let wallboxPower = 0;
+    let wallboxStatus = 'unknown';
+    let wallboxSessionEnergy = 0;
+    let wallboxSessionTime = 0;
+    let wallboxManufacturer = '';
+    let wallboxModel = '';
+
+    if (wallboxFeatures) {
+        // Session status (connected, charging, etc.)
+        const sessionStatus = getWallboxValue('vcs.session');
+        if (sessionStatus && sessionStatus.value) {
+            if (typeof sessionStatus.value === 'object' && sessionStatus.value.status) {
+                wallboxStatus = sessionStatus.value.status;
+            } else if (typeof sessionStatus.value === 'string') {
+                wallboxStatus = sessionStatus.value;
+            }
+        }
+
+        // Current charging session data
+        const sessionCharging = getWallboxValue('vcs.session.charging');
+        if (sessionCharging && sessionCharging.value) {
+            // Extract energy value (can be nested in different ways)
+            if (sessionCharging.value.energy !== undefined) {
+                const energyValue = sessionCharging.value.energy;
+                wallboxSessionEnergy = typeof energyValue === 'object' ? (energyValue.value || 0) : (energyValue || 0);
+            }
+
+            // Extract time value (can be nested in different ways)
+            if (sessionCharging.value.time !== undefined) {
+                const timeValue = sessionCharging.value.time;
+                wallboxSessionTime = typeof timeValue === 'object' ? (timeValue.value || 0) : (timeValue || 0);
+            }
+        }
+
+        // Calculate power from energy and time if available
+        if (wallboxSessionTime > 0 && wallboxSessionEnergy > 0) {
+            wallboxPower = (wallboxSessionEnergy / (wallboxSessionTime / 3600)) * 1000; // Convert to W
+        }
+
+        // Device info
+        const manufacturer = getWallboxValue('device.thirdparty.manufacturer');
+        const model = getWallboxValue('device.thirdparty.model');
+        wallboxManufacturer = manufacturer?.value?.value || manufacturer?.value || '';
+        wallboxModel = model?.value?.value || model?.value || '';
+    }
+
     // Determine battery status from power value (more reliable than operationState)
-    // Positive = charging, Negative = discharging
+    // Negative = charging (Energie geht in die Batterie), Positive = discharging (Energie kommt aus der Batterie)
     let batteryStatus = 'standby';
-    if (batteryPower > 100) { // Threshold to avoid noise
+    if (batteryPower < -100) { // Threshold to avoid noise
         batteryStatus = 'charge';
-    } else if (batteryPower < -100) {
+    } else if (batteryPower > 100) {
         batteryStatus = 'discharge';
     }
 
@@ -232,12 +333,14 @@ function renderVitocharge(features, deviceInfo) {
     const moduleSerials = getNestedValue('device.serial.internalComponents', 'vinList') || [];
     for (let i = 1; i <= 6; i++) {
         const moduleName = ['One', 'Two', 'Three', 'Four', 'Five', 'Six'][i-1];
-        const capacity = getNestedValue('ess.battery.usedAverage', `usableEnergyModule${moduleName}`);
-        if (capacity && capacity > 0) {
+        const capacityWh = getNestedValue('ess.battery.usedAverage', `usableEnergyModule${moduleName}`);
+        // Nur Module mit Kapazität > 0 Wh anzeigen
+        if (capacityWh && capacityWh > 0) {
             modules.push({
                 id: i,
                 serial: moduleSerials[i-1] || 'Unknown',
-                capacity: capacity
+                capacityWh: capacityWh,
+                capacityKWh: (capacityWh / 1000).toFixed(2)
             });
         }
     }
@@ -302,6 +405,14 @@ function renderVitocharge(features, deviceInfo) {
                     <div class="flow-node-label">Netzbezug</div>
                     <div class="flow-node-value">${formatNum(Math.abs(gridPower) / 1000)} kW</div>
                 </div>
+                ${wallboxFeatures ? `
+                <div class="flow-arrow">→</div>
+                <div class="flow-node ${wallboxStatus === 'charging' ? 'active' : ''}">
+                    <div class="flow-node-icon">🚗</div>
+                    <div class="flow-node-label">Wallbox</div>
+                    <div class="flow-node-value">${formatNum(Math.abs(wallboxPower) / 1000)} kW</div>
+                </div>
+                ` : ''}
             </div>
         </div>
     `;
@@ -394,8 +505,8 @@ function renderVitocharge(features, deviceInfo) {
                     <div class="metric-value">${batterySOC} <span class="metric-unit">%</span></div>
                 </div>
                 <div class="metric-item">
-                    <div class="metric-label">Kapazität</div>
-                    <div class="metric-value">${formatNum(batteryCapacity / 1000)} <span class="metric-unit">kWh</span></div>
+                    <div class="metric-label">Gesamtkapazität</div>
+                    <div class="metric-value">${Math.round(batteryCapacity)} <span class="metric-unit">Wh</span> <span style="font-size: 0.8em; color: #a0a0b0;">(${(batteryCapacity / 1000).toFixed(2)} kWh)</span></div>
                 </div>
                 <div class="metric-item">
                     <div class="metric-label">Notstromreserve</div>
@@ -404,6 +515,46 @@ function renderVitocharge(features, deviceInfo) {
             </div>
         </div>
     `;
+
+    // Wallbox Card (if available)
+    if (wallboxFeatures) {
+        const statusEmoji = wallboxStatus === 'charging' ? '🔌' : wallboxStatus === 'connected' ? '🔗' : '⚫';
+        const statusText = wallboxStatus === 'charging' ? 'Lädt' : wallboxStatus === 'connected' ? 'Verbunden' : 'Nicht verbunden';
+        const statusClass = wallboxStatus === 'charging' ? 'charging' : '';
+
+        // Format session time
+        const hours = Math.floor(wallboxSessionTime / 3600);
+        const minutes = Math.floor((wallboxSessionTime % 3600) / 60);
+        const sessionTimeFormatted = `${hours}h ${minutes}min`;
+
+        html += `
+            <div class="section-card">
+                <div class="section-header">🚗 Wallbox</div>
+                <div class="status-box ${statusClass}">
+                    <div class="status-label">Status</div>
+                    <div class="status-value ${statusClass}">${statusEmoji} ${statusText}</div>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-label">Ladeleistung</div>
+                        <div class="metric-value">${formatNum(wallboxPower / 1000)} <span class="metric-unit">kW</span></div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Session-Energie</div>
+                        <div class="metric-value">${(wallboxSessionEnergy || 0).toFixed(2)} <span class="metric-unit">kWh</span></div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Ladezeit (Session)</div>
+                        <div class="metric-value">${sessionTimeFormatted}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Modell</div>
+                        <div class="metric-value" style="font-size: 0.85em;">${wallboxManufacturer} ${wallboxModel}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     html += '</div>'; // Close overview-grid
 
@@ -428,7 +579,7 @@ function renderVitocharge(features, deviceInfo) {
                     </div>
                     <div class="module-info">
                         <span class="module-info-label">Kapazität:</span>
-                        <span class="module-info-value">${formatNum(module.capacity / 1000)} kWh</span>
+                        <span class="module-info-value">${Math.round(module.capacityWh)} Wh (${module.capacityKWh} kWh)</span>
                     </div>
                     <div class="module-info">
                         <span class="module-info-label">Geschätzte Restkapazität:</span>
@@ -450,19 +601,19 @@ function renderVitocharge(features, deviceInfo) {
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-card-label">Laden Gesamt</div>
-                    <div class="stat-card-value">${formatNum(batteryChargeLifeCycle / 1000000)} MWh</div>
+                    <div class="stat-card-value">${formatEnergy(batteryChargeLifeCycle)}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-card-label">Entladen Gesamt</div>
-                    <div class="stat-card-value">${formatNum(batteryDischargeLifeCycle / 1000000)} MWh</div>
+                    <div class="stat-card-value">${formatEnergy(batteryDischargeLifeCycle)}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-card-label">Netzbezug Gesamt</div>
-                    <div class="stat-card-value">${formatNum(gridConsumptionTotal / 1000000)} MWh</div>
+                    <div class="stat-card-value">${formatEnergy(gridConsumptionTotal)}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-card-label">Netzeinspeisung Gesamt</div>
-                    <div class="stat-card-value">${formatNum(gridFeedInTotal / 1000000)} MWh</div>
+                    <div class="stat-card-value">${formatEnergy(gridFeedInTotal)}</div>
                 </div>
             </div>
     `;
@@ -499,7 +650,7 @@ function renderVitocharge(features, deviceInfo) {
                     </div>
                     <div style="display: flex; justify-content: space-between;">
                         <span style="font-size: 12px; color: #a0a0b0;">Blindleistung:</span>
-                        <span style="font-size: 13px; color: ${phase.reactive < 0 ? '#ef4444' : '#10b981'};">${formatNum(phase.reactive)} W</span>
+                        <span style="font-size: 13px; color: ${phase.reactive < 0 ? '#ef4444' : '#10b981'};">${Math.round(phase.reactive)} W</span>
                     </div>
                 </div>
             `;

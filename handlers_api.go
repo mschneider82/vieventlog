@@ -362,6 +362,99 @@ func featuresHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(features)
 }
 
+// wallboxDebugHandler handles GET /api/wallbox/debug
+// Returns mock Wallbox data from local JSON file for testing
+func wallboxDebugHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the wallbox.json file
+	data, err := os.ReadFile("events/wallbox.json")
+	if err != nil {
+		http.Error(w, "Mock wallbox data file not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Parse the JSON to extract features
+	var mockData struct {
+		InstallationID   string        `json:"installationId"`
+		InstallationDesc string        `json:"installationDesc"`
+		GatewaySerial    string        `json:"gatewaySerial"`
+		DeviceID         string        `json:"deviceId"`
+		DeviceType       string        `json:"deviceType"`
+		ModelID          string        `json:"modelId"`
+		AccountName      string        `json:"accountName"`
+		Features         []interface{} `json:"features"`
+	}
+
+	if err := json.Unmarshal(data, &mockData); err != nil {
+		http.Error(w, "Failed to parse mock wallbox data: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to DeviceFeatures format (same structure as vitochargeDebugHandler)
+	response := DeviceFeatures{
+		InstallationID: mockData.InstallationID,
+		GatewayID:      mockData.GatewaySerial,
+		DeviceID:       mockData.DeviceID,
+		Temperatures:   make(map[string]FeatureValue),
+		DHW:            make(map[string]FeatureValue),
+		Circuits:       make(map[string]FeatureValue),
+		OperatingModes: make(map[string]FeatureValue),
+		Other:          make(map[string]FeatureValue),
+		RawFeatures:    []Feature{},
+		LastUpdate:     time.Now(),
+	}
+
+	// Process features
+	for _, f := range mockData.Features {
+		featureMap, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		featureName, _ := featureMap["feature"].(string)
+		properties, _ := featureMap["properties"].(map[string]interface{})
+
+		if featureName == "" || properties == nil {
+			continue
+		}
+
+		// For features with multiple properties
+		if len(properties) > 1 {
+			// Multiple properties - keep as nested object structure
+			nestedValue := make(map[string]interface{})
+			for propName, propValue := range properties {
+				if propMap, ok := propValue.(map[string]interface{}); ok {
+					// Store the full property map with type, value, unit
+					nestedValue[propName] = propMap
+				}
+			}
+
+			response.Other[featureName] = FeatureValue{
+				Type:  "object",
+				Value: nestedValue,
+			}
+		} else {
+			// Single property - extract directly
+			for _, propValue := range properties {
+				if propMap, ok := propValue.(map[string]interface{}); ok {
+					propType, _ := propMap["type"].(string)
+					val := propMap["value"]
+					unit, _ := propMap["unit"].(string)
+
+					response.Other[featureName] = FeatureValue{
+						Type:  propType,
+						Value: val,
+						Unit:  unit,
+					}
+					break
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // vitochargeDebugHandler handles GET /api/vitocharge/debug
 // Returns mock Vitocharge data from local JSON file for testing
 func vitochargeDebugHandler(w http.ResponseWriter, r *http.Request) {

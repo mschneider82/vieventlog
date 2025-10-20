@@ -107,6 +107,7 @@ func main() {
 	// Vitocharge endpoints
 	http.HandleFunc("/api/vitocharge/devices", vitochargeDevicesHandler)
 	http.HandleFunc("/api/vitocharge/debug", vitochargeDebugHandler)
+	http.HandleFunc("/api/wallbox/debug", wallboxDebugHandler)
 
 	// Rooms endpoints
 	http.HandleFunc("/api/rooms", roomsHandler)
