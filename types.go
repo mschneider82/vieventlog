@@ -68,6 +68,7 @@ type EventsResponse struct {
 type Device struct {
 	DeviceID       string `json:"deviceId"`
 	ModelID        string `json:"modelId"`
+	DeviceType     string `json:"deviceType,omitempty"`
 	DisplayName    string `json:"displayName"`
 	InstallationID string `json:"installationId"`
 	GatewaySerial  string `json:"gatewaySerial"`

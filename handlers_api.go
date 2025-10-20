@@ -608,8 +608,8 @@ func vitochargeDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		// Iterate through gateways and their devices
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				// Only include electricityStorage devices (Vitocharge)
-				if gwDevice.DeviceType != "electricityStorage" {
+				// Include electricityStorage devices (Vitocharge) and vehicleChargingStation (Wallbox)
+				if gwDevice.DeviceType != "electricityStorage" && gwDevice.DeviceType != "vehicleChargingStation" {
 					continue
 				}
 
@@ -619,6 +619,7 @@ func vitochargeDevicesHandler(w http.ResponseWriter, r *http.Request) {
 				devicesByInstallation[installID][key] = Device{
 					DeviceID:       gwDevice.DeviceID,
 					ModelID:        gwDevice.ModelID,
+					DeviceType:     gwDevice.DeviceType,
 					DisplayName:    displayName,
 					InstallationID: installID,
 					GatewaySerial:  gateway.Serial,
