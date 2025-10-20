@@ -25,7 +25,7 @@ async function init() {
     await loadInstallations();
     if (currentInstallationId) {
         await loadVitochargeData();
-        startAutoRefresh();
+        // Auto-refresh deaktiviert - manueller Refresh über Button
     }
 }
 
