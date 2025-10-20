@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -163,7 +164,9 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 		// Iterate through gateways and their devices
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				// Only include heating devices (exclude SmartClimate zigbee/roomControl devices)
+				// Only include heating devices (exclude SmartClimate zigbee/roomControl and Vitocharge electricityStorage devices)
+				// SmartClimate has its own page at /smartclimate
+				// Vitocharge has its own page at /vitocharge
 				if gwDevice.DeviceType != "heating" {
 					continue
 				}
@@ -357,6 +360,217 @@ func featuresHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(features)
+}
+
+// vitochargeDebugHandler handles GET /api/vitocharge/debug
+// Returns mock Vitocharge data from local JSON file for testing
+func vitochargeDebugHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the vitocharge.json file
+	data, err := os.ReadFile("events/vitocharge.json")
+	if err != nil {
+		http.Error(w, "Mock data file not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Parse the JSON to extract features
+	var mockData struct {
+		InstallationID   string        `json:"installationId"`
+		InstallationDesc string        `json:"installationDesc"`
+		GatewaySerial    string        `json:"gatewaySerial"`
+		DeviceID         string        `json:"deviceId"`
+		DeviceType       string        `json:"deviceType"`
+		ModelID          string        `json:"modelId"`
+		AccountName      string        `json:"accountName"`
+		Features         []interface{} `json:"features"`
+	}
+
+	if err := json.Unmarshal(data, &mockData); err != nil {
+		http.Error(w, "Failed to parse mock data: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to DeviceFeatures format
+	response := DeviceFeatures{
+		InstallationID: mockData.InstallationID,
+		GatewayID:      mockData.GatewaySerial,
+		DeviceID:       mockData.DeviceID,
+		Temperatures:   make(map[string]FeatureValue),
+		DHW:            make(map[string]FeatureValue),
+		Circuits:       make(map[string]FeatureValue),
+		OperatingModes: make(map[string]FeatureValue),
+		Other:          make(map[string]FeatureValue),
+		RawFeatures:    []Feature{},
+		LastUpdate:     time.Now(),
+	}
+
+	// Process features
+	for _, f := range mockData.Features {
+		featureMap, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		featureName, _ := featureMap["feature"].(string)
+		properties, _ := featureMap["properties"].(map[string]interface{})
+
+		if featureName == "" || properties == nil {
+			continue
+		}
+
+		// For features with multiple properties (e.g., cumulated with currentDay, lifeCycle, etc.)
+		// we need to keep all properties as nested objects
+		if len(properties) > 1 {
+			// Multiple properties - keep as nested object structure
+			nestedValue := make(map[string]interface{})
+			for propName, propValue := range properties {
+				if propMap, ok := propValue.(map[string]interface{}); ok {
+					// Store the full property map with type, value, unit
+					nestedValue[propName] = propMap
+				}
+			}
+
+			response.Other[featureName] = FeatureValue{
+				Type:  "object",
+				Value: nestedValue,
+			}
+		} else {
+			// Single property - extract directly
+			for _, propValue := range properties {
+				if propMap, ok := propValue.(map[string]interface{}); ok {
+					propType, _ := propMap["type"].(string)
+					val := propMap["value"]
+					unit, _ := propMap["unit"].(string)
+
+					response.Other[featureName] = FeatureValue{
+						Type:  propType,
+						Value: val,
+						Unit:  unit,
+					}
+					break
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// vitochargeDevicesHandler handles GET /api/vitocharge/devices
+// Returns all Vitocharge (electricityStorage) devices from all installations
+func vitochargeDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	// Get active accounts and ensure they're authenticated
+	activeAccounts, err := GetActiveAccounts()
+	if err == nil && len(activeAccounts) > 0 {
+		// Authenticate all active accounts to populate accountTokens
+		for _, account := range activeAccounts {
+			_, err := ensureAccountAuthenticated(account)
+			if err != nil {
+				log.Printf("Warning: Failed to authenticate account %s for Vitocharge devices: %v\n", account.Email, err)
+			}
+		}
+	} else if err == nil && len(activeAccounts) == 0 {
+		// Fallback to legacy system
+		if currentCreds != nil {
+			if err := ensureAuthenticated(); err != nil {
+				log.Printf("Warning: Failed to authenticate legacy credentials: %v\n", err)
+			}
+		}
+	}
+
+	// Build a unified installations map from all account tokens
+	allInstallations := make(map[string]*Installation)
+	installationToAccount := make(map[string]string) // installationID -> accountID
+
+	accountsMutex.RLock()
+	for accountID, token := range accountTokens {
+		for id, installation := range token.Installations {
+			allInstallations[id] = installation
+			installationToAccount[id] = accountID
+		}
+	}
+	accountsMutex.RUnlock()
+
+	// Also include legacy installations
+	if installations != nil {
+		for id, installation := range installations {
+			if _, exists := allInstallations[id]; !exists {
+				allInstallations[id] = installation
+				installationToAccount[id] = ""
+			}
+		}
+	}
+
+	// Group Vitocharge devices by installation
+	devicesByInstallation := make(map[string]map[string]Device)
+
+	// Build device list from installations' gateway data
+	for installID, installation := range allInstallations {
+		if _, exists := devicesByInstallation[installID]; !exists {
+			devicesByInstallation[installID] = make(map[string]Device)
+		}
+
+		accountID := installationToAccount[installID]
+
+		// Iterate through gateways and their devices
+		for _, gateway := range installation.Gateways {
+			for _, gwDevice := range gateway.Devices {
+				// Only include electricityStorage devices (Vitocharge)
+				if gwDevice.DeviceType != "electricityStorage" {
+					continue
+				}
+
+				displayName := gwDevice.ModelID
+
+				key := fmt.Sprintf("%s_%s", gateway.Serial, gwDevice.DeviceID)
+				devicesByInstallation[installID][key] = Device{
+					DeviceID:       gwDevice.DeviceID,
+					ModelID:        gwDevice.ModelID,
+					DisplayName:    displayName,
+					InstallationID: installID,
+					GatewaySerial:  gateway.Serial,
+					AccountID:      accountID,
+				}
+				log.Printf("Registered %s device in installation %s: %s (Gateway %s, Device %s, Account %s)\n",
+					gwDevice.DeviceType, installID, displayName, gateway.Serial, gwDevice.DeviceID, accountID)
+			}
+		}
+	}
+
+	// Build response grouped by installation
+	response := make([]DevicesByInstallation, 0)
+
+	for installID, devices := range devicesByInstallation {
+		installation := allInstallations[installID]
+		location := "Unknown"
+		description := ""
+
+		if installation != nil {
+			description = installation.Description
+			if installation.Address.City != "" {
+				location = fmt.Sprintf("%s %s, %s %s",
+					installation.Address.Street,
+					installation.Address.HouseNumber,
+					installation.Address.Zip,
+					installation.Address.City)
+			}
+		}
+
+		deviceList := make([]Device, 0, len(devices))
+		for _, device := range devices {
+			deviceList = append(deviceList, device)
+		}
+
+		response = append(response, DevicesByInstallation{
+			InstallationID: installID,
+			Location:       location,
+			Description:    description,
+			Devices:        deviceList,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // debugDevicesHandler handles GET /api/debug/devices

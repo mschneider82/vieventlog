@@ -63,6 +63,15 @@ func smartClimatePageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, nil)
 }
 
+func vitochargePageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFS(templatesFS, "templates/vitocharge.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, nil)
+}
+
 // ============================================================================
 // Auth Handlers (Legacy)
 // ============================================================================
