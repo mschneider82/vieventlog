@@ -574,16 +574,8 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
                         <span class="module-info-value">${module.serial.substring(0, 12)}...</span>
                     </div>
                     <div class="module-info">
-                        <span class="module-info-label">Typ:</span>
-                        <span class="module-info-value">2.5A</span>
-                    </div>
-                    <div class="module-info">
                         <span class="module-info-label">Kapazität:</span>
                         <span class="module-info-value">${Math.round(module.capacityWh)} Wh (${module.capacityKWh} kWh)</span>
-                    </div>
-                    <div class="module-info">
-                        <span class="module-info-label">Geschätzte Restkapazität:</span>
-                        <span class="module-info-value">100 %</span>
                     </div>
                 </div>
             `;
