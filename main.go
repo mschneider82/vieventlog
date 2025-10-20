@@ -55,6 +55,7 @@ func main() {
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
 	http.HandleFunc("/smartclimate", smartClimatePageHandler)
+	http.HandleFunc("/vitocharge", vitochargePageHandler)
 
 	// Static files handler
 	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
@@ -102,6 +103,10 @@ func main() {
 	http.HandleFunc("/api/smartclimate/trv/temperature/set", trvSetTemperatureHandler)
 	http.HandleFunc("/api/smartclimate/device/name/set", deviceSetNameHandler)
 	http.HandleFunc("/api/smartclimate/trv/childlock/toggle", childLockToggleHandler)
+
+	// Vitocharge endpoints
+	http.HandleFunc("/api/vitocharge/devices", vitochargeDevicesHandler)
+	http.HandleFunc("/api/vitocharge/debug", vitochargeDebugHandler)
 
 	// Rooms endpoints
 	http.HandleFunc("/api/rooms", roomsHandler)
