@@ -12,7 +12,7 @@ async function init() {
     await loadDevices();
     if (currentInstallationId) {
         await loadSmartClimateDevices();
-        startAutoRefresh();
+        // Auto-refresh deaktiviert - manueller Refresh über Button
     }
 }
 
@@ -932,10 +932,11 @@ document.getElementById('installationSelect').addEventListener('change', async (
             selectedInstall.description || selectedInstall.installationId;
     }
     await loadSmartClimateDevices();
+    // Auto-refresh deaktiviert - manueller Refresh über Button
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
-    startAutoRefresh();
 });
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
