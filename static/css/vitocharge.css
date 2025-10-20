@@ -227,6 +227,23 @@ button:active {
     color: #ef4444; /* Red when discharging */
 }
 
+/* Wallbox charging status */
+.status-box.charging {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.status-box.charging .status-value {
+    color: #3b82f6;
+}
+
+/* Active flow node (for wallbox when charging) */
+.flow-node.active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
 /* Metrics grid (2 columns of small metrics) */
 .metrics-grid {
     display: grid;
