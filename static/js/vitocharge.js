@@ -229,7 +229,7 @@ function renderVitocharge(features, deviceInfo) {
 
     // Battery modules
     const modules = [];
-    const moduleSerials = getValue('device.serial.internalComponents')?.value?.vinList || [];
+    const moduleSerials = getNestedValue('device.serial.internalComponents', 'vinList') || [];
     for (let i = 1; i <= 6; i++) {
         const moduleName = ['One', 'Two', 'Three', 'Four', 'Five', 'Six'][i-1];
         const capacity = getNestedValue('ess.battery.usedAverage', `usableEnergyModule${moduleName}`);
@@ -299,7 +299,7 @@ function renderVitocharge(features, deviceInfo) {
                 <div class="flow-arrow ${gridPower < 0 ? 'reverse' : ''}">→</div>
                 <div class="flow-node">
                     <div class="flow-node-icon">🏠</div>
-                    <div class="flow-node-label">Netz</div>
+                    <div class="flow-node-label">Netzbezug</div>
                     <div class="flow-node-value">${formatNum(Math.abs(gridPower) / 1000)} kW</div>
                 </div>
             </div>
@@ -431,7 +431,7 @@ function renderVitocharge(features, deviceInfo) {
                         <span class="module-info-value">${formatNum(module.capacity / 1000)} kWh</span>
                     </div>
                     <div class="module-info">
-                        <span class="module-info-label">Gesundheit:</span>
+                        <span class="module-info-label">Geschätzte Restkapazität:</span>
                         <span class="module-info-value">100 %</span>
                     </div>
                 </div>
