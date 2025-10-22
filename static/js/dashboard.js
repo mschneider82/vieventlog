@@ -1203,6 +1203,7 @@
                 'heating': 'Heizen',
                 'standby': 'Standby',
                 'cooling': 'Kühlen',
+                'heatingCooling': 'Heizen/Kühlen',
                 'dhw': 'Warmwasser',
                 'dhwAndHeating': 'Warmwasser und Heizen',
                 'forcedReduced': 'Reduziert (Erzwungen)',
@@ -2519,7 +2520,9 @@
                 // Map API modes to German labels
                 const modeLabels = {
                     'heating': 'Heizen',
-                    'standby': 'Standby'
+                    'standby': 'Standby',
+                    'cooling': 'Kühlen',
+                    'heatingCooling': 'Heizen/Kühlen'
                 };
                 const currentMode = kf.operatingMode.value;
 
@@ -2530,6 +2533,8 @@
                             <select id="heatingModeSelect" onchange="changeHeatingMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 <option value="heating" ${currentMode === 'heating' ? 'selected' : ''}>Heizen</option>
                                 <option value="standby" ${currentMode === 'standby' ? 'selected' : ''}>Standby</option>
+                                <option value="cooling" ${currentMode === 'cooling' ? 'selected' : ''}>Kühlen</option>
+                                <option value="heatingCooling" ${currentMode === 'heatingCooling' ? 'selected' : ''}>Heizen/Kühlen</option>
                             </select>
                         </span>
                     </div>
@@ -2879,8 +2884,14 @@
 
             if (kf.fhtOperatingMode && kf.fhtOperatingMode.value) {
                 const mode = kf.fhtOperatingMode.value;
-                const modeText = mode === 'heating' ? 'Heizen' : mode === 'cooling' ? 'Kühlen' : 'Standby';
-                const badgeClass = mode === 'heating' ? 'badge-info' : mode === 'cooling' ? 'badge-success' : 'badge-warning';
+                const modeText = mode === 'heating' ? 'Heizen' :
+                                 mode === 'cooling' ? 'Kühlen' :
+                                 mode === 'heatingCooling' ? 'Heizen/Kühlen' :
+                                 'Standby';
+                const badgeClass = mode === 'heating' ? 'badge-info' :
+                                   mode === 'cooling' ? 'badge-success' :
+                                   mode === 'heatingCooling' ? 'badge-primary' :
+                                   'badge-warning';
                 html += `<span class="badge ${badgeClass}">${modeText}</span>`;
             }
 
@@ -3039,6 +3050,9 @@
         function translateMode(mode) {
             const modes = {
                 'standby': 'Standby',
+                'heating': 'Heizen',
+                'cooling': 'Kühlen',
+                'heatingCooling': 'Heizen/Kühlen',
                 'dhw': 'Warmwasser',
                 'dhwAndHeating': 'Heizen + Warmwasser',
                 'forcedReduced': 'Reduziert',
