@@ -320,6 +320,19 @@
             flex-shrink: 0;
         }
 
+        .status-value.sensor-connected {
+            color: #4caf50;
+        }
+
+        .status-value.sensor-disconnected {
+            color: #9e9e9e;
+        }
+
+        .status-value.sensor-active {
+            color: #2196f3;
+            font-weight: 600;
+        }
+
         /* Mode Selector */
         .mode-display {
             padding: 15px;

@@ -325,6 +325,10 @@ button:active {
     color: #667eea;
 }
 
+.sensor-reading .value.condensation-risk {
+    color: #f44336;
+}
+
 .sensor-reading .label {
     font-size: 12px;
     color: #a0a0b0;
