@@ -795,14 +795,16 @@ func heatingModeSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate mode
 	validModes := map[string]bool{
-		"heating": true,
-		"standby": true,
+		"heating":        true,
+		"standby":        true,
+		"cooling":        true,
+		"heatingCooling": true,
 	}
 	if !validModes[req.Mode] {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"error":   "Invalid mode. Must be one of: heating, standby",
+			"error":   "Invalid mode. Must be one of: heating, standby, cooling, heatingCooling",
 		})
 		return
 	}

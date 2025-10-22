@@ -1225,8 +1225,17 @@
 
             // Operating mode with dropdown
             if (operatingMode) {
-                const availableModes = find([`${circuitPrefix}.operating.modes.dhwAndHeating`]) ?
-                    ['heating', 'standby', 'dhwAndHeating'] : ['heating', 'standby'];
+                // Dynamically detect available modes by checking which features exist
+                const availableModes = ['heating', 'standby'];
+                if (find([`${circuitPrefix}.operating.modes.dhwAndHeating`])) {
+                    availableModes.push('dhwAndHeating');
+                }
+                if (find([`${circuitPrefix}.operating.modes.cooling`])) {
+                    availableModes.push('cooling');
+                }
+                if (find([`${circuitPrefix}.operating.modes.heatingCooling`])) {
+                    availableModes.push('heatingCooling');
+                }
 
                 html += `
                     <div class="status-item">
