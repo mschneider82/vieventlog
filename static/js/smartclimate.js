@@ -461,7 +461,7 @@ function renderRoomCard(room) {
                 ${hasHumidity ? `
                 <div class="sensor-reading">
                     <span class="icon">💧</span>
-                    <span class="value">${humidity}%</span>
+                    <span class="value ${room.condensationRisk ? 'condensation-risk' : ''}">${humidity}%</span>
                     <span class="label">Luftfeuchte</span>
                 </div>
                 ` : ''}

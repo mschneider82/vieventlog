@@ -1347,6 +1347,36 @@
                 `;
             }
 
+            // Humidity dewpoint sensor (for cooling systems)
+            const humidityDewpoint = find([`${circuitPrefix}.sensors.humidity.dewpoint`]);
+            if (humidityDewpoint) {
+                const statusProp = humidityDewpoint.value && humidityDewpoint.value.status;
+                const valueProp = humidityDewpoint.value && humidityDewpoint.value.value;
+
+                let statusText = '';
+                let statusClass = '';
+
+                if (statusProp && statusProp.value) {
+                    statusText = statusProp.value === 'connected' ? 'Verbunden' : 'Nicht verbunden';
+                    statusClass = statusProp.value === 'connected' ? 'sensor-connected' : 'sensor-disconnected';
+                }
+
+                if (valueProp && valueProp.value) {
+                    const valueText = valueProp.value === 'on' ? 'EIN' : 'AUS';
+                    statusText += ` (${valueText})`;
+                    if (valueProp.value === 'on') {
+                        statusClass = 'sensor-active';
+                    }
+                }
+
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Feuchteanbauschalter</span>
+                        <span class="status-value ${statusClass}">${statusText}</span>
+                    </div>
+                `;
+            }
+
             // Heating curve with editable dropdowns
             if (heatingCurveSlope) {
                 // Generate slope options from 0.2 to 3.5 in 0.1 steps
