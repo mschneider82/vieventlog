@@ -849,6 +849,21 @@
                     </div>
                 `;
             }
+            // Calculate and show Spreizung (supply - return temperature difference)
+            if (kf.supplyTemp && kf.returnTemp) {
+                const supplyValue = kf.supplyTemp.value;
+                const returnValue = kf.returnTemp.value;
+                const spreizung = supplyValue - returnValue;
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Spreizung</span>
+                        <div>
+                            <span class="temp-value">${formatNum(spreizung)}</span>
+                            <span class="temp-unit">K</span>
+                        </div>
+                    </div>
+                `;
+            }
             if (kf.boilerTemp) {
                 const formatted = formatValue(kf.boilerTemp);
                 const [value, ...unitParts] = formatted.split(' ');
