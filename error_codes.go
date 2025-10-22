@@ -111,6 +111,8 @@ var statusCodes = map[string]string{
 	"S.164": "Waermepumpe: Systemstatus Wartung Standby",
 	"S.165": "Waermepumpe: Systemstatus Regelung",
 	"S.167": "Aktorentest aktiv",
+	"S.168": "Lueftungsbypass offen",
+	"S.169": "Lueftungsbypass geschlossen",
 	"S.170": "Systemcheck laeuft",
 	"S.171": "Initialisierung",
 	"S.172": "Software-Update",

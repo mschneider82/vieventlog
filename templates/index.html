@@ -745,6 +745,10 @@
                 'S.134': true,  // 4/3-Wege Ventil Leerlauf
                 'S.135': true,  // 4/3-Wege Ventil Abtauen
                 'S.136': true,  // 4/3-Wege Ventil Raumbeheizung/Raumkühlung
+                'S.168': true,  // Lüftungsbypass offen
+                'S.169': true,  // Lüftungsbypass geschlossen
+                'I.121': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 1 aktiv
+                'I.122': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 2 aktiv
                 'other': true
             }
         };
@@ -1186,7 +1190,15 @@ ${formatEventBody(event.body)}
                 'S.118': { label: 'V-Position Puffer', description: 'Ventil in Pufferspeicher-Position', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
                 'S.134': { label: 'V-Leerlauf', description: 'Ventil im Leerlauf', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '⭕' },
                 'S.135': { label: 'V-Abtauen', description: 'Ventil in Abtau-Position', color: '#22d3ee', gradient: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)', icon: '🔀' },
-                'S.136': { label: 'V-Raumheizung', description: 'Ventil in Raumheizungs-Position', color: '#84cc16', gradient: 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)', icon: '🏠' }
+                'S.136': { label: 'V-Raumheizung', description: 'Ventil in Raumheizungs-Position', color: '#84cc16', gradient: 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)', icon: '🏠' },
+
+                // Lüftung & Bypass
+                'S.168': { label: 'Bypass offen', description: 'Lüftungsbypass geöffnet', color: '#22c55e', gradient: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', icon: '🌬️' },
+                'S.169': { label: 'Bypass zu', description: 'Lüftungsbypass geschlossen', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '🚫' },
+
+                // Taupunkt/Feuchteschutz
+                'I.121': { label: 'Feuchte HK1', description: 'Feuchteanbauschalter Heizkreis 1 aktiv - Taupunkt unterschritten', color: '#fbbf24', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', icon: '💦' },
+                'I.122': { label: 'Feuchte HK2', description: 'Feuchteanbauschalter Heizkreis 2 aktiv - Taupunkt unterschritten', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '💦' }
             };
 
             controlsContainer.innerHTML = Object.entries(eventTypes).map(([code, info]) => {
