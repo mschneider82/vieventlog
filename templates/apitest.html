@@ -273,10 +273,40 @@
             <div id="errorContainer"></div>
 
             <div class="form-group">
+                <label>Authentifizierungsmodus:</label>
+                <div class="method-selector">
+                    <button class="method-btn active" id="authModeAccount" data-mode="account">Gespeicherten Account verwenden</button>
+                    <button class="method-btn" id="authModeCustom" data-mode="custom">Eigene Credentials verwenden</button>
+                </div>
+            </div>
+
+            <div class="form-group" id="accountSelectGroup">
                 <label>Account auswählen:</label>
                 <select id="accountSelect">
                     <option value="">Lade Accounts...</option>
                 </select>
+            </div>
+
+            <div id="customCredentialsGroup" style="display: none;">
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="customEmail" placeholder="email@example.com">
+                </div>
+
+                <div class="form-group">
+                    <label>Passwort:</label>
+                    <input type="password" id="customPassword" placeholder="Passwort">
+                </div>
+
+                <div class="form-group">
+                    <label>Client ID:</label>
+                    <input type="text" id="customClientId" placeholder="Client ID">
+                </div>
+
+                <div class="form-group">
+                    <label>Client Secret (optional):</label>
+                    <input type="text" id="customClientSecret" placeholder="Leer lassen für Standard">
+                </div>
             </div>
 
             <div class="form-group">
@@ -326,6 +356,7 @@
 
     <script>
         let selectedMethod = 'GET';
+        let authMode = 'account'; // 'account' or 'custom'
         let accounts = [];
 
         // Load accounts on page load
@@ -357,6 +388,23 @@
             }
         }
 
+        // Auth mode selector
+        document.getElementById('authModeAccount').addEventListener('click', () => {
+            authMode = 'account';
+            document.getElementById('authModeAccount').classList.add('active');
+            document.getElementById('authModeCustom').classList.remove('active');
+            document.getElementById('accountSelectGroup').style.display = 'block';
+            document.getElementById('customCredentialsGroup').style.display = 'none';
+        });
+
+        document.getElementById('authModeCustom').addEventListener('click', () => {
+            authMode = 'custom';
+            document.getElementById('authModeCustom').classList.add('active');
+            document.getElementById('authModeAccount').classList.remove('active');
+            document.getElementById('accountSelectGroup').style.display = 'none';
+            document.getElementById('customCredentialsGroup').style.display = 'block';
+        });
+
         // Method selector
         document.querySelectorAll('.method-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -383,28 +431,56 @@
 
         // Submit request
         document.getElementById('submitBtn').addEventListener('click', async () => {
-            const accountId = document.getElementById('accountSelect').value;
             const url = document.getElementById('apiUrl').value.trim();
             const requestBody = document.getElementById('requestBody').value.trim();
 
             // Clear previous error
             document.getElementById('errorContainer').innerHTML = '';
 
-            // Validation
-            if (!accountId) {
-                showError('Bitte wähle einen Account aus.');
-                return;
-            }
+            // Validate URL
             if (!url) {
                 showError('Bitte gib eine URL ein.');
                 return;
             }
 
+            // Build request payload based on auth mode
+            let requestPayload = {
+                method: selectedMethod,
+                url: url
+            };
+
+            if (authMode === 'account') {
+                // Use stored account
+                const accountId = document.getElementById('accountSelect').value;
+                if (!accountId) {
+                    showError('Bitte wähle einen Account aus.');
+                    return;
+                }
+                requestPayload.account_id = accountId;
+            } else {
+                // Use custom credentials
+                const email = document.getElementById('customEmail').value.trim();
+                const password = document.getElementById('customPassword').value.trim();
+                const clientId = document.getElementById('customClientId').value.trim();
+                const clientSecret = document.getElementById('customClientSecret').value.trim();
+
+                if (!email || !password || !clientId) {
+                    showError('Bitte fülle alle Pflichtfelder aus (Email, Passwort, Client ID).');
+                    return;
+                }
+
+                requestPayload.custom_credentials = {
+                    email: email,
+                    password: password,
+                    client_id: clientId,
+                    client_secret: clientSecret || ''
+                };
+            }
+
             // Validate JSON if method requires body
-            let parsedBody = null;
             if ((selectedMethod === 'POST' || selectedMethod === 'PUT') && requestBody) {
                 try {
-                    parsedBody = JSON.parse(requestBody);
+                    requestPayload.body = JSON.parse(requestBody);
                 } catch (error) {
                     showError('Ungültiges JSON im Request Body: ' + error.message);
                     return;
@@ -422,12 +498,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        account_id: accountId,
-                        method: selectedMethod,
-                        url: url,
-                        body: parsedBody
-                    })
+                    body: JSON.stringify(requestPayload)
                 });
 
                 const data = await response.json();

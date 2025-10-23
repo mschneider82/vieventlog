@@ -135,3 +135,46 @@ func AuthenticateWithViCare(username, password, clientID string) (*TokenResponse
 
 	return &tokenResponse, nil
 }
+
+// AuthenticateWithPasswordGrant performs OAuth2 Password Grant flow (like ViCare App)
+// This is the flow used by the official ViCare mobile app
+func AuthenticateWithPasswordGrant(username, password, clientID, clientSecret string) (*TokenResponse, error) {
+	// Use default client secret if not provided
+	if clientSecret == "" {
+		clientSecret = defaultClientSecret
+	}
+
+	// Build token request with password grant
+	tokenParams := url.Values{}
+	tokenParams.Add("grant_type", "password")
+	tokenParams.Add("username", username)
+	tokenParams.Add("password", password)
+	tokenParams.Add("client_id", clientID)
+	tokenParams.Add("client_secret", clientSecret)
+	tokenParams.Add("scope", "openid offline_access Internal")
+
+	tokenReq, err := http.NewRequest("POST", tokenURL, strings.NewReader(tokenParams.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token request: %w", err)
+	}
+
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	tokenResp, err := http.DefaultClient.Do(tokenReq)
+	if err != nil {
+		return nil, fmt.Errorf("token request failed: %w", err)
+	}
+	defer tokenResp.Body.Close()
+
+	if tokenResp.StatusCode != 200 {
+		body, _ := io.ReadAll(tokenResp.Body)
+		return nil, fmt.Errorf("authentication failed (status %d): %s", tokenResp.StatusCode, string(body))
+	}
+
+	var tokenResponse TokenResponse
+	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	return &tokenResponse, nil
+}

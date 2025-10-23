@@ -766,3 +766,115 @@ func debugDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+// testRequestHandler handles POST /api/test-request
+// Executes a custom API request using either stored account or custom credentials
+func testRequestHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TestAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(TestAPIResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.URL == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(TestAPIResponse{
+			Success: false,
+			Error:   "url is required",
+		})
+		return
+	}
+
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+
+	// Get access token - either from account or custom credentials
+	var accessToken string
+
+	if req.CustomCredentials != nil {
+		// Use custom credentials for one-time authentication with Password Grant Flow
+		// This matches the flow used by the official ViCare mobile app
+		log.Printf("Using custom credentials (Password Grant) for API test: %s\n", req.CustomCredentials.Email)
+
+		// Authenticate with Password Grant Flow (like ViCare App)
+		token, err := AuthenticateWithPasswordGrant(
+			req.CustomCredentials.Email,
+			req.CustomCredentials.Password,
+			req.CustomCredentials.ClientID,
+			req.CustomCredentials.ClientSecret,
+		)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(TestAPIResponse{
+				Success: false,
+				Error:   "Failed to authenticate with custom credentials: " + err.Error(),
+			})
+			return
+		}
+
+		accessToken = token.AccessToken
+	} else if req.AccountID != "" {
+		// Use stored account credentials
+		log.Printf("Using stored account for API test: %s\n", req.AccountID)
+
+		account, err := GetAccount(req.AccountID)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(TestAPIResponse{
+				Success: false,
+				Error:   "Account not found: " + err.Error(),
+			})
+			return
+		}
+
+		// Ensure account is authenticated and get token
+		token, err := ensureAccountAuthenticated(account)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(TestAPIResponse{
+				Success: false,
+				Error:   "Failed to authenticate: " + err.Error(),
+			})
+			return
+		}
+
+		accessToken = token.AccessToken
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(TestAPIResponse{
+			Success: false,
+			Error:   "Either account_id or custom_credentials must be provided",
+		})
+		return
+	}
+
+	// Execute the request
+	statusCode, responseBody, err := executeAPIRequest(req.Method, req.URL, accessToken, req.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(TestAPIResponse{
+			Success: false,
+			Error:   "Request failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Return the response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(TestAPIResponse{
+		Success:    true,
+		StatusCode: statusCode,
+		Response:   responseBody,
+	})
+}

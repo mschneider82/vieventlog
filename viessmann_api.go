@@ -374,3 +374,49 @@ func fetchGatewayIDForInstallation(installationID, accessToken string) (string, 
 
 	return "", fmt.Errorf("no gateways found for installation %s (checked %d installations)", installationID, len(result.Data))
 }
+
+// executeAPIRequest executes an arbitrary HTTP request to the Viessmann API
+// Returns status code, response body (parsed as JSON if possible, otherwise as string), and error
+func executeAPIRequest(method, url, accessToken string, requestBody map[string]interface{}) (int, interface{}, error) {
+	var bodyReader io.Reader
+	if requestBody != nil && (method == "POST" || method == "PUT") {
+		bodyBytes, err := json.Marshal(requestBody)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = strings.NewReader(string(bodyBytes))
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	if bodyReader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	log.Printf("Executing %s request to: %s\n", method, url)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Try to parse as JSON
+	var parsedBody interface{}
+	if err := json.Unmarshal(bodyBytes, &parsedBody); err != nil {
+		// If not JSON, return as string
+		return resp.StatusCode, string(bodyBytes), nil
+	}
+
+	return resp.StatusCode, parsedBody, nil
+}

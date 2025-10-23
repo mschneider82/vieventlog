@@ -56,6 +56,7 @@ func main() {
 	http.HandleFunc("/dashboard", dashboardPageHandler)
 	http.HandleFunc("/smartclimate", smartClimatePageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)
+	http.HandleFunc("/apitest", apiTestPageHandler)
 
 	// Static files handler
 	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
@@ -116,6 +117,9 @@ func main() {
 
 	// Debug endpoints
 	http.HandleFunc("/api/debug/devices", debugDevicesHandler)
+
+	// API test endpoint
+	http.HandleFunc("/api/test-request", testRequestHandler)
 
 	// Get bind address from environment, with backward compatibility for PORT
 	bindAddress := os.Getenv("BIND_ADDRESS")
