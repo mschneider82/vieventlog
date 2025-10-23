@@ -112,7 +112,6 @@ var statusCodes = map[string]string{
 	"S.165": "Waermepumpe: Systemstatus Regelung",
 	"S.167": "Aktorentest aktiv",
 	"S.168": "Lueftungsbypass offen",
-	"S.169": "Lueftungsbypass geschlossen",
 	"S.170": "Systemcheck laeuft",
 	"S.171": "Initialisierung",
 	"S.172": "Software-Update",
@@ -194,6 +193,7 @@ var maintenanceCodes = map[string]string{
 	"P.4":  "Heizwasser nachfuellen",
 	"P.8":  "Wartung nach Betriebsstunden steht bevor",
 	"P.34": "Wartung Heizwasserfilter",
+	"P.35": "Zeitintervall für Filterwechsel ist abgelaufen",
 }
 
 // Alert codes (A-codes) - warning messages
@@ -273,6 +273,8 @@ var informationCodes = map[string]string{
 	"I.89":  "Uhrzeit vorgestellt (Sommerzeit)",
 	"I.90":  "Uhrzeit zurueckgestellt (Winterzeit)",
 	"I.92":  "Energiebilanz zurueckgesetzt",
+	"I.94":  "Wartung in 30 Tagen fällig",
+	"I.95":  "Filterwechsel in 14 Tagen fällig",
 	"I.96":  "Unbekannte Folge-Waermepumpe (weiteres Viessmann Geraet)",
 	"I.98":  "Neue Folge-Waermepumpe (weiteres Viessmann Geraet) wurde erkannt",
 	"I.99":  "Zieltemperatur Hygienefunktion erreicht",
@@ -371,7 +373,12 @@ var faultCodes = map[string]string{
 	"F.687": "HPMU Verbindungsfehler",
 	"F.770": "Frostschutz aktiviert",
 	"F.771": "Passiver Frostschutz",
+	"F.764": "Weiterer CAN-BUS-Teilnehmer meldet eine Störung",
 	"F.788": "Kältekreis startet nicht",
+	"F.791": "Ausfall Heizwasser-Durchlauferhitzer Phase 1",
+	"F.792": "Ausfall Heizwasser-Durchlauferhitzer Phase 2",
+	"F.793": "Ausfall Heizwasser-Durchlauferhitzer Phase 3",
+	"F.1078": "Wiederholt zu geringer Volumenstrom bei Verdichteranlauf",
 }
 
 func getErrorDescription(code string) string {
