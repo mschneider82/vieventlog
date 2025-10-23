@@ -442,9 +442,9 @@
             }
 
             #timeline {
-                height: 300px;
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
+                min-height: 0;
             }
 
             /* Fix timeline SVG width for mobile */
@@ -660,7 +660,7 @@
         </div>
 
         <!-- Timeline Visualization -->
-        <div class="timeline-container" style="background: linear-gradient(to bottom, #1e1e2e 0%, #262637 100%); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); padding: 24px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); max-height: 800px; overflow-y: auto;">
+        <div class="timeline-container" style="background: linear-gradient(to bottom, #1e1e2e 0%, #262637 100%); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); padding: 24px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div>
                     <h2 style="margin: 0; font-size: 20px; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 10px;">
@@ -693,7 +693,7 @@
                     </div>
                 </div>
             </div>
-            <div id="timeline" style="width: 100%; height: 450px; overflow-x: auto; overflow-y: hidden; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;"></div>
+            <div id="timeline" style="width: 100%; overflow-x: auto; overflow-y: hidden; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;"></div>
         </div>
 
         <div class="events-container">
@@ -1524,20 +1524,25 @@ ${formatEventBody(event.body)}
                 return sum + 1 + (lane.hasValveSpans ? 0.35 : 0); // 1 main lane + 0.35 smaller valve lane if needed
             }, 0);
 
-            // Design: Give each lane adequate space for good readability
-            // Single/dual lanes: generous height
-            // 3+ lanes: still good but more compact, SVG will be scrollable
+            // Design: Card-based layout with adequate space per device
+            // Each device gets a card with valve position + event timeline
             let minMainLaneHeight;
             if (isMobile) {
-                minMainLaneHeight = 55;
+                minMainLaneHeight = 60;
             } else {
-                // Always use a nice readable height per lane
-                minMainLaneHeight = 100; // Each lane gets 100px for good readability
+                // Generous height per device for good readability
+                minMainLaneHeight = 120; // Each device gets 120px for great readability
             }
 
-            // Calculate height without artificial cap
-            // Container will be scrollable if needed
-            const minHeight = margin.top + margin.bottom + (minMainLaneHeight * laneArray.length) + 20;
+            // Add padding for device card margins and headers
+            const deviceCardMargin = 20; // Space between device cards
+            const deviceCardPadding = 15; // Padding inside each card
+            const deviceCardHeaderHeight = 35; // Height for device name header
+
+            // Calculate total height
+            const minHeight = margin.top + margin.bottom +
+                             (laneArray.length * (minMainLaneHeight + deviceCardMargin + deviceCardHeaderHeight)) +
+                             (laneArray.length * deviceCardPadding * 2) + 40;
             const height = minHeight;
 
             // Calculate average lane height based on total lanes
@@ -1668,53 +1673,72 @@ ${formatEventBody(event.body)}
             let currentYOffset = margin.top;
 
             laneArray.forEach((lane, laneIdx) => {
-                const mainLaneHeight = averageLaneHeight * (lane.hasValveSpans ? 0.75 : 1.0); // Event lane
-                const valveLaneHeight = lane.hasValveSpans ? averageLaneHeight * 0.20 : 0; // Valve lane (smaller, 20% of main)
-                const valveSpacing = lane.hasValveSpans ? 5 : 0; // Nice spacing between valve and event lanes
+                // Card-based layout: fixed heights per device card
+                const cardEventHeight = minMainLaneHeight; // Event timeline height
+                const cardValveHeight = lane.hasValveSpans ? minMainLaneHeight * 0.25 : 0; // Valve lane (25% of event height)
+                const valveSpacing = lane.hasValveSpans ? 8 : 0; // Nice spacing between valve and event
+                const cardPadding = deviceCardPadding;
 
-                // Valve lane comes FIRST (above events)
-                const yValve = currentYOffset;
+                // Calculate main and valve lane heights for this device
+                const mainLaneHeight = cardEventHeight;
+                const valveLaneHeight = cardValveHeight;
+                const cardTotalHeight = deviceCardHeaderHeight + cardPadding + valveLaneHeight + valveSpacing + cardEventHeight + cardPadding;
+
+                // Card header start
+                const cardHeaderY = currentYOffset;
+                const cardContentStartY = cardHeaderY + deviceCardHeaderHeight;
+
+                // Valve lane comes FIRST (above events), with padding
+                const yValve = cardContentStartY + cardPadding;
                 const y = yValve + valveLaneHeight + valveSpacing; // Events below valve lane
 
                 // Combined height for main + valve lanes
                 const totalMainHeight = valveLaneHeight + valveSpacing + mainLaneHeight;
 
-                // Lane background with subtle gradient for main lane
+                // ===== DEVICE CARD BACKGROUND =====
+                const cardBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                cardBg.setAttribute('x', 5);
+                cardBg.setAttribute('y', cardHeaderY);
+                cardBg.setAttribute('width', width - 10);
+                cardBg.setAttribute('height', cardTotalHeight);
+                cardBg.setAttribute('fill', 'rgba(255,255,255,0.04)');
+                cardBg.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+                cardBg.setAttribute('stroke-width', '1');
+                cardBg.setAttribute('rx', '8');
+                svg.appendChild(cardBg);
+
+                // ===== DEVICE CARD HEADER =====
+                const headerBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                headerBg.setAttribute('x', 5);
+                headerBg.setAttribute('y', cardHeaderY);
+                headerBg.setAttribute('width', width - 10);
+                headerBg.setAttribute('height', deviceCardHeaderHeight);
+                headerBg.setAttribute('fill', 'rgba(139, 92, 246, 0.15)');
+                headerBg.setAttribute('stroke', 'none');
+                headerBg.setAttribute('rx', '8');
+                svg.appendChild(headerBg);
+
+                // Device name in header
+                const headerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                headerText.setAttribute('x', margin.left);
+                headerText.setAttribute('y', cardHeaderY + deviceCardHeaderHeight / 2);
+                headerText.setAttribute('dominant-baseline', 'middle');
+                headerText.setAttribute('font-size', isMobile ? '12' : '14');
+                headerText.setAttribute('fill', '#c7d2ff');
+                headerText.setAttribute('font-weight', '700');
+                const installation = installations[lane.installationId];
+                headerText.textContent = `${lane.name}${installation && installation.location ? ` • ${installation.location}` : ''}`;
+                svg.appendChild(headerText);
+
+                // Lane background for event area
                 const laneBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                 laneBg.setAttribute('x', margin.left);
-                laneBg.setAttribute('y', y);
+                laneBg.setAttribute('y', y - 2);
                 laneBg.setAttribute('width', width - margin.left - margin.right);
-                laneBg.setAttribute('height', totalMainHeight);
-                laneBg.setAttribute('fill', laneIdx % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.1)');
+                laneBg.setAttribute('height', mainLaneHeight + 4);
+                laneBg.setAttribute('fill', 'rgba(255,255,255,0.02)');
                 laneBg.setAttribute('rx', '4');
                 svg.appendChild(laneBg);
-
-                // Lane border
-                const laneBorder = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                laneBorder.setAttribute('x', margin.left);
-                laneBorder.setAttribute('y', y);
-                laneBorder.setAttribute('width', width - margin.left - margin.right);
-                laneBorder.setAttribute('height', totalMainHeight);
-                laneBorder.setAttribute('fill', 'none');
-                laneBorder.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                laneBorder.setAttribute('stroke-width', '1');
-                laneBorder.setAttribute('rx', '4');
-                svg.appendChild(laneBorder);
-
-                // Separator line between lanes (except after last lane)
-                if (laneIdx < laneArray.length - 1) {
-                    const separator = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                    separator.setAttribute('x1', margin.left);
-                    separator.setAttribute('y1', y + totalMainHeight + 1);
-                    separator.setAttribute('x2', width - margin.right);
-                    separator.setAttribute('y2', y + totalMainHeight + 1);
-                    separator.setAttribute('stroke', 'rgba(255,255,255,0.15)');
-                    separator.setAttribute('stroke-width', '1');
-                    svg.appendChild(separator);
-                }
-
-                // Device/Installation labels
-                const installation = installations[lane.installationId];
 
                 // If has valve spans, create separate labels for valve and event lanes
                 if (lane.hasValveSpans) {
@@ -2175,8 +2199,8 @@ ${formatEventBody(event.body)}
                     });
                 }
 
-                // Update offset for next lane
-                currentYOffset += mainLaneHeight + valveLaneHeight;
+                // Update offset for next device card
+                currentYOffset += cardTotalHeight + deviceCardMargin;
             });
 
             // Set the final SVG height based on actual lane content
@@ -2186,6 +2210,28 @@ ${formatEventBody(event.body)}
             // Now draw the axis on top
             drawAxisFn(finalHeight);
             svg.appendChild(axisGroup);
+
+            // ===== ADJUST CONTAINER HEIGHT BASED ON SVG CONTENT =====
+            // Set container height to show all content with minimal scrolling
+            const timelineDiv = document.querySelector('#timeline');
+            const timelineContainer = document.querySelector('.timeline-container');
+
+            if (timelineDiv && timelineContainer) {
+                // Set the #timeline div height to match the SVG content
+                timelineDiv.style.height = finalHeight + 'px';
+
+                // Use the actual SVG height + some padding for the controls at the top
+                const controlsHeight = 80; // Space for title, buttons, filters
+                const containerPaddingTotal = 48; // padding: 24px top + 24px bottom
+                const totalNeededHeight = finalHeight + controlsHeight + containerPaddingTotal;
+
+                // Set a reasonable max-height, minimum 750px for readability
+                const minMaxHeight = 750;
+                const dynamicMaxHeight = Math.max(minMaxHeight, totalNeededHeight);
+
+                timelineContainer.style.maxHeight = dynamicMaxHeight + 'px';
+                console.log(`Timeline: ${laneArray.length} devices, SVG height ${finalHeight}px, #timeline height ${finalHeight}px, container height ${dynamicMaxHeight}px`);
+            }
         }
 
         // ========================================
