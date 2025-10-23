@@ -12,10 +12,10 @@ import (
 // Room represents aggregated data for a room from RoomControl
 type Room struct {
 	RoomID            int                    `json:"roomId"`
-	RoomName          string                 `json:"roomName"`          // User-defined name or default "Raum X"
-	SystemName        string                 `json:"systemName"`        // Name from rooms.N.properties.name.value
-	RoomType          string                 `json:"roomType"`          // Type from rooms.N.properties.type.value (hallway, livingroom, etc.)
-	RoomTypeDE        string                 `json:"roomTypeDE"`        // German translation of room type
+	RoomName          string                 `json:"roomName"`   // User-defined name or default "Raum X"
+	SystemName        string                 `json:"systemName"` // Name from rooms.N.properties.name.value
+	RoomType          string                 `json:"roomType"`   // Type from rooms.N.properties.type.value (hallway, livingroom, etc.)
+	RoomTypeDE        string                 `json:"roomTypeDE"` // German translation of room type
 	InstallationID    string                 `json:"installationId"`
 	AccountID         string                 `json:"accountId"`
 	GatewaySerial     string                 `json:"gatewaySerial"` // Required for API calls
@@ -28,7 +28,7 @@ type Room struct {
 	WindowOpen        bool                   `json:"windowOpen"`
 	HeatingSetpoint   *float64               `json:"heatingSetpoint,omitempty"`
 	CoolingSetpoint   *float64               `json:"coolingSetpoint,omitempty"`
-	ChildLock         string                 `json:"childLock,omitempty"`     // "active" or "inactive"
+	ChildLock         string                 `json:"childLock,omitempty"`      // "active" or "inactive"
 	OperatingState    string                 `json:"operatingState,omitempty"` // "energySaving" or "heating"
 	RawFeatures       map[string]interface{} `json:"rawFeatures,omitempty"`
 }

@@ -204,3 +204,28 @@ type DebugDevicesResponse struct {
 	Devices          []DebugDeviceInfo `json:"devices"`
 	IncludesFeatures bool              `json:"includesFeatures"`
 }
+
+// TestAPIRequest represents a request to test an arbitrary Viessmann API endpoint
+type TestAPIRequest struct {
+	AccountID         string                 `json:"account_id,omitempty"`
+	CustomCredentials *CustomCredentials     `json:"custom_credentials,omitempty"`
+	Method            string                 `json:"method"`
+	URL               string                 `json:"url"`
+	Body              map[string]interface{} `json:"body,omitempty"`
+}
+
+// CustomCredentials for API testing with temporary authentication
+type CustomCredentials struct {
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+}
+
+// TestAPIResponse represents the response from a test API request
+type TestAPIResponse struct {
+	Success    bool        `json:"success"`
+	Error      string      `json:"error,omitempty"`
+	StatusCode int         `json:"status_code,omitempty"`
+	Response   interface{} `json:"response,omitempty"`
+}
