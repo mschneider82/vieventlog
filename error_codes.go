@@ -201,6 +201,7 @@ var alertCodes = map[string]string{
 	"A.2":   "Frostschutzgrenze unterschritten",
 	"A.11":  "Anlagendruck zu niedrig",
 	"A.12":  "Batterie im Elektronikmodul HPMU",
+	"A.27":  "Batterie geringer Ladezustand",
 	"A.16":  "Mindestvolumenstrom unterschritten",
 	"A.17":  "Erhöhte Trinkwasserhygiene",
 	"A.19":  "Temperaturwächter hat ausgelöst",
