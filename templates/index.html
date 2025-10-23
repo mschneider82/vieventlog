@@ -660,7 +660,7 @@
         </div>
 
         <!-- Timeline Visualization -->
-        <div class="timeline-container" style="background: linear-gradient(to bottom, #1e1e2e 0%, #262637 100%); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); padding: 24px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
+        <div class="timeline-container" style="background: linear-gradient(to bottom, #1e1e2e 0%, #262637 100%); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); padding: 24px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); max-height: 800px; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div>
                     <h2 style="margin: 0; font-size: 20px; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 10px;">
@@ -1249,7 +1249,8 @@ ${formatEventBody(event.body)}
                     lanes[laneKey] = {
                         name: `${event.modelId} (${event.deviceId})`,
                         installationId: installation,
-                        events: []
+                        events: [],
+                        hasValveSpans: false // Track if this lane has valve position events
                     };
                 }
                 lanes[laneKey].events.push(event);
@@ -1258,12 +1259,22 @@ ${formatEventBody(event.body)}
             // Process each lane to create state spans with valve position awareness
             Object.values(lanes).forEach(lane => {
                 lane.spans = [];
+                lane.valveSpans = []; // Separate spans for valve positions
                 const activeStates = {}; // Track active states by error code
+                const activeValveStates = {}; // Track active valve position states separately
                 let currentValvePosition = null; // Track 4/3-way valve position
 
                 lane.events.forEach(event => {
                     const code = event.errorCode;
                     if (!code) return;
+
+                    // Define valve position codes
+                    const isValveCode = (c) => {
+                        return c && (
+                            (c >= 'S.112' && c <= 'S.118') ||
+                            (c >= 'S.134' && c <= 'S.136')
+                        );
+                    };
 
                     // Handle valve position changes (all valve-related codes)
                     const valvePositionMap = {
@@ -1279,6 +1290,44 @@ ${formatEventBody(event.body)}
                         'S.136': 'room'         // Raumbeheizung/Raumkühlung
                     };
 
+                    // Separate handling for valve position codes
+                    if (isValveCode(code)) {
+                        lane.hasValveSpans = true;
+
+                        if (event.active === true) {
+                            // Start of a new valve state
+                            activeValveStates[code] = {
+                                startTime: event.eventTimestamp || event.createdAt,
+                                startEvent: event
+                            };
+                        } else if (event.active === false) {
+                            // End of a valve state
+                            if (activeValveStates[code]) {
+                                lane.valveSpans.push({
+                                    code: code,
+                                    startTime: activeValveStates[code].startTime,
+                                    endTime: event.eventTimestamp || event.createdAt,
+                                    startEvent: activeValveStates[code].startEvent,
+                                    endEvent: event
+                                });
+                                delete activeValveStates[code];
+                            }
+                        } else if (event.active === null || event.active === undefined) {
+                            // Fallback: Treat events without active field as instant events
+                            const eventTime = event.eventTimestamp || event.createdAt;
+                            const endTime = new Date(new Date(eventTime).getTime() + 5 * 60 * 1000).toISOString();
+                            lane.valveSpans.push({
+                                code: code,
+                                startTime: eventTime,
+                                endTime: endTime,
+                                startEvent: event,
+                                endEvent: null,
+                                fallback: true
+                            });
+                        }
+                    }
+
+                    // Only continue with non-valve code processing below
                     if (valvePositionMap[code]) {
                         if (event.active === true) {
                             const newValvePosition = valvePositionMap[code];
@@ -1286,31 +1335,22 @@ ${formatEventBody(event.body)}
 
                             // Migration: If S.125 is already running when valve switches to warmwater
                             if (code === 'S.115' && activeStates['S.125']) {
-                                // End the normal S.125 span
-                                lane.spans.push({
-                                    code: 'S.125',
-                                    originalCode: 'S.125',
-                                    startTime: activeStates['S.125'].startTime,
-                                    endTime: eventTime,
-                                    startEvent: activeStates['S.125'].startEvent,
-                                    endEvent: event,
-                                    valvePosition: null
-                                });
-
-                                // Start new S.125-WARMWATER span
+                                // DON'T end the S.125 span - it continues in the background
+                                // Instead, start a S.125-WARMWATER span as an overlay
+                                // The original S.125 continues and will be ended when S.125 BEENDET event arrives
                                 activeStates['S.125-WARMWATER'] = {
                                     startTime: eventTime,
                                     startEvent: event,
                                     originalCode: 'S.125',
-                                    valvePosition: 'warmwater'
+                                    valvePosition: 'warmwater',
+                                    parentS125: activeStates['S.125']  // Reference to parent heating state
                                 };
-
-                                delete activeStates['S.125'];
                             }
 
-                            // Migration: If S.125 is already running when valve switches to heating circuit
-                            if ((code === 'S.116' || code === 'S.117') && activeStates['S.125-WARMWATER']) {
-                                // End the S.125-WARMWATER span
+                            // Migration: If S.125-WARMWATER is active when valve switches away from warmwater
+                            // This applies to heating circuits (S.116, S.117), puffer (S.118), defrost (S.135), room (S.136), idle (S.134)
+                            if (activeStates['S.125-WARMWATER'] && (code === 'S.116' || code === 'S.117' || code === 'S.118' || code === 'S.134' || code === 'S.135' || code === 'S.136')) {
+                                // End the S.125-WARMWATER span (the overlay)
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
@@ -1321,13 +1361,9 @@ ${formatEventBody(event.body)}
                                     valvePosition: 'warmwater'
                                 });
 
-                                // Start new normal S.125 span
-                                activeStates['S.125'] = {
-                                    startTime: eventTime,
-                                    startEvent: event,
-                                    originalCode: 'S.125',
-                                    valvePosition: newValvePosition
-                                };
+                                // Parent S.125 continues - don't create a new span, just track valve position
+                                // The background S.125 continues until its actual BEENDET event
+                                currentValvePosition = newValvePosition;
 
                                 delete activeStates['S.125-WARMWATER'];
                             }
@@ -1336,9 +1372,9 @@ ${formatEventBody(event.body)}
                         } else if (event.active === false) {
                             const eventTime = event.eventTimestamp || event.createdAt;
 
-                            // Inverse Migration: When warmwater valve ends, convert S.125-WARMWATER back to S.125
+                            // When warmwater valve ends, end the S.125-WARMWATER overlay span
                             if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
-                                // End the S.125-WARMWATER span
+                                // End the S.125-WARMWATER overlay span
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
@@ -1350,18 +1386,15 @@ ${formatEventBody(event.body)}
                                 });
 
                                 delete activeStates['S.125-WARMWATER'];
-
-                                // Note: We don't start a new S.125 here because typically S.125
-                                // ends at the same time or shortly after S.115 ends
+                                // Parent S.125 continues - don't do anything
+                                currentValvePosition = null;
                             }
 
-                            // Inverse Migration: When heating circuit valve ends, convert S.125 back if needed
-                            if ((code === 'S.116' || code === 'S.117') && activeStates['S.125']) {
-                                // Just end the current S.125 - typically heating stops when valve switches
-                                // We don't create a span here, just let normal S.125 end handling take care of it
+                            // When heating circuit valve ends, just track the position change
+                            if ((code === 'S.116' || code === 'S.117' || code === 'S.118' || code === 'S.134' || code === 'S.135' || code === 'S.136')) {
+                                // S.125 continues in the background, just update valve position
+                                currentValvePosition = null;
                             }
-
-                            currentValvePosition = null;
                         }
                     }
 
@@ -1423,6 +1456,56 @@ ${formatEventBody(event.body)}
                         valvePosition: state.valvePosition
                     });
                 });
+
+                // Add ongoing valve states (still active)
+                Object.entries(activeValveStates).forEach(([code, state]) => {
+                    lane.valveSpans.push({
+                        code: code,
+                        startTime: state.startTime,
+                        endTime: new Date().toISOString(), // Current time
+                        startEvent: state.startEvent,
+                        endEvent: null,
+                        ongoing: true
+                    });
+                });
+
+                // Sort spans by start time, then by end time to ensure correct ordering
+                lane.spans.sort((a, b) => {
+                    const aStart = new Date(a.startTime).getTime();
+                    const bStart = new Date(b.startTime).getTime();
+                    if (aStart !== bStart) return aStart - bStart;
+                    return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
+                });
+
+                // Post-process spans to fix gaps caused by state transitions at same timestamp
+                // When one span ends at time T and another starts at time T, adjust the end time
+                // of the first span to match the start time of the next to avoid gaps
+                for (let i = 0; i < lane.spans.length - 1; i++) {
+                    const currentSpan = lane.spans[i];
+                    const nextSpan = lane.spans[i + 1];
+
+                    // Check if next span starts exactly when current span ends
+                    const currentEnd = new Date(currentSpan.endTime).getTime();
+                    const nextStart = new Date(nextSpan.startTime).getTime();
+
+                    // If there's a tiny gap (less than 1 second), extend current span to match next start
+                    if (nextStart > currentEnd && nextStart - currentEnd < 1000) {
+                        currentSpan.endTime = nextSpan.startTime;
+                    }
+                }
+
+                // Same for valve spans
+                for (let i = 0; i < lane.valveSpans.length - 1; i++) {
+                    const currentSpan = lane.valveSpans[i];
+                    const nextSpan = lane.valveSpans[i + 1];
+
+                    const currentEnd = new Date(currentSpan.endTime).getTime();
+                    const nextStart = new Date(nextSpan.startTime).getTime();
+
+                    if (nextStart > currentEnd && nextStart - currentEnd < 1000) {
+                        currentSpan.endTime = nextSpan.startTime;
+                    }
+                }
             });
 
             const laneArray = Object.values(lanes);
@@ -1432,10 +1515,34 @@ ${formatEventBody(event.body)}
             const containerWidth = container.offsetWidth || window.innerWidth;
             const minWidth = isMobile ? containerWidth - 40 : 1400;
             const width = Math.max(minWidth, sortedEvents.length * (isMobile ? 3 : 6));
-            const minLaneHeight = isMobile ? 50 : 60; // Minimum height per lane for visibility
-            const height = Math.max(isMobile ? 300 : 400, minLaneHeight * laneArray.length + 100); // Dynamic height based on lane count
-            const margin = { top: 30, right: isMobile ? 20 : 40, bottom: 70, left: isMobile ? 120 : 280 }; // Reduced left margin for mobile
-            const laneHeight = (height - margin.top - margin.bottom) / Math.max(laneArray.length, 1);
+
+            // Define margins first
+            const margin = { top: 30, right: isMobile ? 20 : 40, bottom: 70, left: isMobile ? 120 : 280 };
+
+            // Calculate total lane units (main lanes + valve sub-lanes)
+            const totalLaneUnits = laneArray.reduce((sum, lane) => {
+                return sum + 1 + (lane.hasValveSpans ? 0.35 : 0); // 1 main lane + 0.35 smaller valve lane if needed
+            }, 0);
+
+            // Design: Give each lane adequate space for good readability
+            // Single/dual lanes: generous height
+            // 3+ lanes: still good but more compact, SVG will be scrollable
+            let minMainLaneHeight;
+            if (isMobile) {
+                minMainLaneHeight = 55;
+            } else {
+                // Always use a nice readable height per lane
+                minMainLaneHeight = 100; // Each lane gets 100px for good readability
+            }
+
+            // Calculate height without artificial cap
+            // Container will be scrollable if needed
+            const minHeight = margin.top + margin.bottom + (minMainLaneHeight * laneArray.length) + 20;
+            const height = minHeight;
+
+            // Calculate average lane height based on total lanes
+            const totalLaneSpace = height - margin.top - margin.bottom;
+            const averageLaneHeight = totalLaneSpace / Math.max(totalLaneUnits, 1);
 
             // Create scale
             const xScale = (date) => {
@@ -1443,14 +1550,13 @@ ${formatEventBody(event.body)}
                 return margin.left + t * (width - margin.left - margin.right);
             };
 
-            // Create SVG
+            // Create SVG (height will be adjusted after rendering all lanes)
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('width', width);
-            svg.setAttribute('height', height);
             svg.style.display = 'block';
             container.appendChild(svg);
 
-            // Draw grid and time axis with intelligent intervals
+            // Draw grid and time axis with intelligent intervals (will be drawn after lanes)
             const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
             // Calculate appropriate interval based on time range
@@ -1471,53 +1577,55 @@ ${formatEventBody(event.body)}
             }
 
             // Round start time to previous full hour
-            const startTime = new Date(timeExtent[0]);
-            startTime.setMinutes(0, 0, 0);
+            const axisStartTime = new Date(timeExtent[0]);
+            axisStartTime.setMinutes(0, 0, 0);
 
             // Generate rounded hour marks
             const timeMarks = [];
-            let currentTime = new Date(startTime);
-            while (currentTime <= timeExtent[1]) {
-                if (currentTime >= timeExtent[0]) {
-                    timeMarks.push(new Date(currentTime));
+            let axisCurrentTime = new Date(axisStartTime);
+            while (axisCurrentTime <= timeExtent[1]) {
+                if (axisCurrentTime >= timeExtent[0]) {
+                    timeMarks.push(new Date(axisCurrentTime));
                 }
-                currentTime.setHours(currentTime.getHours() + hourInterval);
+                axisCurrentTime.setHours(axisCurrentTime.getHours() + hourInterval);
             }
 
-            // Draw grid lines and labels for each time mark
-            timeMarks.forEach((markTime, index) => {
-                const x = xScale(markTime);
-                const isFirst = index === 0;
-                const isLast = index === timeMarks.length - 1;
+            // Store axis drawing function for later (after lanes are rendered)
+            const drawAxisFn = (finalHeight) => {
+                // Draw grid lines and labels for each time mark
+                timeMarks.forEach((markTime, index) => {
+                    const x = xScale(markTime);
+                    const isFirst = index === 0;
+                    const isLast = index === timeMarks.length - 1;
 
-                // Grid line
-                const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                gridLine.setAttribute('x1', x);
-                gridLine.setAttribute('y1', margin.top);
-                gridLine.setAttribute('x2', x);
-                gridLine.setAttribute('y2', height - margin.bottom);
-                gridLine.setAttribute('stroke', 'rgba(255,255,255,0.05)');
-                gridLine.setAttribute('stroke-width', '1');
-                if (isFirst || isLast) {
-                    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                    gridLine.setAttribute('stroke-width', '2');
-                }
-                axisGroup.appendChild(gridLine);
+                    // Grid line
+                    const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    gridLine.setAttribute('x1', x);
+                    gridLine.setAttribute('y1', margin.top);
+                    gridLine.setAttribute('x2', x);
+                    gridLine.setAttribute('y2', finalHeight - margin.bottom);
+                    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.05)');
+                    gridLine.setAttribute('stroke-width', '1');
+                    if (isFirst || isLast) {
+                        gridLine.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+                        gridLine.setAttribute('stroke-width', '2');
+                    }
+                    axisGroup.appendChild(gridLine);
 
-                // Tick
-                const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                tick.setAttribute('x1', x);
-                tick.setAttribute('y1', height - margin.bottom);
-                tick.setAttribute('x2', x);
-                tick.setAttribute('y2', height - margin.bottom + 6);
-                tick.setAttribute('stroke', 'rgba(255,255,255,0.3)');
-                tick.setAttribute('stroke-width', '2');
-                axisGroup.appendChild(tick);
+                    // Tick
+                    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    tick.setAttribute('x1', x);
+                    tick.setAttribute('y1', finalHeight - margin.bottom);
+                    tick.setAttribute('x2', x);
+                    tick.setAttribute('y2', finalHeight - margin.bottom + 6);
+                    tick.setAttribute('stroke', 'rgba(255,255,255,0.3)');
+                    tick.setAttribute('stroke-width', '2');
+                    axisGroup.appendChild(tick);
 
-                // Time label - show date and time for intervals >= 12h, otherwise just time
-                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                label.setAttribute('x', x);
-                label.setAttribute('y', height - margin.bottom + 22);
+                    // Time label - show date and time for intervals >= 12h, otherwise just time
+                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    label.setAttribute('x', x);
+                    label.setAttribute('y', finalHeight - margin.bottom + 22);
                 label.setAttribute('text-anchor', 'middle');
                 label.setAttribute('font-size', isMobile ? '9' : '11');
                 label.setAttribute('font-weight', '500');
@@ -1546,26 +1654,37 @@ ${formatEventBody(event.body)}
                 if (hourInterval < 12 && (markTime.getHours() === 0 || index % 4 === 0)) {
                     const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     dateLabel.setAttribute('x', x);
-                    dateLabel.setAttribute('y', height - margin.bottom + 38);
+                    dateLabel.setAttribute('y', finalHeight - margin.bottom + 38);
                     dateLabel.setAttribute('text-anchor', 'middle');
                     dateLabel.setAttribute('font-size', '10');
                     dateLabel.setAttribute('fill', '#707080');
                     dateLabel.textContent = markTime.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' });
                     axisGroup.appendChild(dateLabel);
-                }
-            });
-            svg.appendChild(axisGroup);
+                    }
+                });
+            };
 
-            // Draw lanes and state spans
+            // Draw lanes and state spans (before axis so axis is on top)
+            let currentYOffset = margin.top;
+
             laneArray.forEach((lane, laneIdx) => {
-                const y = margin.top + laneIdx * laneHeight;
+                const mainLaneHeight = averageLaneHeight * (lane.hasValveSpans ? 0.75 : 1.0); // Event lane
+                const valveLaneHeight = lane.hasValveSpans ? averageLaneHeight * 0.20 : 0; // Valve lane (smaller, 20% of main)
+                const valveSpacing = lane.hasValveSpans ? 5 : 0; // Nice spacing between valve and event lanes
 
-                // Lane background with subtle gradient
+                // Valve lane comes FIRST (above events)
+                const yValve = currentYOffset;
+                const y = yValve + valveLaneHeight + valveSpacing; // Events below valve lane
+
+                // Combined height for main + valve lanes
+                const totalMainHeight = valveLaneHeight + valveSpacing + mainLaneHeight;
+
+                // Lane background with subtle gradient for main lane
                 const laneBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                 laneBg.setAttribute('x', margin.left);
                 laneBg.setAttribute('y', y);
                 laneBg.setAttribute('width', width - margin.left - margin.right);
-                laneBg.setAttribute('height', laneHeight);
+                laneBg.setAttribute('height', totalMainHeight);
                 laneBg.setAttribute('fill', laneIdx % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.1)');
                 laneBg.setAttribute('rx', '4');
                 svg.appendChild(laneBg);
@@ -1575,61 +1694,154 @@ ${formatEventBody(event.body)}
                 laneBorder.setAttribute('x', margin.left);
                 laneBorder.setAttribute('y', y);
                 laneBorder.setAttribute('width', width - margin.left - margin.right);
-                laneBorder.setAttribute('height', laneHeight);
+                laneBorder.setAttribute('height', totalMainHeight);
                 laneBorder.setAttribute('fill', 'none');
-                laneBorder.setAttribute('stroke', 'rgba(255,255,255,0.05)');
+                laneBorder.setAttribute('stroke', 'rgba(255,255,255,0.1)');
                 laneBorder.setAttribute('stroke-width', '1');
                 laneBorder.setAttribute('rx', '4');
                 svg.appendChild(laneBorder);
 
-                // Lane label background (taller for two lines)
-                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                labelBg.setAttribute('x', 10);
-                labelBg.setAttribute('y', y + laneHeight / 2 - 20);
-                labelBg.setAttribute('width', margin.left - 20);
-                labelBg.setAttribute('height', 40);
-                labelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
-                labelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                labelBg.setAttribute('stroke-width', '1');
-                labelBg.setAttribute('rx', '6');
-                svg.appendChild(labelBg);
-
-                // Lane label with installation info - split into two lines
-                const laneLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                laneLabel.setAttribute('x', margin.left - 15);
-                laneLabel.setAttribute('y', y + laneHeight / 2);
-                laneLabel.setAttribute('text-anchor', 'end');
-                laneLabel.setAttribute('font-size', isMobile ? '9' : '11');
-                laneLabel.setAttribute('fill', '#e0e0e0');
-                laneLabel.setAttribute('font-weight', '600');
-
-                // Line 1: Device name
-                const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                line1.setAttribute('x', margin.left - 15);
-                line1.setAttribute('dy', '-0.6em');
-                line1.textContent = lane.name;
-                laneLabel.appendChild(line1);
-
-                // Line 2: Installation location (skip on mobile to save space)
-                const installation = installations[lane.installationId];
-                if (!isMobile && installation && installation.location) {
-                    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                    line2.setAttribute('x', margin.left - 15);
-                    line2.setAttribute('dy', '1.2em');
-                    line2.setAttribute('font-size', '10');
-                    line2.setAttribute('fill', '#a0a0b0');
-                    line2.setAttribute('font-weight', '400');
-                    line2.textContent = `📍 ${installation.location}`;
-                    laneLabel.appendChild(line2);
+                // Separator line between lanes (except after last lane)
+                if (laneIdx < laneArray.length - 1) {
+                    const separator = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    separator.setAttribute('x1', margin.left);
+                    separator.setAttribute('y1', y + totalMainHeight + 1);
+                    separator.setAttribute('x2', width - margin.right);
+                    separator.setAttribute('y2', y + totalMainHeight + 1);
+                    separator.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+                    separator.setAttribute('stroke-width', '1');
+                    svg.appendChild(separator);
                 }
 
-                svg.appendChild(laneLabel);
+                // Device/Installation labels
+                const installation = installations[lane.installationId];
+
+                // If has valve spans, create separate labels for valve and event lanes
+                if (lane.hasValveSpans) {
+                    // Valve lane label background
+                    const valveLabelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    valveLabelBg.setAttribute('x', 10);
+                    valveLabelBg.setAttribute('y', yValve + valveLaneHeight / 2 - 12);
+                    valveLabelBg.setAttribute('width', margin.left - 20);
+                    valveLabelBg.setAttribute('height', 24);
+                    valveLabelBg.setAttribute('fill', 'rgba(255,255,255,0.03)');
+                    valveLabelBg.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+                    valveLabelBg.setAttribute('stroke-width', '0.5');
+                    valveLabelBg.setAttribute('rx', '4');
+                    svg.appendChild(valveLabelBg);
+
+                    // Valve lane label
+                    const valveLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    valveLabel.setAttribute('x', margin.left - 15);
+                    valveLabel.setAttribute('y', yValve + valveLaneHeight / 2);
+                    valveLabel.setAttribute('text-anchor', 'end');
+                    valveLabel.setAttribute('dominant-baseline', 'middle');
+                    valveLabel.setAttribute('font-size', isMobile ? '8' : '9');
+                    valveLabel.setAttribute('fill', '#888898');
+                    valveLabel.setAttribute('font-weight', '400');
+                    valveLabel.textContent = '🔀 V-Pos';
+                    svg.appendChild(valveLabel);
+
+                    // Event lane label background
+                    const eventLabelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    eventLabelBg.setAttribute('x', 10);
+                    eventLabelBg.setAttribute('y', y + mainLaneHeight / 2 - 30);
+                    eventLabelBg.setAttribute('width', margin.left - 20);
+                    eventLabelBg.setAttribute('height', 60);
+                    eventLabelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
+                    eventLabelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+                    eventLabelBg.setAttribute('stroke-width', '1');
+                    eventLabelBg.setAttribute('rx', '6');
+                    svg.appendChild(eventLabelBg);
+
+                    // Event lane label (device name + location)
+                    const eventLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    eventLabel.setAttribute('x', margin.left - 15);
+                    eventLabel.setAttribute('y', y + mainLaneHeight / 2);
+                    eventLabel.setAttribute('text-anchor', 'end');
+                    eventLabel.setAttribute('fill', '#e0e0e0');
+
+                    // Line 1: Device name
+                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                    line1.setAttribute('x', margin.left - 15);
+                    line1.setAttribute('dy', '-0.6em');
+                    line1.setAttribute('font-size', isMobile ? '9' : '11');
+                    line1.setAttribute('font-weight', '600');
+                    line1.textContent = lane.name;
+                    eventLabel.appendChild(line1);
+
+                    // Line 2: Installation location (skip on mobile to save space)
+                    if (!isMobile && installation && installation.location) {
+                        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                        line2.setAttribute('x', margin.left - 15);
+                        line2.setAttribute('dy', '1.2em');
+                        line2.setAttribute('font-size', '10');
+                        line2.setAttribute('fill', '#a0a0b0');
+                        line2.setAttribute('font-weight', '400');
+                        line2.textContent = `📍 ${installation.location}`;
+                        eventLabel.appendChild(line2);
+                    }
+
+                    svg.appendChild(eventLabel);
+                } else {
+                    // No valve spans - single label for event lane
+                    const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    labelBg.setAttribute('x', 10);
+                    labelBg.setAttribute('y', y + mainLaneHeight / 2 - 20);
+                    labelBg.setAttribute('width', margin.left - 20);
+                    labelBg.setAttribute('height', 40);
+                    labelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
+                    labelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+                    labelBg.setAttribute('stroke-width', '1');
+                    labelBg.setAttribute('rx', '6');
+                    svg.appendChild(labelBg);
+
+                    const laneLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    laneLabel.setAttribute('x', margin.left - 15);
+                    laneLabel.setAttribute('y', y + mainLaneHeight / 2);
+                    laneLabel.setAttribute('text-anchor', 'end');
+                    laneLabel.setAttribute('fill', '#e0e0e0');
+
+                    // Line 1: Device name
+                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                    line1.setAttribute('x', margin.left - 15);
+                    line1.setAttribute('dy', '-0.6em');
+                    line1.setAttribute('font-size', isMobile ? '9' : '11');
+                    line1.setAttribute('font-weight', '600');
+                    line1.textContent = lane.name;
+                    laneLabel.appendChild(line1);
+
+                    // Line 2: Installation location (skip on mobile to save space)
+                    if (!isMobile && installation && installation.location) {
+                        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                        line2.setAttribute('x', margin.left - 15);
+                        line2.setAttribute('dy', '1.2em');
+                        line2.setAttribute('font-size', '10');
+                        line2.setAttribute('fill', '#a0a0b0');
+                        line2.setAttribute('font-weight', '400');
+                        line2.textContent = `📍 ${installation.location}`;
+                        laneLabel.appendChild(line2);
+                    }
+
+                    svg.appendChild(laneLabel);
+                }
 
                 // Draw state spans (duration bars)
                 lane.spans.forEach((span, spanIdx) => {
                     // Apply timeline filter: only render spans that should be displayed
                     if (globalFilters.timelineTypes[span.code] === false) {
                         return; // Skip this span
+                    }
+
+                    // Skip valve position codes - they go in separate valve lane
+                    const isValveCode = (c) => {
+                        return c && (
+                            (c >= 'S.112' && c <= 'S.118') ||
+                            (c >= 'S.134' && c <= 'S.136')
+                        );
+                    };
+                    if (isValveCode(span.code)) {
+                        return; // Skip valve codes - they are rendered in valve lane
                     }
 
                     // Check if this span type has a visual representation
@@ -1647,8 +1859,17 @@ ${formatEventBody(event.body)}
                     const gradient = eventInfo?.gradient || color;
 
                     // Calculate bar dimensions
-                    const barHeight = Math.max(laneHeight - 30, 20); // Minimum 20px bar height
-                    const barY = y + (laneHeight - barHeight) / 2; // Center bar vertically in lane
+                    // S.125-WARMWATER (warmwater overlay) should be smaller to show heating bar underneath
+                    let barHeight, barY;
+                    if (span.code === 'S.125-WARMWATER') {
+                        // Warmwater overlay: 75% of lane height, leaving visible space for heating bar above/below
+                        barHeight = Math.max(mainLaneHeight * 0.75, 12);
+                        barY = y + (mainLaneHeight - barHeight) / 2;
+                    } else {
+                        // Regular spans: full height minus padding for nice presentation
+                        barHeight = Math.max(mainLaneHeight - 20, 20); // Minimum 20px bar height
+                        barY = y + (mainLaneHeight - barHeight) / 2; // Center bar vertically in lane
+                    }
 
                     // Shadow/glow effect
                     const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -1797,7 +2018,7 @@ ${formatEventBody(event.body)}
                     // Outer glow
                     const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     glow.setAttribute('cx', x);
-                    glow.setAttribute('cy', y + laneHeight / 2);
+                    glow.setAttribute('cy', y + mainLaneHeight / 2);
                     glow.setAttribute('r', 5);
                     glow.setAttribute('fill', color);
                     glow.setAttribute('opacity', '0.3');
@@ -1806,7 +2027,7 @@ ${formatEventBody(event.body)}
                     // Main circle
                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     circle.setAttribute('cx', x);
-                    circle.setAttribute('cy', y + laneHeight / 2);
+                    circle.setAttribute('cy', y + mainLaneHeight / 2);
                     circle.setAttribute('r', 4);
                     circle.setAttribute('fill', event.active ? color : 'rgba(30, 30, 46, 0.9)');
                     circle.setAttribute('stroke', color);
@@ -1817,13 +2038,154 @@ ${formatEventBody(event.body)}
                     if (event.active) {
                         const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                         highlight.setAttribute('cx', x - 1);
-                        highlight.setAttribute('cy', y + laneHeight / 2 - 1);
+                        highlight.setAttribute('cy', y + mainLaneHeight / 2 - 1);
                         highlight.setAttribute('r', 1.5);
                         highlight.setAttribute('fill', 'rgba(255,255,255,0.6)');
                         svg.appendChild(highlight);
                     }
                 });
+
+                // Draw valve position spans (smaller, thin bars ABOVE main events in visual space)
+                // Rendered AFTER events so they appear on top in SVG but positioned above event lane
+                if (lane.hasValveSpans && valveLaneHeight > 0) {
+                    lane.valveSpans.forEach((span, spanIdx) => {
+                        // Apply timeline filter: only render spans that should be displayed
+                        if (globalFilters.timelineTypes[span.code] === false) {
+                            return; // Skip this span
+                        }
+
+                        // Check if this span type has a visual representation
+                        const eventInfo = eventTypes[span.code];
+                        if (!eventInfo) {
+                            return; // Skip spans without visual definition
+                        }
+
+                        const x1 = xScale(span.startTime);
+                        const x2 = xScale(span.endTime);
+                        const actualWidth = x2 - x1;
+                        const spanWidth = Math.max(actualWidth, 2); // Minimum 2px width
+
+                        const color = eventInfo?.color || '#6b7280';
+
+                        // Calculate bar dimensions for valve lane (smaller than main lane)
+                        const valveBarHeight = Math.max(valveLaneHeight - 8, 8); // Thinner bars for valve lane
+                        const valveBarY = yValve + (valveLaneHeight - valveBarHeight) / 2; // Center bar vertically in valve lane
+
+                        // Shadow/glow effect
+                        const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        shadow.setAttribute('x', x1 - 1);
+                        shadow.setAttribute('y', valveBarY - 1);
+                        shadow.setAttribute('width', spanWidth + 2);
+                        shadow.setAttribute('height', valveBarHeight + 2);
+                        shadow.setAttribute('fill', color);
+                        shadow.setAttribute('opacity', '0.15');
+                        shadow.setAttribute('rx', '3');
+                        shadow.setAttribute('filter', 'blur(2px)');
+                        svg.appendChild(shadow);
+
+                        // Create gradient definition for valve bar
+                        const defs = svg.querySelector('defs') || document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                        if (!svg.querySelector('defs')) svg.appendChild(defs);
+
+                        const gradientId = `gradient-valve-${laneIdx}-${spanIdx}`;
+                        const gradDef = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                        gradDef.setAttribute('id', gradientId);
+                        gradDef.setAttribute('x1', '0%');
+                        gradDef.setAttribute('y1', '0%');
+                        gradDef.setAttribute('x2', '0%');
+                        gradDef.setAttribute('y2', '100%');
+
+                        const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                        stop1.setAttribute('offset', '0%');
+                        stop1.setAttribute('stop-color', color);
+                        stop1.setAttribute('stop-opacity', '0.7');
+
+                        const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                        stop2.setAttribute('offset', '100%');
+                        stop2.setAttribute('stop-color', color);
+                        stop2.setAttribute('stop-opacity', '0.5');
+
+                        gradDef.appendChild(stop1);
+                        gradDef.appendChild(stop2);
+                        defs.appendChild(gradDef);
+
+                        // Main valve span bar
+                        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        bar.setAttribute('x', x1);
+                        bar.setAttribute('y', valveBarY);
+                        bar.setAttribute('width', spanWidth);
+                        bar.setAttribute('height', valveBarHeight);
+                        bar.setAttribute('fill', `url(#${gradientId})`);
+                        bar.setAttribute('rx', '3');
+                        if (span.fallback) {
+                            bar.setAttribute('stroke', 'rgba(255,255,255,0.3)');
+                            bar.setAttribute('stroke-width', '0.5');
+                            bar.setAttribute('stroke-dasharray', '3,2');
+                            bar.setAttribute('opacity', '0.6');
+                        }
+                        bar.style.cursor = 'pointer';
+                        bar.style.transition = 'all 0.2s';
+
+                        // Hover effect
+                        bar.addEventListener('mouseenter', function() {
+                            this.setAttribute('opacity', '0.9');
+                            this.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+                            this.setAttribute('stroke-width', '1');
+                        });
+                        bar.addEventListener('mouseleave', function() {
+                            this.removeAttribute('opacity');
+                            if (!span.fallback) {
+                                this.removeAttribute('stroke');
+                                this.removeAttribute('stroke-width');
+                            }
+                        });
+
+                        // Calculate duration
+                        const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
+                        const durationText = duration < 60
+                            ? `${Math.round(duration)}min`
+                            : `${(duration / 60).toFixed(1)}h`;
+
+                        // Tooltip
+                        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                        const startTime = new Date(span.startTime).toLocaleString('de-DE');
+                        const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
+                        let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
+                        if (span.fallback) {
+                            tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
+                        }
+                        tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
+                        title.textContent = tooltipText;
+                        bar.appendChild(title);
+
+                        svg.appendChild(bar);
+
+                        // Add icon if span is wide enough
+                        const labelY = valveBarY + valveBarHeight / 2;
+                        const minWidthForIcon = 25;
+
+                        if (spanWidth > minWidthForIcon) {
+                            const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            iconLabel.setAttribute('x', x1 + 2);
+                            iconLabel.setAttribute('y', labelY - 1);
+                            iconLabel.setAttribute('font-size', '10');
+                            iconLabel.textContent = eventInfo?.icon || '';
+                            svg.appendChild(iconLabel);
+                        }
+                    });
+                }
+
+                // Update offset for next lane
+                currentYOffset += mainLaneHeight + valveLaneHeight;
             });
+
+            // Set the final SVG height based on actual lane content
+            const finalHeight = currentYOffset + margin.bottom;
+            svg.setAttribute('height', finalHeight);
+
+            // Now draw the axis on top
+            drawAxisFn(finalHeight);
+            svg.appendChild(axisGroup);
         }
 
         // ========================================
