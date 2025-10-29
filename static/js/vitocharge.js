@@ -469,7 +469,6 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
 
         strings.forEach(str => {
             const isActive = str.current > 0.1;
-            const power = (str.voltage * str.current).toFixed(0);
             const statusColor = isActive ? '#10b981' : '#6b7280';
             const statusIcon = isActive ? '🟢' : '⚫';
 
@@ -478,7 +477,6 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
                     <div style="font-size: 11px; color: #a0a0b0; margin-bottom: 4px;">${statusIcon} ${str.name}</div>
                     <div style="font-size: 13px; color: ${statusColor}; font-weight: 600;">${formatNum(str.voltage)} V</div>
                     <div style="font-size: 12px; color: #a0a0b0;">${formatNum(str.current)} A</div>
-                    ${isActive ? `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">${power} W</div>` : ''}
                 </div>
             `;
         });
@@ -575,7 +573,7 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
                     <div class="module-header">Batteriemodul ${module.id}</div>
                     <div class="module-info">
                         <span class="module-info-label">Seriennummer:</span>
-                        <span class="module-info-value">${module.serial.substring(0, 12)}...</span>
+                        <span class="module-info-value">${module.serial}</span>
                     </div>
                     <div class="module-info">
                         <span class="module-info-label">Kapazität:</span>
