@@ -326,6 +326,11 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
         phaseTwo: getNestedValue('pcc.ac.active.current', 'phaseTwo') || 0,
         phaseThree: getNestedValue('pcc.ac.active.current', 'phaseThree') || 0
     };
+    const gridActivePower = {
+        phaseOne: getNestedValue('pcc.ac.active.power', 'phaseOne') || 0,
+        phaseTwo: getNestedValue('pcc.ac.active.power', 'phaseTwo') || 0,
+        phaseThree: getNestedValue('pcc.ac.active.power', 'phaseThree') || 0
+    };
     const gridReactivePower = {
         phaseOne: getNestedValue('pcc.ac.reactive.power', 'phaseOne') || 0,
         phaseTwo: getNestedValue('pcc.ac.reactive.power', 'phaseTwo') || 0,
@@ -622,14 +627,13 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
         `;
 
         const phases = [
-            { name: 'L1', current: gridCurrents.phaseOne, reactive: gridReactivePower.phaseOne },
-            { name: 'L2', current: gridCurrents.phaseTwo, reactive: gridReactivePower.phaseTwo },
-            { name: 'L3', current: gridCurrents.phaseThree, reactive: gridReactivePower.phaseThree }
+            { name: 'L1', current: gridCurrents.phaseOne, active: gridActivePower.phaseOne, reactive: gridReactivePower.phaseOne },
+            { name: 'L2', current: gridCurrents.phaseTwo, active: gridActivePower.phaseTwo, reactive: gridReactivePower.phaseTwo },
+            { name: 'L3', current: gridCurrents.phaseThree, active: gridActivePower.phaseThree, reactive: gridReactivePower.phaseThree }
         ];
 
         phases.forEach(phase => {
-            const power = (phase.current * 230).toFixed(0); // Approximate active power (assuming 230V)
-            const totalPower = Math.sqrt(Math.pow(power, 2) + Math.pow(phase.reactive, 2)).toFixed(0);
+            const totalPower = Math.sqrt(Math.pow(phase.active, 2) + Math.pow(phase.reactive, 2)).toFixed(0);
 
             html += `
                 <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
@@ -640,7 +644,7 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 12px; color: #a0a0b0;">Wirkleistung:</span>
-                        <span style="font-size: 13px; color: #e0e0e0;">${power} W</span>
+                        <span style="font-size: 13px; color: #e0e0e0;">${phase.active} W</span>
                     </div>
                     <div style="display: flex; justify-content: space-between;">
                         <span style="font-size: 12px; color: #a0a0b0;">Blindleistung:</span>
