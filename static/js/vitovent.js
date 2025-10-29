@@ -523,8 +523,8 @@ async function setOperatingMode(mode) {
 
         if (result.success) {
             showSuccess(`Betriebsmodus zu "${formatOperatingMode(mode)}" geändert`);
-            // Reload data after a short delay
-            setTimeout(() => loadVitoventData(), 1000);
+            // Reload data after a short delay (force refresh to clear cache)
+            setTimeout(() => loadVitoventData(true), 1000);
         } else {
             showError('Fehler: ' + (result.error || 'Unbekannter Fehler'));
         }
@@ -555,8 +555,8 @@ async function toggleQuickMode(mode, activate) {
         if (result.success) {
             const action = activate ? 'aktiviert' : 'deaktiviert';
             showSuccess(`Modus ${action}`);
-            // Reload data after a short delay
-            setTimeout(() => loadVitoventData(), 1000);
+            // Reload data after a short delay (force refresh to clear cache)
+            setTimeout(() => loadVitoventData(true), 1000);
         } else {
             showError('Fehler: ' + (result.error || 'Unbekannter Fehler'));
         }
