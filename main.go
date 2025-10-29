@@ -55,6 +55,7 @@ func main() {
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
 	http.HandleFunc("/smartclimate", smartClimatePageHandler)
+	http.HandleFunc("/vitovent", vitoventPageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)
 	http.HandleFunc("/apitest", apiTestPageHandler)
 
@@ -105,6 +106,11 @@ func main() {
 	http.HandleFunc("/api/smartclimate/trv/temperature/set", trvSetTemperatureHandler)
 	http.HandleFunc("/api/smartclimate/device/name/set", deviceSetNameHandler)
 	http.HandleFunc("/api/smartclimate/trv/childlock/toggle", childLockToggleHandler)
+
+	// Vitovent endpoints
+	http.HandleFunc("/api/vitovent/devices", vitoventDevicesHandler)
+	http.HandleFunc("/api/vitovent/operating-mode/set", vitoventOperatingModeHandler)
+	http.HandleFunc("/api/vitovent/quickmode/toggle", vitoventQuickModeHandler)
 
 	// Vitocharge endpoints
 	http.HandleFunc("/api/vitocharge/devices", vitochargeDevicesHandler)

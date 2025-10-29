@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vitocharge - ViEventLog</title>
-    <link rel="stylesheet" href="/static/css/vitocharge.css">
+    <title>Vitovent Lüftung - ViEventLog</title>
+    <link rel="stylesheet" href="/static/css/vitovent.css">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-top">
                 <div>
-                    <h1>⚡ Vitocharge VX3</h1>
+                    <h1>🌬️ Vitovent Lüftung</h1>
                     <div class="breadcrumb">
                         <a href="/">← Events</a>
                         <span>/</span>
@@ -36,17 +36,17 @@
             <div style="display: flex; gap: 10px;">
                 <button id="refreshBtn">🔄 Aktualisieren</button>
                 <a href="/smartclimate" style="padding: 10px 20px; border: none; border-radius: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600; text-decoration: none; display: inline-block;">🏠 SmartClimate</a>
-                <a href="/vitovent" style="padding: 10px 20px; border: none; border-radius: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600; text-decoration: none; display: inline-block;">🌬️ Vitovent</a>
+                <a href="/vitocharge" style="padding: 10px 20px; border: none; border-radius: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600; text-decoration: none; display: inline-block;">⚡ Vitocharge VX3</a>
             </div>
         </div>
 
         <div id="errorContainer"></div>
-        <div id="vitochargeContent" class="loading">
+        <div id="vitoventContent" class="loading">
             <div class="spinner"></div>
-            <p>Lade Vitocharge-Daten...</p>
+            <p>Lade Vitovent-System...</p>
         </div>
     </div>
 
-    <script src="/static/js/vitocharge.js"></script>
+    <script src="/static/js/vitovent.js"></script>
 </body>
 </html>
