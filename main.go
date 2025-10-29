@@ -81,6 +81,7 @@ func main() {
 	// DHW operating mode control
 	http.HandleFunc("/api/dhw/mode/set", dhwModeSetHandler)
 	http.HandleFunc("/api/dhw/temperature/set", dhwTemperatureSetHandler)
+	http.HandleFunc("/api/dhw/temperature2/set", dhwTemperature2SetHandler)
 	http.HandleFunc("/api/dhw/hysteresis/set", dhwHysteresisSetHandler)
 	http.HandleFunc("/api/dhw/oneTimeCharge/activate", dhwOneTimeChargeHandler)
 
