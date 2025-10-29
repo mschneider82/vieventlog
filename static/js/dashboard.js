@@ -536,6 +536,7 @@
                 // DHW
                 dhwTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage', 'heating.dhw.sensors.temperature.dhwCylinder']),
                 dhwTarget: find(['heating.dhw.temperature.main']),
+                dhwTarget2: find(['heating.dhw.temperature.temp2']),
                 dhwStatus: find(['heating.dhw.operating.modes.active']),
                 dhwHysteresis: find(['heating.dhw.temperature.hysteresis']),
                 dhwHysteresisSwitchOn: findNested('heating.dhw.temperature.hysteresis', 'switchOnValue'),
@@ -1510,6 +1511,18 @@
                     <select id="dhwTargetSelect" onchange="changeDhwTemperature(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         ${Array.from({length: 51}, (_, i) => i + 10).map(temp => `
                             <option value="${temp}" ${Math.round(kf.dhwTarget.value) === temp ? 'selected' : ''}>${temp}°C</option>
+                        `).join('')}
+                    </select>
+                </span>
+            </div>
+                        ` : ''}
+                        ${kf.dhwTarget2 ? `
+            <div class="status-item">
+                <span class="status-label">Soll-Temperatur 2</span>
+                <span class="status-value">
+                    <select id="dhwTarget2Select" onchange="changeDhwTemperature2(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        ${Array.from({length: 51}, (_, i) => i + 10).map(temp => `
+                            <option value="${temp}" ${Math.round(kf.dhwTarget2.value) === temp ? 'selected' : ''}>${temp}°C</option>
                         `).join('')}
                     </select>
                 </span>
@@ -3920,8 +3933,66 @@
             }
         }
 
+        // DHW Temperature 2 Change Function
+        async function changeDhwTemperature2(newTemp) {
+            const select = document.getElementById('dhwTarget2Select');
+            const originalValue = select.value;
+
+            try {
+                // Get current device info
+                const currentInstall = installations.find(i => i.installationId === currentInstallationId);
+                if (!currentInstall || !currentInstall.devices) {
+                    throw new Error('Installation nicht gefunden');
+                }
+
+                const currentDevice = currentInstall.devices.find(d =>
+                    d.deviceId === currentDeviceId && d.gatewaySerial === currentGatewaySerial
+                );
+
+                if (!currentDevice) {
+                    throw new Error('Gerät nicht gefunden');
+                }
+
+                // Disable select while changing
+                select.disabled = true;
+
+                const response = await fetch('/api/dhw/temperature2/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDevice.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        temperature: parseFloat(newTemp)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('DHW temperature 2 changed to:', newTemp);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Ändern der Temperatur 2: ' + data.error);
+                    select.value = originalValue;
+                    select.disabled = false;
+                }
+            } catch (error) {
+                alert('Fehler beim Ändern der Temperatur 2: ' + error.message);
+                select.value = originalValue;
+                select.disabled = false;
+            }
+        }
+
         // Make functions available globally
         window.changeDhwTemperature = changeDhwTemperature;
+        window.changeDhwTemperature2 = changeDhwTemperature2;
         window.changeDhwHysteresis = changeDhwHysteresis;
 
         // DHW One Time Charge Function
