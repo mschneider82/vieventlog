@@ -1373,31 +1373,41 @@
             // Humidity dewpoint sensor (for cooling systems)
             const humidityDewpoint = find([`${circuitPrefix}.sensors.humidity.dewpoint`]);
             if (humidityDewpoint) {
-                const statusProp = humidityDewpoint.value && humidityDewpoint.value.status;
-                const valueProp = humidityDewpoint.value && humidityDewpoint.value.value;
-
                 let statusText = '';
                 let statusClass = '';
 
-                if (statusProp && statusProp.value) {
-                    statusText = statusProp.value === 'connected' ? 'Verbunden' : 'Nicht verbunden';
-                    statusClass = statusProp.value === 'connected' ? 'sensor-connected' : 'sensor-disconnected';
-                }
+                // Check if it's a nested object with properties
+                if (typeof humidityDewpoint.value === 'object' && humidityDewpoint.value !== null) {
+                    const statusProp = humidityDewpoint.value.status;
+                    const valueProp = humidityDewpoint.value.value;
 
-                if (valueProp && valueProp.value) {
-                    const valueText = valueProp.value === 'on' ? 'EIN' : 'AUS';
-                    statusText += ` (${valueText})`;
-                    if (valueProp.value === 'on') {
-                        statusClass = 'sensor-active';
+                    if (statusProp && statusProp.value) {
+                        statusText = statusProp.value === 'connected' ? 'Verbunden' : 'Nicht verbunden';
+                        statusClass = statusProp.value === 'connected' ? 'sensor-connected' : 'sensor-disconnected';
                     }
+
+                    if (valueProp && valueProp.value) {
+                        const valueText = valueProp.value === 'on' ? 'EIN' : 'AUS';
+                        statusText += ` (${valueText})`;
+                        if (valueProp.value === 'on') {
+                            statusClass = 'sensor-active';
+                        }
+                    }
+                } else if (humidityDewpoint.value !== null && humidityDewpoint.value !== undefined) {
+                    // Direct value (e.g., "on" or "off")
+                    const valueText = humidityDewpoint.value === 'on' ? 'EIN' : 'AUS';
+                    statusText = valueText;
+                    statusClass = humidityDewpoint.value === 'on' ? 'sensor-active' : 'sensor-disconnected';
                 }
 
-                html += `
-                    <div class="status-item">
-                        <span class="status-label">Feuchteanbauschalter</span>
-                        <span class="status-value ${statusClass}">${statusText}</span>
-                    </div>
-                `;
+                if (statusText) {
+                    html += `
+                        <div class="status-item">
+                            <span class="status-label">Feuchteanbauschalter</span>
+                            <span class="status-value ${statusClass}">${statusText}</span>
+                        </div>
+                    `;
+                }
             }
 
             // Heating curve with editable dropdowns

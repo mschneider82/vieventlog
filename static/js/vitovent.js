@@ -70,7 +70,8 @@ async function loadVitoventData(forceRefresh = false) {
     contentDiv.innerHTML = '<div class="spinner"></div><p>Lade Vitovent-Daten...</p>';
 
     try {
-        const response = await fetch(`/api/vitovent/devices?installationId=${currentInstallationId}`);
+        const refreshParam = forceRefresh ? '&refresh=true' : '';
+        const response = await fetch(`/api/vitovent/devices?installationId=${currentInstallationId}${refreshParam}`);
 
         if (!response.ok) {
             throw new Error('API Fehler: ' + response.status);
@@ -594,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
-            loadVitoventData();
+            loadVitoventData(true); // Force refresh
         });
     }
     init();
