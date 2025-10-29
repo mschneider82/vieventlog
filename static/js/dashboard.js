@@ -601,6 +601,7 @@
                 // Valves and auxiliary systems
                 fourWayValve: find(['heating.valves.fourThreeWay.position']),
                 secondaryHeater: find(['heating.secondaryHeatGenerator.state', 'heating.secondaryHeatGenerator.status']),
+                fanRing: findNested('heating.heater.fanRing', 'active'),
 
                 // Refrigerant circuit (heat pump specific)
                 evaporatorTemp: find(['heating.evaporators.0.sensors.temperature.liquid']),
@@ -1070,6 +1071,18 @@
                         <div class="status-item">
                             <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
                             <span class="status-value">${formatNum(avgRuntime)} Std.</span>
+                        </div>
+                    ` : ''}
+                    ${kf.fanRing ? `
+                        <div class="status-item">
+                            <span class="status-label">Ventilatorringheizung</span>
+                            <span class="status-value">
+                                <button id="fanRingToggle" class="toggle-btn ${kf.fanRing.value ? 'active' : ''}"
+                                    data-current="${kf.fanRing.value ? 'true' : 'false'}"
+                                    onclick="toggleFanRing(event)">
+                                    ${kf.fanRing.value ? '🟢 An' : '⚪ Aus'}
+                                </button>
+                            </span>
                         </div>
                     ` : ''}
                 `;
@@ -4402,6 +4415,64 @@
 
         // Make function available globally
         window.changeHeatingMode = changeHeatingMode;
+
+        // --- Fan Ring Heating Control ---
+        async function toggleFanRing(event) {
+            event.preventDefault();
+
+            try {
+                if (!currentDeviceInfo) {
+                    throw new Error('Device-Information nicht verfügbar');
+                }
+
+                const button = event.target;
+                const currentState = button.dataset.current === 'true';
+                const newState = !currentState;
+
+                // Disable button while changing
+                button.disabled = true;
+                const originalText = button.textContent;
+                button.textContent = '⏳ Wird geändert...';
+
+                const response = await fetch('/api/fan-ring/toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountId: currentDeviceInfo.accountId,
+                        installationId: currentInstallationId,
+                        gatewaySerial: currentGatewaySerial,
+                        deviceId: currentDeviceId,
+                        active: newState
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`Fan ring heating turned ${newState ? 'on' : 'off'}`);
+                    // Wait a bit then reload to show new status
+                    setTimeout(() => {
+                        loadDashboard(true); // Force refresh
+                    }, 2000);
+                } else {
+                    alert('Fehler beim Umschalten der Ventilatorringheizung: ' + data.error);
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            } catch (error) {
+                alert('Fehler beim Umschalten der Ventilatorringheizung: ' + error.message);
+                button.disabled = false;
+                const originalText = event.target.dataset.originalText;
+                if (originalText) {
+                    event.target.textContent = originalText;
+                }
+            }
+        }
+
+        // Make function available globally
+        window.toggleFanRing = toggleFanRing;
 
         // Initialize
         init();

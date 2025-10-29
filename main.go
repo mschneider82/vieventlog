@@ -89,6 +89,9 @@ func main() {
 	// Noise reduction control
 	http.HandleFunc("/api/noise-reduction/mode/set", noiseReductionModeSetHandler)
 
+	// Fan ring heating control
+	http.HandleFunc("/api/fan-ring/toggle", fanRingToggleHandler)
+
 	// Heating curve control
 	http.HandleFunc("/api/heating/curve/set", heatingCurveSetHandler)
 	http.HandleFunc("/api/heating/mode/set", heatingModeSetHandler)
