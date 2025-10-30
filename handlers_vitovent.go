@@ -330,6 +330,9 @@ func vitoventDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if force refresh is requested
+	forceRefresh := r.URL.Query().Get("refresh") == "true"
+
 	// Get active accounts
 	activeAccounts, err := GetActiveAccounts()
 	if err != nil {
@@ -371,6 +374,14 @@ func vitoventDevicesHandler(w http.ResponseWriter, r *http.Request) {
 				// Check if this is a Vitovent ventilation device
 				if !isVitoventDevice(device.DeviceType, device.ModelID) {
 					continue
+				}
+
+				// Invalidate cache if force refresh is requested
+				if forceRefresh {
+					cacheKey := fmt.Sprintf("%s:%s:%s", installationID, gateway.Serial, device.DeviceID)
+					featuresCacheMutex.Lock()
+					delete(featuresCache, cacheKey)
+					featuresCacheMutex.Unlock()
 				}
 
 				// Fetch features for this device
