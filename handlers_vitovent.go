@@ -21,16 +21,34 @@ type VitoventDevice struct {
 }
 
 // isVitoventDevice checks if a device is a Vitovent ventilation system
+// Supports both VitoAir and Vitovent 300F models
 func isVitoventDevice(deviceType, modelID string) bool {
-	// Check if deviceType is "ventilation"
+	// Check if deviceType is "ventilation" (VitoAir)
 	if deviceType == "ventilation" {
 		return true
 	}
 
-	// Also check ModelID for viair/vitovent keywords
+	// Check ModelID for viair/vitovent/vento keywords
 	modelIDLower := strings.ToLower(modelID)
-	if strings.Contains(modelIDLower, "viair") || strings.Contains(modelIDLower, "vitovent") {
+	if strings.Contains(modelIDLower, "viair") ||
+		strings.Contains(modelIDLower, "vitovent") ||
+		strings.Contains(modelIDLower, "vento") {
 		return true
+	}
+
+	// Vitovent 300F might not have a clear deviceType, check for common patterns
+	// Empty or generic device types with vitovent-like modelIDs
+	if modelID != "" {
+		// Check if modelID contains any ventilation-related keywords in different positions
+		modelLower := strings.ToLower(modelID)
+		// Common patterns: VitoVent, vitovent, VENTO, etc.
+		ventilationKeywords := []string{"vent", "air", "lüft"}
+		for _, keyword := range ventilationKeywords {
+			if strings.Contains(modelLower, keyword) {
+				log.Printf("Device matches ventilation keyword '%s': Type=%s, ModelID=%s\n", keyword, deviceType, modelID)
+				return true
+			}
+		}
 	}
 
 	return false
@@ -454,11 +472,21 @@ func vitoventDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Look for ventilation device
+		// Strategy: Try devices that match ventilation criteria first (direct detection)
+		// Then check features for ANY device that has ventilation.* features (embedded in WMP/Heatbox)
 		for _, gateway := range installation.Gateways {
 			for _, device := range gateway.Devices {
-				// Check if this is a Vitovent ventilation device
-				if !isVitoventDevice(device.DeviceType, device.ModelID) {
-					continue
+				// Check if this is a Vitovent ventilation device by type/model
+				isVentilationDevice := isVitoventDevice(device.DeviceType, device.ModelID)
+
+				if !isVentilationDevice {
+					// Don't skip - might be a WMP/Heatbox with embedded ventilation features
+					// Log but continue to check features
+					log.Printf("Device doesn't match Vitovent criteria, but checking features anyway: Type=%s, ModelID=%s, DeviceID=%s\n",
+						device.DeviceType, device.ModelID, device.DeviceID)
+				} else {
+					log.Printf("Vitovent device detected by type/model: Type=%s, ModelID=%s, DeviceID=%s\n",
+						device.DeviceType, device.ModelID, device.DeviceID)
 				}
 
 				// Invalidate cache if force refresh is requested
@@ -476,6 +504,22 @@ func vitoventDevicesHandler(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
+				// Check if this device has any ventilation features
+				hasVentilationFeatures := false
+				for _, feature := range features.RawFeatures {
+					if strings.HasPrefix(feature.Feature, "ventilation.") || feature.Feature == "ventilation" {
+						hasVentilationFeatures = true
+						log.Printf("Found ventilation feature in device: %s\n", feature.Feature)
+						break
+					}
+				}
+
+				// Skip if device has no ventilation features and doesn't match ventilation device criteria
+				if !hasVentilationFeatures && !isVentilationDevice {
+					log.Printf("Device has no ventilation features and is not a ventilation device, skipping: %s\n", device.DeviceID)
+					continue
+				}
+
 				// Extract relevant features
 				extractedFeatures := extractVitoventFeatures(features.RawFeatures)
 
@@ -484,7 +528,7 @@ func vitoventDevicesHandler(w http.ResponseWriter, r *http.Request) {
 					DeviceID:       device.DeviceID,
 					DeviceType:     device.DeviceType,
 					ModelID:        device.ModelID,
-					Name:           fmt.Sprintf("Vitovent %s", device.ModelID),
+					Name:           fmt.Sprintf("Vitovent (über %s)", device.ModelID),
 					InstallationID: installationID,
 					GatewaySerial:  gateway.Serial,
 					AccountID:      account.ID,
