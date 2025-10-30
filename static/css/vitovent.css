@@ -185,6 +185,43 @@ button:active {
     gap: 20px;
 }
 
+/* Sections with limited width for better layout */
+.section.operating-mode-section {
+    max-width: 450px;
+}
+
+.section.quickmodes-section {
+    max-width: 400px;
+}
+
+.section.temperature-section {
+    max-width: 450px;
+}
+
+.section.levels-section {
+    max-width: 450px;
+}
+
+.section.humidity-section {
+    max-width: 450px;
+}
+
+.section.volumeflow-section {
+    max-width: 450px;
+}
+
+.section.fan-section {
+    max-width: 450px;
+}
+
+.section.filter-section {
+    max-width: 450px;
+}
+
+.section.bypass-config-section {
+    max-width: 450px;
+}
+
 .section {
     background: rgba(255,255,255,0.02);
     border: 1px solid rgba(255,255,255,0.1);
