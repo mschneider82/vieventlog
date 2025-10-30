@@ -44,15 +44,44 @@ type VitoventDashboardResponse struct {
 }
 
 // extractVitoventFeatures extracts relevant features for Vitovent devices
+// Supports both VitoAir (complex) and Vitovent 300F (simplified) models
 func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 	features := make(map[string]interface{})
 
+	// Track device type capabilities
+	features["device_type"] = "unknown" // Will be set based on available features
+
 	for _, f := range rawFeatures {
 		switch {
-		// Operating modes
+		// ========== OPERATING MODES (Both VitoAir and 300F) ==========
+		// VitoAir style: ventilation.operating.modes.active
 		case f.Feature == "ventilation.operating.modes.active":
 			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
 				features["operating_mode"] = val["value"]
+				features["device_type"] = "vitoair" // VitoAir uses this style
+			}
+
+		// Vitovent 300F style: individual mode properties
+		case f.Feature == "ventilation.operating.modes.standby":
+			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
+				if active, ok := val["value"].(bool); ok && active {
+					features["operating_mode"] = "standby"
+					features["device_type"] = "vitovent300f"
+				}
+			}
+		case f.Feature == "ventilation.operating.modes.standard":
+			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
+				if active, ok := val["value"].(bool); ok && active {
+					features["operating_mode"] = "standard"
+					features["device_type"] = "vitovent300f"
+				}
+			}
+		case f.Feature == "ventilation.operating.modes.ventilation":
+			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
+				if active, ok := val["value"].(bool); ok && active {
+					features["operating_mode"] = "ventilation"
+					features["device_type"] = "vitovent300f"
+				}
 			}
 
 		// Ventilation active
@@ -123,7 +152,7 @@ func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 				features["bypass_target_temp"] = val["value"]
 			}
 
-		// Quick modes
+		// Quick modes - VitoAir style (intensive, silent, shutdown)
 		case f.Feature == "ventilation.quickmodes.forcedLevelFour":
 			qm := make(map[string]interface{})
 			if active, ok := f.Properties["active"].(map[string]interface{}); ok {
@@ -153,6 +182,34 @@ func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 				qm["runtime"] = runtime["value"]
 			}
 			features["quickmode_shutdown"] = qm
+
+		// Quick modes - Vitovent 300F style (comfort, eco, holiday)
+		case f.Feature == "ventilation.quickmodes.comfort":
+			qm := make(map[string]interface{})
+			if active, ok := f.Properties["active"].(map[string]interface{}); ok {
+				qm["active"] = active["value"]
+			}
+			features["quickmode_comfort"] = qm
+
+		case f.Feature == "ventilation.quickmodes.eco":
+			qm := make(map[string]interface{})
+			if active, ok := f.Properties["active"].(map[string]interface{}); ok {
+				qm["active"] = active["value"]
+			}
+			features["quickmode_eco"] = qm
+
+		case f.Feature == "ventilation.quickmodes.holiday":
+			qm := make(map[string]interface{})
+			if active, ok := f.Properties["active"].(map[string]interface{}); ok {
+				qm["active"] = active["value"]
+			}
+			if start, ok := f.Properties["start"].(map[string]interface{}); ok {
+				qm["start"] = start["value"]
+			}
+			if end, ok := f.Properties["end"].(map[string]interface{}); ok {
+				qm["end"] = end["value"]
+			}
+			features["quickmode_holiday"] = qm
 
 		// Temperature sensors
 		case f.Feature == "ventilation.sensors.temperature.supply":
@@ -291,6 +348,34 @@ func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 		case f.Feature == "ventilation.external.lock":
 			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
 				features["external_lock"] = val["value"]
+			}
+
+		// ========== VITOVENT 300F SPECIFIC FEATURES ==========
+		// Volume Flow Levels (300F only - showing configured levels)
+		case f.Feature == "ventilation.levels.levelOne":
+			if vol, ok := f.Properties["volumeFlow"].(map[string]interface{}); ok {
+				features["level_one_volumeflow"] = vol["value"]
+			}
+		case f.Feature == "ventilation.levels.levelTwo":
+			if vol, ok := f.Properties["volumeFlow"].(map[string]interface{}); ok {
+				features["level_two_volumeflow"] = vol["value"]
+			}
+		case f.Feature == "ventilation.levels.levelThree":
+			if vol, ok := f.Properties["volumeFlow"].(map[string]interface{}); ok {
+				features["level_three_volumeflow"] = vol["value"]
+			}
+		case f.Feature == "ventilation.levels.levelFour":
+			if vol, ok := f.Properties["volumeFlow"].(map[string]interface{}); ok {
+				features["level_four_volumeflow"] = vol["value"]
+			}
+
+		// Schedule (300F only)
+		case f.Feature == "ventilation.schedule":
+			if active, ok := f.Properties["active"].(map[string]interface{}); ok {
+				features["schedule_active"] = active["value"]
+			}
+			if entries, ok := f.Properties["entries"].(map[string]interface{}); ok {
+				features["schedule_entries"] = entries["value"]
 			}
 		}
 	}

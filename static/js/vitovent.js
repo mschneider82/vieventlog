@@ -121,13 +121,21 @@ function renderVitoventDevice(data) {
             <div class="device-sections">
     `;
 
-    // Operating Modes Section
+    // Operating Modes Section - adapt to device type
+    const isVitoair = features.device_type === 'vitoair';
+    const is300F = features.device_type === 'vitovent300f';
+
     html += `
         <div class="section">
             <div class="section-title">⚙️ Betriebsmodus</div>
             <div class="status-badge ${getOperatingModeBadgeClass(features.operating_mode)}">
                 ${formatOperatingMode(features.operating_mode)}
             </div>
+    `;
+
+    if (isVitoair) {
+        // VitoAir: Complex mode selection
+        html += `
             <div class="control-group">
                 <label class="control-label">Modus ändern</label>
                 <div class="mode-selector">
@@ -141,7 +149,25 @@ function renderVitoventDevice(data) {
                             onclick="setOperatingMode('sensorDriven')">Auto-Sensor</button>
                 </div>
             </div>
-    `;
+        `;
+    } else if (is300F) {
+        // Vitovent 300F: Simple mode selection
+        html += `
+            <div class="control-group">
+                <label class="control-label">Modus ändern</label>
+                <div class="mode-selector">
+                    <button class="mode-btn ${features.operating_mode === 'standby' ? 'active' : ''}"
+                            onclick="setOperatingMode('standby')">Standby</button>
+                    <button class="mode-btn ${features.operating_mode === 'standard' ? 'active' : ''}"
+                            onclick="setOperatingMode('standard')">Standard</button>
+                    <button class="mode-btn ${features.operating_mode === 'ventilation' ? 'active' : ''}"
+                            onclick="setOperatingMode('ventilation')">Lüftung</button>
+                </div>
+            </div>
+        `;
+    }
+
+    html += `</div>`;
 
     if (features.operating_state) {
         html += `
@@ -166,49 +192,140 @@ function renderVitoventDevice(data) {
 
     html += '</div>';
 
-    // Quick Modes Section
+    // Quick Modes Section - device-specific
     html += `
         <div class="section">
             <div class="section-title">⚡ Schnellwahl-Modi</div>
     `;
 
-    if (features.quickmode_intensive) {
-        const active = features.quickmode_intensive.active;
-        html += `
-            <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('forcedLevelFour', ${!active})">
-                <span>💨 Intensivlüftung ${active ? '(aktiv)' : ''}</span>
-                <span class="quickmode-info">${features.quickmode_intensive.runtime || 30} Min</span>
-            </button>
-        `;
-    }
+    if (isVitoair) {
+        // VitoAir quick modes
+        if (features.quickmode_intensive) {
+            const active = features.quickmode_intensive.active;
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('forcedLevelFour', ${!active})">
+                    <span>💨 Intensivlüftung ${active ? '(aktiv)' : ''}</span>
+                    <span class="quickmode-info">${features.quickmode_intensive.runtime || 30} Min</span>
+                </button>
+            `;
+        }
 
-    if (features.quickmode_silent) {
-        const active = features.quickmode_silent.active;
-        html += `
-            <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('silent', ${!active})">
-                <span>🔇 Geräuschreduziert ${active ? '(aktiv)' : ''}</span>
-                <span class="quickmode-info">${features.quickmode_silent.runtime || 30} Min</span>
-            </button>
-        `;
-    }
+        if (features.quickmode_silent) {
+            const active = features.quickmode_silent.active;
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('silent', ${!active})">
+                    <span>🔇 Geräuschreduziert ${active ? '(aktiv)' : ''}</span>
+                    <span class="quickmode-info">${features.quickmode_silent.runtime || 30} Min</span>
+                </button>
+            `;
+        }
 
-    if (features.quickmode_shutdown) {
-        const active = features.quickmode_shutdown.active;
-        html += `
-            <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('temporaryShutdown', ${!active})">
-                <span>⏸️ Temp. Abschaltung ${active ? '(aktiv)' : ''}</span>
-                <span class="quickmode-info">${features.quickmode_shutdown.runtime || 360} Min</span>
-            </button>
-        `;
+        if (features.quickmode_shutdown) {
+            const active = features.quickmode_shutdown.active;
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('temporaryShutdown', ${!active})">
+                    <span>⏸️ Temp. Abschaltung ${active ? '(aktiv)' : ''}</span>
+                    <span class="quickmode-info">${features.quickmode_shutdown.runtime || 360} Min</span>
+                </button>
+            `;
+        }
+    } else if (is300F) {
+        // Vitovent 300F quick modes
+        if (features.quickmode_comfort) {
+            const active = features.quickmode_comfort.active;
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('comfort', ${!active})">
+                    <span>🛋️ Komfort ${active ? '(aktiv)' : ''}</span>
+                </button>
+            `;
+        }
+
+        if (features.quickmode_eco) {
+            const active = features.quickmode_eco.active;
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('eco', ${!active})">
+                    <span>♻️ Eco ${active ? '(aktiv)' : ''}</span>
+                </button>
+            `;
+        }
+
+        if (features.quickmode_holiday) {
+            const active = features.quickmode_holiday.active;
+            const dateInfo = (features.quickmode_holiday.start || features.quickmode_holiday.end)
+                ? `${features.quickmode_holiday.start} bis ${features.quickmode_holiday.end}`
+                : 'nicht aktiv';
+            html += `
+                <button class="quickmode-button ${active ? 'active' : ''}" onclick="toggleQuickMode('holiday', ${!active})">
+                    <span>🏖️ Urlaubsmodus ${active ? '(aktiv)' : ''}</span>
+                    <span class="quickmode-info" style="font-size: 0.85em;">${dateInfo}</span>
+                </button>
+            `;
+        }
     }
 
     html += '</div>';
 
-    // Sensors Section - Temperatures
-    html += `
-        <div class="section">
-            <div class="section-title">🌡️ Temperaturen</div>
-    `;
+    // Vitovent 300F: Volume Flow Levels Section
+    if (is300F && (features.level_one_volumeflow !== undefined || features.level_two_volumeflow !== undefined ||
+                   features.level_three_volumeflow !== undefined || features.level_four_volumeflow !== undefined)) {
+        html += `
+            <div class="section">
+                <div class="section-title">📊 Lüftungsstufen</div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+        `;
+
+        if (features.level_one_volumeflow !== undefined) {
+            html += `
+                <div class="sensor-row">
+                    <span class="sensor-label">Stufe 1:</span>
+                    <span class="sensor-value">${features.level_one_volumeflow} m³/h</span>
+                </div>
+            `;
+        }
+        if (features.level_two_volumeflow !== undefined) {
+            html += `
+                <div class="sensor-row">
+                    <span class="sensor-label">Stufe 2:</span>
+                    <span class="sensor-value">${features.level_two_volumeflow} m³/h</span>
+                </div>
+            `;
+        }
+        if (features.level_three_volumeflow !== undefined) {
+            html += `
+                <div class="sensor-row">
+                    <span class="sensor-label">Stufe 3:</span>
+                    <span class="sensor-value">${features.level_three_volumeflow} m³/h</span>
+                </div>
+            `;
+        }
+        if (features.level_four_volumeflow !== undefined) {
+            html += `
+                <div class="sensor-row">
+                    <span class="sensor-label">Stufe 4:</span>
+                    <span class="sensor-value">${features.level_four_volumeflow} m³/h</span>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    // Sensors Section - Temperatures (VitoAir specific)
+    if (isVitoair) {
+        html += `
+            <div class="section">
+                <div class="section-title">🌡️ Temperaturen</div>
+        `;
+    } else {
+        // For 300F, only show volume flow section (no temperature sensors)
+        html += `
+            <div class="section" style="display: none;">
+                <div class="section-title">🌡️ Temperaturen</div>
+        `;
+    }
 
     if (features.temp_supply !== undefined) {
         html += `
@@ -469,10 +586,14 @@ function renderVitoventDevice(data) {
 
 function formatOperatingMode(mode) {
     const modes = {
+        // VitoAir modes
         'permanent': 'Konstantbetrieb',
         'ventilation': 'Zeitprogramm',
         'sensorOverride': 'Zeitprogramm + Sensor',
-        'sensorDriven': 'Sensor-Automatikmodus'
+        'sensorDriven': 'Sensor-Automatikmodus',
+        // Vitovent 300F modes
+        'standby': 'Standby',
+        'standard': 'Standard',
     };
     return modes[mode] || mode;
 }
@@ -497,8 +618,14 @@ function formatBypassLevel(level) {
 
 function getOperatingModeBadgeClass(mode) {
     switch(mode) {
+        // VitoAir modes - active when running
         case 'permanent': return 'active';
         case 'sensorDriven': return 'active';
+        case 'ventilation': return 'active';
+        // Vitovent 300F modes - active when in ventilation mode
+        case 'ventilation': return 'active';
+        case 'standard': return 'active';
+        case 'standby': return '';
         default: return '';
     }
 }
