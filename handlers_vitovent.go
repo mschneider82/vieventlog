@@ -66,8 +66,11 @@ type VitoventDashboardResponse struct {
 func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 	features := make(map[string]interface{})
 
-	// Track device type capabilities
+	// Track device type capabilities and feature presence
 	features["device_type"] = "unknown" // Will be set based on available features
+	var hasVitoairModes bool
+	var has300FModes bool
+	var currentOperatingMode string
 
 	for _, f := range rawFeatures {
 		switch {
@@ -75,30 +78,31 @@ func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 		// VitoAir style: ventilation.operating.modes.active
 		case f.Feature == "ventilation.operating.modes.active":
 			if val, ok := f.Properties["value"].(map[string]interface{}); ok {
-				features["operating_mode"] = val["value"]
-				features["device_type"] = "vitoair" // VitoAir uses this style
+				currentOperatingMode = val["value"].(string)
+				features["operating_mode"] = currentOperatingMode
+				hasVitoairModes = true // VitoAir has this feature structure
 			}
 
-		// Vitovent 300F style: individual mode properties
+		// Vitovent 300F style: individual mode properties (check for presence, not active state)
 		case f.Feature == "ventilation.operating.modes.standby":
+			has300FModes = true // Just mark that this 300F-style feature exists
 			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
 				if active, ok := val["value"].(bool); ok && active {
 					features["operating_mode"] = "standby"
-					features["device_type"] = "vitovent300f"
 				}
 			}
 		case f.Feature == "ventilation.operating.modes.standard":
+			has300FModes = true // Just mark that this 300F-style feature exists
 			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
 				if active, ok := val["value"].(bool); ok && active {
 					features["operating_mode"] = "standard"
-					features["device_type"] = "vitovent300f"
 				}
 			}
 		case f.Feature == "ventilation.operating.modes.ventilation":
+			has300FModes = true // Just mark that this 300F-style feature exists
 			if val, ok := f.Properties["active"].(map[string]interface{}); ok {
 				if active, ok := val["value"].(bool); ok && active {
 					features["operating_mode"] = "ventilation"
-					features["device_type"] = "vitovent300f"
 				}
 			}
 
@@ -396,6 +400,16 @@ func extractVitoventFeatures(rawFeatures []Feature) map[string]interface{} {
 				features["schedule_entries"] = entries["value"]
 			}
 		}
+	}
+
+	// Determine device type based on feature structure presence (not current state)
+	// This ensures stable device type detection even after mode changes
+	if hasVitoairModes {
+		features["device_type"] = "vitoair"
+		log.Printf("Device detected as VitoAir (has ventilation.operating.modes.active structure)\n")
+	} else if has300FModes {
+		features["device_type"] = "vitovent300f"
+		log.Printf("Device detected as Vitovent 300F (has individual mode properties: standby/standard/ventilation)\n")
 	}
 
 	return features

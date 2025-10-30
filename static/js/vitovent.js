@@ -126,7 +126,7 @@ function renderVitoventDevice(data) {
     const is300F = features.device_type === 'vitovent300f';
 
     html += `
-        <div class="section">
+        <div class="section operating-mode-section">
             <div class="section-title">⚙️ Betriebsmodus</div>
             <div class="status-badge ${getOperatingModeBadgeClass(features.operating_mode)}">
                 ${formatOperatingMode(features.operating_mode)}
@@ -194,7 +194,7 @@ function renderVitoventDevice(data) {
 
     // Quick Modes Section - device-specific
     html += `
-        <div class="section">
+        <div class="section quickmodes-section">
             <div class="section-title">⚡ Schnellwahl-Modi</div>
     `;
 
@@ -269,7 +269,7 @@ function renderVitoventDevice(data) {
     if (is300F && (features.level_one_volumeflow !== undefined || features.level_two_volumeflow !== undefined ||
                    features.level_three_volumeflow !== undefined || features.level_four_volumeflow !== undefined)) {
         html += `
-            <div class="section">
+            <div class="section levels-section">
                 <div class="section-title">📊 Lüftungsstufen</div>
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
         `;
@@ -316,13 +316,13 @@ function renderVitoventDevice(data) {
     // Sensors Section - Temperatures (VitoAir specific)
     if (isVitoair) {
         html += `
-            <div class="section">
+            <div class="section temperature-section">
                 <div class="section-title">🌡️ Temperaturen</div>
         `;
     } else {
         // For 300F, only show volume flow section (no temperature sensors)
         html += `
-            <div class="section" style="display: none;">
+            <div class="section temperature-section" style="display: none;">
                 <div class="section-title">🌡️ Temperaturen</div>
         `;
     }
@@ -372,7 +372,7 @@ function renderVitoventDevice(data) {
 
     // Humidity Section
     html += `
-        <div class="section">
+        <div class="section humidity-section">
             <div class="section-title">💧 Luftfeuchte</div>
     `;
 
@@ -413,7 +413,7 @@ function renderVitoventDevice(data) {
 
     // Volume Flow Section
     html += `
-        <div class="section">
+        <div class="section volumeflow-section">
             <div class="section-title">💨 Luftmenge</div>
     `;
 
@@ -446,7 +446,7 @@ function renderVitoventDevice(data) {
 
     // Fan Status Section
     html += `
-        <div class="section">
+        <div class="section fan-section">
             <div class="section-title">🔄 Ventilatoren</div>
     `;
 
@@ -482,7 +482,7 @@ function renderVitoventDevice(data) {
 
     // Filter Section
     html += `
-        <div class="section">
+        <div class="section filter-section">
             <div class="section-title">🔧 Filter</div>
     `;
 
@@ -514,7 +514,7 @@ function renderVitoventDevice(data) {
     // Bypass Section (if available)
     if (features.bypass_available) {
         html += `
-            <div class="section">
+            <div class="section bypass-config-section">
                 <div class="section-title">🌡️ Bypass</div>
                 <div class="bypass-section">
                     <div class="status-badge ${features.bypass_available ? 'active' : 'inactive'}">
