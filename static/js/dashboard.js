@@ -899,9 +899,15 @@
                 const formatted = formatValue(kf.primarySupplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
+                // For heat pumps (Vitocal), use "Lufteintrittstemperatur" instead of "Primärkreis-Vorlauf"
+                // Check if this is a Vitocal by looking for compressor-specific sensors (even if compressor is off)
+                const isVitocal = kf.compressorActive || kf.compressorSpeed || kf.compressorInletTemp ||
+                                 kf.compressorOutletTemp || kf.compressorOilTemp || kf.compressorMotorTemp ||
+                                 kf.compressorPressure;
+                const label = isVitocal ? 'Lufteintritts-temperatur' : 'Primärkreis-Vorlauf';
                 temps += `
                     <div class="temp-item">
-                        <span class="temp-label">Primärkreis-Vorlauf</span>
+                        <span class="temp-label">${label}</span>
                         <div>
                             <span class="temp-value">${value}</span>
                             <span class="temp-unit">${unit}</span>
