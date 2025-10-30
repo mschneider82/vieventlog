@@ -553,6 +553,7 @@
                 operatingProgram: find(['heating.circuits.0.operating.programs.active']),
 
                 // Compressor (heat pump - Vitocal)
+                compressorActive: findNested('heating.compressors.0', 'active'),
                 compressorSpeed: find(['heating.compressors.0.speed.current']),
                 compressorPower: find(['heating.inverters.0.sensors.power.output']),
                 compressorCurrent: find(['heating.inverters.0.sensors.power.current']),
@@ -958,7 +959,8 @@
 
             if (hasCompressor) {
                 title = '⚙️ Verdichter';
-                const isRunning = kf.compressorSpeed && kf.compressorSpeed.value > 0;
+                // Use compressorActive boolean if available, otherwise fall back to compressorSpeed
+                const isRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
 
                 // Convert speed to RPM if unit is revolutionsPerSecond
                 let speedValue = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.value : 0;
