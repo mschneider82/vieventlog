@@ -636,13 +636,15 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
 
         phases.forEach(phase => {
             const totalPower = Math.sqrt(Math.pow(phase.active, 2) + Math.pow(phase.reactive, 2)).toFixed(0);
+            // Calculate current from active power using I = P / U (U = 230V nominal)
+            const calculatedCurrent = (phase.active / 230).toFixed(2);
 
             html += `
                 <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
                     <div style="font-size: 14px; color: #667eea; font-weight: 600; margin-bottom: 8px;">Phase ${phase.name}</div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 12px; color: #a0a0b0;">Strom:</span>
-                        <span style="font-size: 13px; color: #e0e0e0; font-weight: 600;">${formatNum(phase.current)} A</span>
+                        <span style="font-size: 13px; color: #e0e0e0; font-weight: 600;">${calculatedCurrent} A</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 12px; color: #a0a0b0;">Wirkleistung:</span>
