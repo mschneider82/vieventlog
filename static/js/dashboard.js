@@ -594,6 +594,12 @@
                 fan1: find(['heating.primaryCircuit.fans.1.current']),
 
                 // Efficiency
+                // COP (Coefficient of Performance) features - primary source
+                copTotal: find(['heating.cop.total']),
+                copHeating: find(['heating.cop.heating']),
+                copDhw: find(['heating.cop.dhw']),
+                copCooling: find(['heating.cop.cooling']),
+                // SCOP/SPF fallback if COP not available
                 scop: find(['heating.scop.total', 'heating.spf.total']),
                 scopHeating: find(['heating.scop.heating', 'heating.spf.heating']),
                 scopDhw: find(['heating.scop.dhw', 'heating.spf.dhw']),
@@ -617,7 +623,8 @@
                 deviceVariant: find(['device.variant', 'heating.device.variant']),
 
                 // Compressor statistics (load classes)
-                compressorStats: find(['heating.compressors.0.statistics']),
+                compressorStats0: find(['heating.compressors.0.statistics']),
+                compressorStats1: find(['heating.compressors.1.statistics']),
 
                 // SmartClimate / Zigbee device features
                 // Device generic
@@ -2672,68 +2679,75 @@
                 `;
             }
 
-            // JAZ / SCOP / SPF values (Coefficient of Performance)
-            if (kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
+            // JAZ / COP / SCOP / SPF values (Coefficient of Performance)
+            if (kf.copTotal || kf.copHeating || kf.copDhw || kf.copCooling || kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
                 info += `
                     <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
                         <span class="status-label" style="font-weight: 600; color: #667eea;">Coefficient of Performance (JAZ)</span>
                     </div>
                 `;
 
-                if (kf.scop) {
+                // JAZ Gesamt (COP or SCOP fallback)
+                if (kf.copTotal || kf.scop) {
+                    const value = kf.copTotal || kf.scop;
                     info += `
                         <div class="status-item">
             <span class="status-label">JAZ Gesamt</span>
-            <span class="status-value">${formatNum(kf.scop.value)}</span>
+            <span class="status-value">${formatNum(value.value)}</span>
                         </div>
                     `;
                 }
 
-                if (kf.scopHeating) {
+                // JAZ Heizen (COP or SCOP fallback)
+                if (kf.copHeating || kf.scopHeating) {
+                    const value = kf.copHeating || kf.scopHeating;
                     info += `
                         <div class="status-item">
             <span class="status-label">JAZ Heizen</span>
-            <span class="status-value">${formatNum(kf.scopHeating.value)}</span>
+            <span class="status-value">${formatNum(value.value)}</span>
                         </div>
                     `;
                 }
 
-                if (kf.scopDhw) {
+                // JAZ Warmwasser (COP or SCOP fallback)
+                if (kf.copDhw || kf.scopDhw) {
+                    const value = kf.copDhw || kf.scopDhw;
                     info += `
                         <div class="status-item">
             <span class="status-label">JAZ Warmwasser</span>
-            <span class="status-value">${formatNum(kf.scopDhw.value)}</span>
+            <span class="status-value">${formatNum(value.value)}</span>
                         </div>
                     `;
                 }
 
-                if (kf.seerCooling) {
+                // JAZ Kühlen (COP or SEER fallback)
+                if (kf.copCooling || kf.seerCooling) {
+                    const value = kf.copCooling || kf.seerCooling;
                     info += `
                         <div class="status-item">
-            <span class="status-label">JAZ Kühlen (SEER)</span>
-            <span class="status-value">${formatNum(kf.seerCooling.value)}</span>
+            <span class="status-label">JAZ Kühlen</span>
+            <span class="status-value">${formatNum(value.value)}</span>
                         </div>
                     `;
                 }
             }
 
             // Compressor statistics (Lastklassen / Load classes)
-            if (kf.compressorStats) {
-                const stats = kf.compressorStats.value;
-
-                // Debug: Log the statistics structure
-                console.log('📊 Compressor Statistics:', stats);
+            // Helper function to render load class statistics
+            function renderCompressorStats(statsObj, compressorIndex) {
+                let html = '';
+                const stats = statsObj.value;
 
                 if (stats && typeof stats === 'object') {
-                    // Check if this has the nested structure (hours/starts from heating.compressors.0.statistics)
+                    // Check if this has the nested structure (hours/starts from heating.compressors.X.statistics)
                     // These are shown in the Kompressor card, so skip them here
                     const hasHoursStarts = stats.hours && stats.hours.value !== undefined;
 
                     if (!hasHoursStarts) {
-                        // This is the load class data (heating.compressors.0.statistics with loadClassOne, etc.)
-                        info += `
+                        // This is the load class data (heating.compressors.X.statistics with loadClassOne, etc.)
+                        html += `
             <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
-                <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf 1 - Betriebsstunden</span>
+                <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf ${compressorIndex + 1}</span>
             </div>
                         `;
 
@@ -2772,7 +2786,7 @@
                 }
 
                 if (value !== null) {
-                    info += `
+                    html += `
                         <div class="status-item">
                             <span class="status-label">Stunden Lastklasse ${['eins', 'zwei', 'drei', 'vier', 'fünf'][index]}</span>
                             <span class="status-value">${value} h</span>
@@ -2783,6 +2797,17 @@
                         }
                     }
                 }
+                return html;
+            }
+
+            // Render all available compressor statistics
+            if (kf.compressorStats0) {
+                console.log('📊 Compressor 0 Statistics:', kf.compressorStats0.value);
+                info += renderCompressorStats(kf.compressorStats0, 0);
+            }
+            if (kf.compressorStats1) {
+                console.log('📊 Compressor 1 Statistics:', kf.compressorStats1.value);
+                info += renderCompressorStats(kf.compressorStats1, 1);
             }
 
             return `
