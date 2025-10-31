@@ -256,7 +256,9 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
         const sessionStatus = getWallboxValue('vcs.session');
         if (sessionStatus && sessionStatus.value) {
             if (typeof sessionStatus.value === 'object' && sessionStatus.value.status) {
-                wallboxStatus = sessionStatus.value.status;
+                // Extract the status value - it's a nested FeatureValue object
+                const statusObj = sessionStatus.value.status;
+                wallboxStatus = typeof statusObj === 'object' ? (statusObj.value || statusObj) : statusObj;
             } else if (typeof sessionStatus.value === 'string') {
                 wallboxStatus = sessionStatus.value;
             }

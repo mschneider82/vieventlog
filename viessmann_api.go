@@ -243,7 +243,7 @@ func parseFeatures(features []Feature, installationID, gatewayID, deviceID strin
 			df.Temperatures[featureName] = value
 		} else if strings.Contains(featureName, "dhw") || strings.Contains(featureName, "hotwater") {
 			df.DHW[featureName] = value
-		} else if strings.Contains(featureName, "operating") || strings.Contains(featureName, "mode") || strings.Contains(featureName, "program") {
+		} else if strings.Contains(featureName, "operating") || strings.Contains(featureName, "mode") || strings.Contains(featureName, "program") || strings.Contains(featureName, "session") {
 			df.OperatingModes[featureName] = value
 		} else if strings.Contains(featureName, "circuit") {
 			df.Circuits[featureName] = value
