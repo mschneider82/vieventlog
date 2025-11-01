@@ -280,9 +280,12 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
             }
         }
 
-        // Calculate power from energy and time if available
-        if (wallboxSessionTime > 0 && wallboxSessionEnergy > 0) {
+        // Calculate power from energy and time only if actively charging
+        // If connected but not charging, power should be 0
+        if (wallboxStatus === 'charging' && wallboxSessionTime > 0 && wallboxSessionEnergy > 0) {
             wallboxPower = (wallboxSessionEnergy / (wallboxSessionTime / 3600)) * 1000; // Convert to W
+        } else {
+            wallboxPower = 0; // Not charging = 0 power
         }
 
         // Device info
