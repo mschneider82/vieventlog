@@ -444,7 +444,7 @@ func trvSetTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build API URL (ZigBee devices use v1 API)
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/trv.temperature/commands/setTargetTemperature",
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/trv.temperature/commands/setTargetTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -644,7 +644,7 @@ func childLockToggleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build API URL (ZigBee devices use v1 API)
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v1/features/installations/%s/gateways/%s/devices/%s/features/trv.childLock/commands/%s",
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/trv.childLock/commands/%s",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, command)
 
 	// Create HTTP request (empty body for these commands)
