@@ -1211,7 +1211,7 @@ func roomTempSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/equipment/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.programs.%s/commands/setTemperature",
+	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.programs.%s/commands/setTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit, req.Program)
 
 	// Prepare request body
