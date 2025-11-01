@@ -635,9 +635,15 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
         ];
 
         phases.forEach(phase => {
-            const totalPower = Math.sqrt(Math.pow(phase.active, 2) + Math.pow(phase.reactive, 2)).toFixed(0);
-            // Calculate current from active power using I = P / U (U = 230V nominal)
-            const calculatedCurrent = (phase.active / 230).toFixed(2);
+            // Calculate apparent power S = √(P² + Q²)
+            const apparentPower = Math.sqrt(Math.pow(phase.active, 2) + Math.pow(phase.reactive, 2));
+            const totalPower = apparentPower.toFixed(0);
+
+            // Calculate power factor cos(φ) = P / S
+            const cosPhi = phase.active / apparentPower;
+
+            // Calculate current using I = P / (U × cos(φ)) where U = 230V nominal
+            const calculatedCurrent = (phase.active / (230 * cosPhi)).toFixed(2);
 
             html += `
                 <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
