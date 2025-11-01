@@ -984,13 +984,15 @@
                     speedUnit = 'U/min';
                 }
 
-                // Extract compressor statistics
+                // Extract compressor statistics (use compressorStats0 since it now holds the primary compressor data)
                 let compressorHours = 0;
                 let compressorStarts = 0;
                 let avgRuntime = 0;
 
-                if (kf.compressorStats && kf.compressorStats.value) {
-                    const stats = kf.compressorStats.value;
+                // Try compressorStats0 first (new naming), then fall back to legacy compressorStats
+                const statsObj = kf.compressorStats0 || kf.compressorStats;
+                if (statsObj && statsObj.value) {
+                    const stats = statsObj.value;
                     if (stats.hours && stats.hours.value !== undefined) {
                         compressorHours = stats.hours.value;
                     }
