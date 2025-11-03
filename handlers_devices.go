@@ -139,6 +139,108 @@ func deviceSettingsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{Success: true})
 }
 
+// Hybrid Pro Control Handlers
+
+func hybridProControlGetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	accountID := r.URL.Query().Get("accountId")
+	installationID := r.URL.Query().Get("installationId")
+	deviceID := r.URL.Query().Get("deviceId")
+
+	if accountID == "" || installationID == "" || deviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: false,
+			Error:   "accountId, installationId, and deviceId are required",
+		})
+		return
+	}
+
+	deviceKey := fmt.Sprintf("%s_%s", installationID, deviceID)
+	settings, err := GetDeviceSettings(accountID, deviceKey)
+	if err != nil {
+		// No settings found is not an error - return empty response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: true,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if settings.HybridProControl != nil {
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success:  true,
+			Settings: settings.HybridProControl,
+		})
+	} else {
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: true,
+		})
+	}
+}
+
+func hybridProControlSetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req HybridProControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	if req.AccountID == "" || req.InstallationID == "" || req.DeviceID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: false,
+			Error:   "accountId, installationId, and deviceId are required",
+		})
+		return
+	}
+
+	deviceKey := fmt.Sprintf("%s_%s", req.InstallationID, req.DeviceID)
+
+	// Get or create device settings
+	settings, err := GetDeviceSettings(req.AccountID, deviceKey)
+	if err != nil {
+		settings = &DeviceSettings{}
+	}
+
+	// Update hybrid pro control settings
+	settings.HybridProControl = &req.Settings
+
+	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HybridProControlResponse{
+			Success: false,
+			Error:   "Failed to save settings: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Hybrid Pro Control settings saved for %s (account: %s): strategy=%s, electricity=%.3f/%.3f, fossil=%.3f/%.3f\n",
+		deviceKey, req.AccountID, req.Settings.ControlStrategy,
+		req.Settings.ElectricityPriceLow, req.Settings.ElectricityPriceNormal,
+		req.Settings.FossilPriceLow, req.Settings.FossilPriceNormal)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(HybridProControlResponse{
+		Success:  true,
+		Settings: &req.Settings,
+	})
+}
+
 // DHW (Domestic Hot Water) Control Handlers
 
 func dhwModeSetHandler(w http.ResponseWriter, r *http.Request) {

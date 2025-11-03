@@ -79,6 +79,10 @@ func main() {
 	http.HandleFunc("/api/device-settings/set", deviceSettingsSetHandler)
 	http.HandleFunc("/api/device-settings/delete", deviceSettingsDeleteHandler)
 
+	// Hybrid Pro Control endpoints
+	http.HandleFunc("/api/hybrid-pro-control/get", hybridProControlGetHandler)
+	http.HandleFunc("/api/hybrid-pro-control/set", hybridProControlSetHandler)
+
 	// DHW operating mode control
 	http.HandleFunc("/api/dhw/mode/set", dhwModeSetHandler)
 	http.HandleFunc("/api/dhw/temperature/set", dhwTemperatureSetHandler)
