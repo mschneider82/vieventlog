@@ -34,9 +34,27 @@ type Credentials struct {
 }
 
 type DeviceSettings struct {
-	Name             string `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
-	CompressorRpmMin int    `json:"compressorRpmMin,omitempty"`
-	CompressorRpmMax int    `json:"compressorRpmMax,omitempty"`
+	Name             string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
+	CompressorRpmMin int                       `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax int                       `json:"compressorRpmMax,omitempty"`
+	HybridProControl *HybridProControlSettings `json:"hybridProControl,omitempty"`
+}
+
+type HybridProControlSettings struct {
+	// Electricity prices in EUR/kWh
+	ElectricityPriceLow    float64 `json:"electricityPriceLow"`
+	ElectricityPriceNormal float64 `json:"electricityPriceNormal"`
+
+	// Control strategy: "constant" (Konstanttemperatur), "ecological" (Ökologisch), "economic" (Ökonomisch)
+	ControlStrategy string `json:"controlStrategy"`
+
+	// Energy factors (primary energy factor)
+	HeatPumpEnergyFactor float64 `json:"heatPumpEnergyFactor"` // heating.secondaryHeatGenerator.electricity.energyFactor
+	FossilEnergyFactor   float64 `json:"fossilEnergyFactor"`   // heating.secondaryHeatGenerator.fossil.energyFactor
+
+	// Fossil fuel prices in EUR/kWh or EUR/l
+	FossilPriceLow    float64 `json:"fossilPriceLow"`
+	FossilPriceNormal float64 `json:"fossilPriceNormal"`
 }
 
 type RoomSettings struct {

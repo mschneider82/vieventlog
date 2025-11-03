@@ -229,3 +229,16 @@ type TestAPIResponse struct {
 	StatusCode int         `json:"status_code,omitempty"`
 	Response   interface{} `json:"response,omitempty"`
 }
+
+type HybridProControlRequest struct {
+	AccountID      string                   `json:"accountId"`
+	InstallationID string                   `json:"installationId"`
+	DeviceID       string                   `json:"deviceId"`
+	Settings       HybridProControlSettings `json:"settings"`
+}
+
+type HybridProControlResponse struct {
+	Success  bool                      `json:"success"`
+	Error    string                    `json:"error,omitempty"`
+	Settings *HybridProControlSettings `json:"settings,omitempty"`
+}

@@ -197,6 +197,9 @@
                 // Load device settings for RPM percentage calculation
                 await loadDeviceSettings(currentDevice.installationId, currentDevice.deviceId);
 
+                // Load hybrid pro control settings if available
+                await loadSavedHybridProControlSettings(currentDevice.accountId, currentDevice.installationId, currentDevice.deviceId);
+
                 renderDashboard(features);
                 updateLastUpdate();
 
@@ -215,6 +218,9 @@
 
             // Extract key features
             const keyFeatures = extractKeyFeatures(features);
+
+            // Store key features globally for use in Modal
+            window.currentKeyFeatures = keyFeatures;
 
             // Debug: Log features with specific keywords
             if (features.rawFeatures) {
@@ -424,6 +430,9 @@
                 // Refrigerant circuit (heat pump only)
                 html += renderRefrigerantCircuit(keyFeatures);
 
+                // Hybrid Pro Control (hybrid systems)
+                html += renderHybridProControlInfo(keyFeatures);
+
                 // System status - only show if no heating circuit cards were rendered
                 if (circuits.length === 0) {
                     html += renderSystemStatus(keyFeatures);
@@ -608,7 +617,17 @@
                 // Valves and auxiliary systems
                 fourWayValve: find(['heating.valves.fourThreeWay.position']),
                 secondaryHeater: find(['heating.secondaryHeatGenerator.state', 'heating.secondaryHeatGenerator.status']),
+                secondaryHeatGeneratorStatus: find(['heating.secondaryHeatGenerator.status']),
                 fanRing: findNested('heating.heater.fanRing', 'active'),
+
+                // Hybrid Pro Control features
+                hybridElectricityPriceLow: find(['heating.secondaryHeatGenerator.electricity.price.low']),
+                hybridElectricityPriceNormal: find(['heating.secondaryHeatGenerator.electricity.price.normal']),
+                hybridHeatPumpEnergyFactor: find(['heating.secondaryHeatGenerator.electricity.energyFactor']),
+                hybridFossilEnergyFactor: find(['heating.secondaryHeatGenerator.fossil.energyFactor']),
+                hybridFossilPriceLow: find(['heating.secondaryHeatGenerator.fossil.price.low']),
+                hybridFossilPriceNormal: find(['heating.secondaryHeatGenerator.fossil.price.normal']),
+                hybridControlStrategy: find(['heating.secondaryHeatGenerator.control.strategy']),
 
                 // Refrigerant circuit (heat pump specific)
                 evaporatorTemp: find(['heating.evaporators.0.sensors.temperature.liquid']),
@@ -764,6 +783,15 @@
                 <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
                     ⚙️ Einstellungen
+                </button>
+            ` : '';
+
+            // Check if this is a hybrid system and show Hybrid Pro Control button
+            const isHybrid = kf.secondaryHeatGeneratorStatus !== undefined;
+            const hybridProControlButton = isHybrid ? `
+                <button onclick="openHybridProControlModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}', '${deviceInfo.gatewaySerial}')"
+                        style="margin-left: 10px; padding: 5px 10px; cursor: pointer; background-color: #ff9800; color: white; border: none; border-radius: 4px;">
+                    ☀️ Hybrid Pro Control
                 </button>
             ` : '';
 
@@ -944,6 +972,7 @@
                         <div>
                             <span class="badge badge-info">Device ${deviceInfo.deviceId}</span>
                             ${settingsButton}
+                            ${hybridProControlButton}
                         </div>
                     </div>
                     ${temps ? `<div class="temp-grid">${temps}</div>` : ''}
@@ -2537,6 +2566,180 @@
                     </div>
                     <div class="status-list">
                         ${sensors}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHybridProControlInfo(kf) {
+            // Get saved settings if available
+            const saved = window.savedHybridProControlSettings || {};
+
+            // Debug logging
+            console.log('=== Hybrid Pro Control Debug ===');
+            console.log('Current kf values:', {
+                hybridElectricityPriceLow: kf.hybridElectricityPriceLow,
+                hybridElectricityPriceNormal: kf.hybridElectricityPriceNormal,
+                hybridHeatPumpEnergyFactor: kf.hybridHeatPumpEnergyFactor,
+                hybridFossilEnergyFactor: kf.hybridFossilEnergyFactor,
+                hybridFossilPriceLow: kf.hybridFossilPriceLow,
+                hybridFossilPriceNormal: kf.hybridFossilPriceNormal,
+                hybridControlStrategy: kf.hybridControlStrategy
+            });
+            console.log('Saved settings:', saved);
+
+            // Debug: Search for any control strategy fields
+            console.log('All kf keys with "strategy":', Object.keys(kf).filter(k => k.toLowerCase().includes('strategy')));
+            console.log('All kf keys with "control":', Object.keys(kf).filter(k => k.toLowerCase().includes('control')));
+
+            // Simple number formatter for hybrid values (not feature objects)
+            const formatNumber = (num) => {
+                if (num === null || num === undefined || num === '' || isNaN(num)) {
+                    return null;
+                }
+                const n = parseFloat(num);
+                // For prices and energy factors, show up to 3 decimal places but remove trailing zeros
+                return n.toFixed(4).replace(/\.?0+$/, '');
+            };
+
+            // Prefer saved settings, fallback to API values
+            const getDisplayValue = (savedVal, apiVal) => {
+                // If saved value exists and is not 0, use it
+                if (savedVal !== undefined && savedVal !== null && savedVal !== 0) {
+                    console.log('Using saved value:', savedVal);
+                    return formatNumber(savedVal);
+                }
+                // Otherwise use API value
+                else if (apiVal) {
+                    // apiVal can be an object with a 'value' property or just a number
+                    const numVal = (typeof apiVal === 'object' && apiVal.value !== undefined) ? apiVal.value : apiVal;
+                    console.log('Using API value:', numVal, 'from apiVal:', apiVal);
+                    return formatNumber(numVal);
+                }
+                return null;
+            };
+
+            // Helper to check if a value is valid
+            const hasValidValue = (val) => {
+                if (val === null || val === undefined || val === '') return false;
+                if (typeof val === 'object' && val.value !== undefined) {
+                    return val.value !== null && val.value !== undefined && val.value !== '' && !isNaN(val.value);
+                }
+                return !isNaN(val);
+            };
+
+            // Only show if hybrid system with at least one hybrid value (saved or API)
+            const hasAnyValue = (saved.electricityPriceLow !== undefined && saved.electricityPriceLow !== 0) ||
+                               (saved.electricityPriceNormal !== undefined && saved.electricityPriceNormal !== 0) ||
+                               (saved.heatPumpEnergyFactor !== undefined && saved.heatPumpEnergyFactor !== 0) ||
+                               (saved.fossilEnergyFactor !== undefined && saved.fossilEnergyFactor !== 0) ||
+                               (saved.fossilPriceLow !== undefined && saved.fossilPriceLow !== 0) ||
+                               (saved.fossilPriceNormal !== undefined && saved.fossilPriceNormal !== 0) ||
+                               hasValidValue(kf.hybridElectricityPriceLow) ||
+                               hasValidValue(kf.hybridElectricityPriceNormal) ||
+                               hasValidValue(kf.hybridHeatPumpEnergyFactor) ||
+                               hasValidValue(kf.hybridFossilEnergyFactor) ||
+                               hasValidValue(kf.hybridFossilPriceLow) ||
+                               hasValidValue(kf.hybridFossilPriceNormal);
+
+            if (!hasAnyValue) {
+                return '';
+            }
+
+            let hybrid = '';
+
+            // Stromtarif Niedrig
+            const elLow = getDisplayValue(saved.electricityPriceLow, kf.hybridElectricityPriceLow);
+            if (elLow) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Stromtarif Niedrig</span>
+                        <span class="status-value">${elLow} EUR/kWh</span>
+                    </div>
+                `;
+            }
+
+            // Stromtarif Normal
+            const elNorm = getDisplayValue(saved.electricityPriceNormal, kf.hybridElectricityPriceNormal);
+            if (elNorm) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Stromtarif Normal</span>
+                        <span class="status-value">${elNorm} EUR/kWh</span>
+                    </div>
+                `;
+            }
+
+            // Primärenergiefaktor WP
+            const hpFactor = getDisplayValue(saved.heatPumpEnergyFactor, kf.hybridHeatPumpEnergyFactor);
+            if (hpFactor) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Primärenergiefaktor WP</span>
+                        <span class="status-value">${hpFactor}</span>
+                    </div>
+                `;
+            }
+
+            // Primärenergiefaktor Fossil
+            const fosFactor = getDisplayValue(saved.fossilEnergyFactor, kf.hybridFossilEnergyFactor);
+            if (fosFactor) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Primärenergiefaktor Fossil</span>
+                        <span class="status-value">${fosFactor}</span>
+                    </div>
+                `;
+            }
+
+            // Fossil Tarif Niedrig
+            const fosPriceLow = getDisplayValue(saved.fossilPriceLow, kf.hybridFossilPriceLow);
+            if (fosPriceLow) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Fossil Tarif Niedrig</span>
+                        <span class="status-value">${fosPriceLow} EUR/kWh</span>
+                    </div>
+                `;
+            }
+
+            // Fossil Tarif Normal
+            const fosPriceNorm = getDisplayValue(saved.fossilPriceNormal, kf.hybridFossilPriceNormal);
+            if (fosPriceNorm) {
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Fossil Tarif Normal</span>
+                        <span class="status-value">${fosPriceNorm} EUR/kWh</span>
+                    </div>
+                `;
+            }
+
+            // Regelstrategie (nur aus gespeicherten Einstellungen, nicht aus API)
+            const strategyMap = {
+                'constant': 'Konstanttemperatur',
+                'ecological': 'Ökologisch',
+                'economic': 'Ökonomisch'
+            };
+
+            if (saved.controlStrategy) {
+                const strategy = strategyMap[saved.controlStrategy] || saved.controlStrategy;
+                hybrid += `
+                    <div class="status-item">
+                        <span class="status-label">Regelstrategie</span>
+                        <span class="status-value">${strategy}</span>
+                    </div>
+                `;
+            }
+
+            if (!hybrid) return '';
+
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <h2>☀️ Hybrid Pro Control</h2>
+                    </div>
+                    <div class="status-list">
+                        ${hybrid}
                     </div>
                 </div>
             `;
@@ -4518,6 +4721,499 @@
 
         // Make function available globally
         window.toggleFanRing = toggleFanRing;
+
+        // Hybrid Pro Control Modal Functions
+        async function openHybridProControlModal(installationId, deviceId, gatewaySerial) {
+            // Get account from current device
+            const accountId = window.currentDeviceInfo?.accountId;
+            if (!accountId) {
+                alert('Kein Account für dieses Gerät verfügbar');
+                return;
+            }
+
+            showHybridProControlModal(installationId, deviceId, gatewaySerial, accountId);
+        }
+
+        function showHybridProControlModal(installationId, deviceId, gatewaySerial, accountId) {
+            // Store parameters for later use
+            hybridModalParams = {
+                installationId: installationId,
+                deviceId: deviceId,
+                accountId: accountId,
+                gatewaySerial: gatewaySerial
+            };
+
+            const modal = document.createElement('div');
+            modal.className = 'debug-modal';
+            modal.style.display = 'flex';
+            modal.style.zIndex = '10000';
+
+            // Create a temporary container for the form
+            const formContainer = document.createElement('div');
+            formContainer.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 95%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    <div id="hybridProControlContainer" style="display: block;">
+                        <!-- Form will be loaded here -->
+                    </div>
+                </div>
+            `;
+
+            modal.appendChild(formContainer);
+            document.body.appendChild(modal);
+            modal.id = 'hybridProControlModal';
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeHybridProControlModal();
+                }
+            });
+
+            // Create inline form
+            const container = document.getElementById('hybridProControlContainer');
+            if (container) {
+                container.innerHTML = `
+                    <div style="margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
+                        <h2 style="margin: 0 0 5px 0; color: #333;">☀️ Hybrid Pro Control</h2>
+                        <p style="margin: 0; color: #666; font-size: 14px;">Einstellungen für Hybrid-Wärmepumpensysteme</p>
+                    </div>
+
+                    <div id="hybridTabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #ddd; flex-wrap: wrap;">
+                        <button class="hybrid-tab-btn active" onclick="switchHybridTab(event, 'electricity')" style="padding: 10px 15px; border: none; background: #f5f5f5; cursor: pointer; border-radius: 4px 4px 0 0; color: #666; font-weight: 500; transition: all 0.3s ease;">💡 Stromtarife</button>
+                        <button class="hybrid-tab-btn" onclick="switchHybridTab(event, 'strategy')" style="padding: 10px 15px; border: none; background: #f5f5f5; cursor: pointer; border-radius: 4px 4px 0 0; color: #666; font-weight: 500; transition: all 0.3s ease;">⚙️ Regelstrategie</button>
+                        <button class="hybrid-tab-btn" onclick="switchHybridTab(event, 'energyFactors')" style="padding: 10px 15px; border: none; background: #f5f5f5; cursor: pointer; border-radius: 4px 4px 0 0; color: #666; font-weight: 500; transition: all 0.3s ease;">📊 Primärenergiefaktoren</button>
+                        <button class="hybrid-tab-btn" onclick="switchHybridTab(event, 'fossil')" style="padding: 10px 15px; border: none; background: #f5f5f5; cursor: pointer; border-radius: 4px 4px 0 0; color: #666; font-weight: 500; transition: all 0.3s ease;">🔥 Fossile Brennstoffe</button>
+                    </div>
+
+                    <form id="hybridProControlForm" style="margin-bottom: 20px;">
+                        <!-- Electricity Prices Tab -->
+                        <div id="electricity-tab" style="display: block; background: #f9f9f9; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h3 style="margin: 0 0 10px 0; color: #333;">Elektrizitätstarife</h3>
+                            <p style="margin: 0 0 15px 0; color: #888; font-size: 13px;">Einheit: EUR/kWh</p>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Niedertarif (Low) <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="electricityPriceLow" name="electricityPriceLow" step="0.001" min="0" placeholder="z.B. 0.15" required style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">EUR/kWh</span>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Normaltarif (Normal) <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="electricityPriceNormal" name="electricityPriceNormal" step="0.001" min="0" placeholder="z.B. 0.28" required style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">EUR/kWh</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Control Strategy Tab -->
+                        <div id="strategy-tab" style="display: none; background: #f9f9f9; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h3 style="margin: 0 0 10px 0; color: #333;">Regelstrategie</h3>
+                            <p style="margin: 0 0 15px 0; color: #888; font-size: 13px;">Auswahl der Betriebsstrategie für das Hybrid-System</p>
+
+                            <div style="margin: 0;">
+                                <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 15px; padding: 12px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+                                    <input type="radio" id="strategy-constant" name="controlStrategy" value="constant" style="cursor: pointer; accent-color: #4CAF50; margin-top: 2px;">
+                                    <label for="strategy-constant" style="margin: 0; cursor: pointer; flex: 1;"><strong>Konstanttemperatur</strong><br><span style="color: #666; font-size: 13px;">Konstante Rücklauftemperatur unabhängig von Außentemperatur</span></label>
+                                </div>
+
+                                <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 15px; padding: 12px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+                                    <input type="radio" id="strategy-ecological" name="controlStrategy" value="ecological" style="cursor: pointer; accent-color: #4CAF50; margin-top: 2px;">
+                                    <label for="strategy-ecological" style="margin: 0; cursor: pointer; flex: 1;"><strong>Ökologisch</strong><br><span style="color: #666; font-size: 13px;">Maximaler Einsatz der Wärmepumpe für geringere CO₂-Emissionen</span></label>
+                                </div>
+
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+                                    <input type="radio" id="strategy-economic" name="controlStrategy" value="economic" style="cursor: pointer; accent-color: #4CAF50; margin-top: 2px;">
+                                    <label for="strategy-economic" style="margin: 0; cursor: pointer; flex: 1;"><strong>Ökonomisch</strong><br><span style="color: #666; font-size: 13px;">Optimierung der Betriebskosten unter Berücksichtigung der Strompreise</span></label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Energy Factors Tab -->
+                        <div id="energyFactors-tab" style="display: none; background: #f9f9f9; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h3 style="margin: 0 0 10px 0; color: #333;">Primärenergiefaktoren</h3>
+                            <p style="margin: 0 0 15px 0; color: #888; font-size: 13px;">Wertangaben für die Effizienzberechnung</p>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Primärenergiefaktor Wärmepumpe <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="heatPumpEnergyFactor" name="heatPumpEnergyFactor" step="0.01" min="0" placeholder="z.B. 2.4" required style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">(dimensionslos)</span>
+                                </div>
+                                <small style="display: block; margin-top: 4px; color: #999; font-size: 12px;">Typisch: 2.0 - 3.5 für moderne Wärmepumpen</small>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Primärenergiefaktor Fossil (Kessel) <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="fossilEnergyFactor" name="fossilEnergyFactor" step="0.01" min="0" placeholder="z.B. 1.1" required style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">(dimensionslos)</span>
+                                </div>
+                                <small style="display: block; margin-top: 4px; color: #999; font-size: 12px;">Typisch: 1.0 - 1.3 für Gasheizungen</small>
+                            </div>
+                        </div>
+
+                        <!-- Fossil Fuels Tab -->
+                        <div id="fossil-tab" style="display: none; background: #f9f9f9; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                            <h3 style="margin: 0 0 10px 0; color: #333;">Energiekosten externer Wärmeerzeuger (Fossil)</h3>
+                            <p style="margin: 0 0 15px 0; color: #888; font-size: 13px;">Einheit: EUR/kWh (für Gas) oder EUR/Liter (für Öl)</p>
+
+                            <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 12px; margin-bottom: 15px; border-radius: 4px; color: #1976d2; font-size: 13px;">
+                                💡 <strong>Hinweis:</strong> Diese Werte sind optional und werden für erweiterte Kostenberechnungen verwendet.
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Niedertarif (Low) <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="fossilPriceLow" name="fossilPriceLow" step="0.001" min="0" placeholder="z.B. 0.08" style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">EUR/kWh</span>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Normaltarif (Normal) <span style="color: #2196F3; font-size: 12px;">ℹ️</span></label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="fossilPriceNormal" name="fossilPriceNormal" step="0.001" min="0" placeholder="z.B. 0.10" style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <span style="white-space: nowrap; color: #666; font-size: 13px; padding: 8px 10px; background: #f0f0f0; border-radius: 4px;">EUR/kWh</span>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 20px; flex-wrap: wrap;">
+                        <button onclick="saveHybridProControlFromModal()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer;">💾 Einstellungen speichern</button>
+                        <button onclick="resetHybridProControl()" style="padding: 10px 20px; background: #f0f0f0; color: #333; border: 1px solid #ddd; border-radius: 4px; font-weight: 500; cursor: pointer;">🔄 Zurücksetzen</button>
+                        <div id="hybridProControlStatus" style="flex: 1; min-height: 20px; font-size: 13px; display: flex; align-items: center;"></div>
+                    </div>
+                `;
+
+                // Add close button
+                const closeBtn = document.createElement('button');
+                closeBtn.textContent = '✕';
+                closeBtn.style.cssText = `
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #666;
+                    z-index: 10001;
+                `;
+                closeBtn.onclick = closeHybridProControlModal;
+                formContainer.querySelector('div').appendChild(closeBtn);
+
+                // Load settings after a small delay to ensure DOM is ready
+                setTimeout(() => {
+                    loadHybridProControlSettings(installationId, deviceId, accountId);
+                }, 100);
+            }
+        }
+
+        function closeHybridProControlModal() {
+            const modal = document.getElementById('hybridProControlModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Switch between Hybrid Pro Control tabs
+        function switchHybridTab(event, tabName) {
+            // Remove active class from all buttons
+            document.querySelectorAll('#hybridTabs .hybrid-tab-btn').forEach(btn => {
+                btn.style.background = '#f5f5f5';
+                btn.style.color = '#666';
+            });
+
+            // Hide all tab contents
+            ['electricity', 'strategy', 'energyFactors', 'fossil'].forEach(tab => {
+                const tabEl = document.getElementById(tab + '-tab');
+                if (tabEl) tabEl.style.display = 'none';
+            });
+
+            // Activate clicked button
+            event.target.style.background = '#4CAF50';
+            event.target.style.color = 'white';
+
+            // Show clicked tab
+            const tabEl = document.getElementById(tabName + '-tab');
+            if (tabEl) tabEl.style.display = 'block';
+        }
+
+        // Load Hybrid Pro Control settings (from both API and saved settings)
+        async function loadHybridProControlSettings(installationId, deviceId, accountId) {
+            try {
+                // Get form elements (wait a bit to ensure they exist)
+                const elLow = document.getElementById('electricityPriceLow');
+                const elNorm = document.getElementById('electricityPriceNormal');
+                const hpFactor = document.getElementById('heatPumpEnergyFactor');
+                const fosFactor = document.getElementById('fossilEnergyFactor');
+                const fosPriceLow = document.getElementById('fossilPriceLow');
+                const fosPriceNorm = document.getElementById('fossilPriceNormal');
+
+                if (!elLow) {
+                    console.warn('Form elements not found, retrying in 300ms...');
+                    setTimeout(() => loadHybridProControlSettings(installationId, deviceId, accountId), 300);
+                    return;
+                }
+
+                // First, try to load saved settings from our API
+                console.log('Loading hybrid settings for:', {installationId, deviceId, accountId});
+                const params = new URLSearchParams({
+                    accountId: accountId,
+                    installationId: installationId,
+                    deviceId: deviceId
+                });
+
+                let savedSettings = null;
+                try {
+                    const response = await fetch(`/api/hybrid-pro-control/get?${params}`);
+                    const data = await response.json();
+                    console.log('Saved settings response:', data);
+                    if (data.success && data.settings) {
+                        savedSettings = data.settings;
+                    }
+                } catch (e) {
+                    console.log('No saved settings found');
+                }
+
+                // Also get current API values from keyFeatures (which are in the dashboard)
+                const kf = window.currentKeyFeatures || {};
+                console.log('Current API values from dashboard:', {
+                    hybridElectricityPriceLow: kf.hybridElectricityPriceLow,
+                    hybridElectricityPriceNormal: kf.hybridElectricityPriceNormal,
+                    hybridHeatPumpEnergyFactor: kf.hybridHeatPumpEnergyFactor,
+                    hybridFossilEnergyFactor: kf.hybridFossilEnergyFactor,
+                    hybridFossilPriceLow: kf.hybridFossilPriceLow,
+                    hybridFossilPriceNormal: kf.hybridFossilPriceNormal
+                });
+
+                // Helper to format number with up to 4 decimal places (but remove trailing zeros)
+                const formatDecimal = (val) => {
+                    if (!val) return '';
+                    const num = parseFloat(val);
+                    // Show up to 4 decimal places, but remove trailing zeros
+                    return num.toFixed(4).replace(/\.?0+$/, '');
+                };
+
+                // Populate form: prefer saved settings, fallback to API values
+                if (savedSettings && savedSettings.electricityPriceLow) {
+                    elLow.value = formatDecimal(savedSettings.electricityPriceLow);
+                } else if (kf.hybridElectricityPriceLow?.value) {
+                    elLow.value = formatDecimal(kf.hybridElectricityPriceLow.value);
+                }
+
+                if (savedSettings && savedSettings.electricityPriceNormal) {
+                    elNorm.value = formatDecimal(savedSettings.electricityPriceNormal);
+                } else if (kf.hybridElectricityPriceNormal?.value) {
+                    elNorm.value = formatDecimal(kf.hybridElectricityPriceNormal.value);
+                }
+
+                if (savedSettings && savedSettings.heatPumpEnergyFactor) {
+                    hpFactor.value = formatDecimal(savedSettings.heatPumpEnergyFactor);
+                } else if (kf.hybridHeatPumpEnergyFactor?.value) {
+                    hpFactor.value = formatDecimal(kf.hybridHeatPumpEnergyFactor.value);
+                }
+
+                if (savedSettings && savedSettings.fossilEnergyFactor) {
+                    fosFactor.value = formatDecimal(savedSettings.fossilEnergyFactor);
+                } else if (kf.hybridFossilEnergyFactor?.value) {
+                    fosFactor.value = formatDecimal(kf.hybridFossilEnergyFactor.value);
+                }
+
+                if (savedSettings && savedSettings.fossilPriceLow) {
+                    fosPriceLow.value = formatDecimal(savedSettings.fossilPriceLow);
+                } else if (kf.hybridFossilPriceLow?.value) {
+                    fosPriceLow.value = formatDecimal(kf.hybridFossilPriceLow.value);
+                }
+
+                if (savedSettings && savedSettings.fossilPriceNormal) {
+                    fosPriceNorm.value = formatDecimal(savedSettings.fossilPriceNormal);
+                } else if (kf.hybridFossilPriceNormal?.value) {
+                    fosPriceNorm.value = formatDecimal(kf.hybridFossilPriceNormal.value);
+                }
+
+                if (savedSettings && savedSettings.controlStrategy) {
+                    const strategyRadio = document.getElementById('strategy-' + savedSettings.controlStrategy);
+                    if (strategyRadio) {
+                        strategyRadio.checked = true;
+                        console.log('Selected strategy:', savedSettings.controlStrategy);
+                    }
+                }
+
+                console.log('✅ Settings loaded and form populated');
+            } catch (error) {
+                console.error('Error loading hybrid settings:', error);
+            }
+        }
+
+        // Save Hybrid Pro Control settings from modal
+        function saveHybridProControlFromModal() {
+            if (hybridModalParams.installationId && hybridModalParams.deviceId && hybridModalParams.accountId) {
+                saveHybridProControl(hybridModalParams.installationId, hybridModalParams.deviceId, hybridModalParams.accountId);
+            } else {
+                showHybridStatus('❌ Fehler: Keine Geräte-Informationen verfügbar', 'error');
+            }
+        }
+
+        // Save Hybrid Pro Control settings
+        async function saveHybridProControl(installationId, deviceId, accountId) {
+            // Get current form values
+            const electricityLow = document.getElementById('electricityPriceLow').value;
+            const electricityNormal = document.getElementById('electricityPriceNormal').value;
+            const strategy = document.querySelector('input[name="controlStrategy"]:checked');
+            const heatPumpFactor = document.getElementById('heatPumpEnergyFactor').value;
+            const fossilFactor = document.getElementById('fossilEnergyFactor').value;
+            const fossilPriceLow = document.getElementById('fossilPriceLow').value;
+            const fossilPriceNorm = document.getElementById('fossilPriceNormal').value;
+
+            // Check if at least ONE field has been filled in
+            if (!electricityLow && !electricityNormal && !strategy && !heatPumpFactor && !fossilFactor && !fossilPriceLow && !fossilPriceNorm) {
+                showHybridStatus('❌ Bitte füllen Sie mindestens ein Feld aus', 'error');
+                return;
+            }
+
+            // Load current saved settings to merge with new values
+            const params = new URLSearchParams({
+                accountId: accountId,
+                installationId: installationId,
+                deviceId: deviceId
+            });
+
+            let currentSettings = null;
+            try {
+                const response = await fetch(`/api/hybrid-pro-control/get?${params}`);
+                const data = await response.json();
+                if (data.success && data.settings) {
+                    currentSettings = data.settings;
+                }
+            } catch (e) {
+                console.log('No existing settings found');
+            }
+
+            // Also get current API values as fallback
+            const kf = window.currentKeyFeatures || {};
+
+            // Build settings object: use filled values, keep existing values for empty fields
+            const settings = {
+                electricityPriceLow: electricityLow ? parseFloat(electricityLow) :
+                                   (currentSettings?.electricityPriceLow || kf.hybridElectricityPriceLow?.value || 0),
+                electricityPriceNormal: electricityNormal ? parseFloat(electricityNormal) :
+                                       (currentSettings?.electricityPriceNormal || kf.hybridElectricityPriceNormal?.value || 0),
+                controlStrategy: strategy ? strategy.value :
+                               (currentSettings?.controlStrategy || ''),
+                heatPumpEnergyFactor: heatPumpFactor ? parseFloat(heatPumpFactor) :
+                                     (currentSettings?.heatPumpEnergyFactor || kf.hybridHeatPumpEnergyFactor?.value || 0),
+                fossilEnergyFactor: fossilFactor ? parseFloat(fossilFactor) :
+                                   (currentSettings?.fossilEnergyFactor || kf.hybridFossilEnergyFactor?.value || 0),
+                fossilPriceLow: fossilPriceLow ? parseFloat(fossilPriceLow) :
+                               (currentSettings?.fossilPriceLow || kf.hybridFossilPriceLow?.value || 0),
+                fossilPriceNormal: fossilPriceNorm ? parseFloat(fossilPriceNorm) :
+                                  (currentSettings?.fossilPriceNormal || kf.hybridFossilPriceNormal?.value || 0)
+            };
+
+            const request = {
+                accountId: accountId,
+                installationId: installationId,
+                deviceId: deviceId,
+                settings: settings
+            };
+
+            showHybridStatus('Speichern...', 'loading');
+
+            try {
+                const response = await fetch('/api/hybrid-pro-control/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(request)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showHybridStatus('✅ Einstellungen erfolgreich gespeichert', 'success');
+                } else {
+                    showHybridStatus('❌ Fehler: ' + (data.error || 'Unbekannter Fehler'), 'error');
+                }
+            } catch (error) {
+                showHybridStatus('❌ Fehler beim Speichern: ' + error.message, 'error');
+            }
+        }
+
+        // Reset Hybrid Pro Control form
+        function resetHybridProControl() {
+            // Get current values from server and reload form
+            const form = document.getElementById('hybridProControlForm');
+            if (form) {
+                form.reset();
+                // Use stored parameters
+                if (hybridModalParams.installationId && hybridModalParams.deviceId && hybridModalParams.accountId) {
+                    loadHybridProControlSettings(hybridModalParams.installationId, hybridModalParams.deviceId, hybridModalParams.accountId);
+                }
+            }
+        }
+
+        // Store parameters for use in hybrid modal
+        let hybridModalParams = {
+            installationId: null,
+            deviceId: null,
+            accountId: null,
+            gatewaySerial: null
+        };
+
+        // Load saved hybrid pro control settings and store globally
+        async function loadSavedHybridProControlSettings(accountId, installationId, deviceId) {
+            try {
+                const params = new URLSearchParams({
+                    accountId: accountId,
+                    installationId: installationId,
+                    deviceId: deviceId
+                });
+
+                const response = await fetch(`/api/hybrid-pro-control/get?${params}`);
+                const data = await response.json();
+
+                if (data.success && data.settings) {
+                    // Store saved settings globally
+                    window.savedHybridProControlSettings = data.settings;
+                    console.log('✅ Saved Hybrid Pro Control settings loaded:', data.settings);
+                } else {
+                    window.savedHybridProControlSettings = null;
+                    console.log('No saved hybrid settings found');
+                }
+            } catch (error) {
+                console.error('Error loading saved hybrid settings:', error);
+                window.savedHybridProControlSettings = null;
+            }
+        }
+
+        // Show status message for Hybrid Pro Control
+        function showHybridStatus(message, type) {
+            const statusDiv = document.getElementById('hybridProControlStatus');
+            if (!statusDiv) return;
+
+            statusDiv.textContent = message;
+            statusDiv.style.color = type === 'success' ? '#2e7d32' : type === 'error' ? '#c62828' : '#f57f17';
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                }, 4000);
+            }
+        }
+
+        // Make functions available globally
+        window.openHybridProControlModal = openHybridProControlModal;
+        window.closeHybridProControlModal = closeHybridProControlModal;
+        window.switchHybridTab = switchHybridTab;
+        window.saveHybridProControl = saveHybridProControl;
+        window.saveHybridProControlFromModal = saveHybridProControlFromModal;
+        window.resetHybridProControl = resetHybridProControl;
 
         // Initialize
         init();
