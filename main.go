@@ -83,6 +83,10 @@ func main() {
 	http.HandleFunc("/api/hybrid-pro-control/get", hybridProControlGetHandler)
 	http.HandleFunc("/api/hybrid-pro-control/set", hybridProControlSetHandler)
 
+	// PV String settings endpoints
+	http.HandleFunc("/api/pv-settings/get", pvSettingsGetHandler)
+	http.HandleFunc("/api/pv-settings/set", pvSettingsSetHandler)
+
 	// DHW operating mode control
 	http.HandleFunc("/api/dhw/mode/set", dhwModeSetHandler)
 	http.HandleFunc("/api/dhw/temperature/set", dhwTemperatureSetHandler)

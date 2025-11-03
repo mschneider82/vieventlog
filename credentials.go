@@ -38,6 +38,7 @@ type DeviceSettings struct {
 	CompressorRpmMin int                       `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax int                       `json:"compressorRpmMax,omitempty"`
 	HybridProControl *HybridProControlSettings `json:"hybridProControl,omitempty"`
+	PVStrings        *PVStringSettings         `json:"pvStrings,omitempty"` // PV String configuration for power/current calculation
 }
 
 type HybridProControlSettings struct {
@@ -59,6 +60,18 @@ type HybridProControlSettings struct {
 
 type RoomSettings struct {
 	Name string `json:"name"` // User-defined room name (e.g., "Badezimmer", "Wohnzimmer")
+}
+
+// PVStringConfig defines configuration for a single PV string
+type PVStringConfig struct {
+	Name        string  `json:"name"`        // User-defined string name (e.g., "String 1 Süd", "String 2 Ost")
+	ModuleCount int     `json:"moduleCount"` // Number of modules in this string
+	ModulePower float64 `json:"modulePower"` // Nominal power per module in Watts
+}
+
+// PVStringSettings stores PV configuration for power and current calculations
+type PVStringSettings struct {
+	Strings []PVStringConfig `json:"strings"` // List of configured strings
 }
 
 type Account struct {

@@ -358,6 +358,32 @@ func featuresHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Add calculated PV metrics if settings are configured
+	// Try to find account ID for this installation
+	var accountID string
+	activeAccounts, accErr := GetActiveAccounts()
+	if accErr == nil {
+		for _, account := range activeAccounts {
+			token, err := ensureAccountAuthenticated(account)
+			if err != nil {
+				continue
+			}
+			for _, instID := range token.InstallationIDs {
+				if instID == installationID {
+					accountID = account.ID
+					break
+				}
+			}
+			if accountID != "" {
+				break
+			}
+		}
+	}
+	if accountID != "" {
+		deviceKey := fmt.Sprintf("%s_%s", installationID, deviceID)
+		addCalculatedPVMetrics(features, accountID, deviceKey)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(features)
 }
