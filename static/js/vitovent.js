@@ -167,8 +167,6 @@ function renderVitoventDevice(data) {
         `;
     }
 
-    html += `</div>`;
-
     if (features.operating_state) {
         html += `
             <div class="operating-state">
