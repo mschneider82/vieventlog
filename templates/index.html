@@ -1236,11 +1236,18 @@ ${formatEventBody(event.body)}
             // Clear container
             container.innerHTML = '';
 
-            // Parse timestamps
-            const timeExtent = [
-                new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt),
-                new Date(sortedEvents[sortedEvents.length - 1].eventTimestamp || sortedEvents[sortedEvents.length - 1].createdAt)
-            ];
+            // Parse timestamps - IMPORTANT: Use ALL events for time extent, not just first/last
+            // This ensures that events in the middle are not clipped
+            let minTime = new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt);
+            let maxTime = new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt);
+
+            sortedEvents.forEach(event => {
+                const eventTime = new Date(event.eventTimestamp || event.createdAt);
+                if (eventTime < minTime) minTime = eventTime;
+                if (eventTime > maxTime) maxTime = eventTime;
+            });
+
+            const timeExtent = [minTime, maxTime];
 
             // Group events by device and status code to create state spans
             const lanes = {};
@@ -1400,11 +1407,10 @@ ${formatEventBody(event.body)}
                         }
                     }
 
-                    // Map S.125 based on valve position
+                    // Keep original code - don't auto-rename to S.125-WARMWATER
+                    // S.125-WARMWATER spans are created explicitly as overlays when S.115 starts during S.125
+                    // Using auto-rename causes the entire heating span to be misnamed when S.115 was already active
                     let effectiveCode = code;
-                    if (code === 'S.125' && currentValvePosition === 'warmwater') {
-                        effectiveCode = 'S.125-WARMWATER'; // Virtual code for heating during hot water mode
-                    }
 
                     if (event.active === true) {
                         // Start of a new state
@@ -1515,8 +1521,18 @@ ${formatEventBody(event.body)}
             // Calculate timeline dimensions based on number of lanes and screen size
             const isMobile = window.innerWidth <= 768;
             const containerWidth = container.offsetWidth || window.innerWidth;
+
+            // IMPORTANT: Width must be sufficient to show all events with good spacing
+            // Base width on time extent (hourly resolution) rather than just event count
+            const timeRangeHours = (timeExtent[1] - timeExtent[0]) / (1000 * 60 * 60);
+            const pixelsPerHour = isMobile ? 40 : 60; // 40px per hour on mobile, 60px on desktop
+            const timeBasedWidth = Math.ceil(timeRangeHours * pixelsPerHour) + (isMobile ? 40 : 80);
+
             const minWidth = isMobile ? containerWidth - 40 : 1400;
-            const width = Math.max(minWidth, sortedEvents.length * (isMobile ? 3 : 6));
+            const eventBasedWidth = Math.max(minWidth, sortedEvents.length * (isMobile ? 3 : 6));
+
+            // Use whichever is larger: time-based or event-based
+            const width = Math.max(timeBasedWidth, eventBasedWidth);
 
             // Define margins first
             const margin = { top: 30, right: isMobile ? 20 : 40, bottom: 70, left: isMobile ? 120 : 280 };
@@ -1566,8 +1582,7 @@ ${formatEventBody(event.body)}
             // Draw grid and time axis with intelligent intervals (will be drawn after lanes)
             const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
-            // Calculate appropriate interval based on time range
-            const timeRangeHours = (timeExtent[1] - timeExtent[0]) / (1000 * 60 * 60);
+            // Calculate appropriate interval based on time range (timeRangeHours already calculated above)
             let hourInterval;
             if (timeRangeHours <= 24) {
                 hourInterval = 1; // Every hour for <= 24h
@@ -1879,7 +1894,12 @@ ${formatEventBody(event.body)}
                     const x1 = xScale(span.startTime);
                     const x2 = xScale(span.endTime);
                     const actualWidth = x2 - x1;
-                    const spanWidth = Math.max(actualWidth, 2); // Minimum 2px width, but we'll use visual tricks for very small spans
+
+                    // IMPORTANT FIX: Don't clamp width to 2px - let actualWidth be used
+                    // This ensures that large spans with significant width are rendered at full size
+                    const spanWidth = Math.max(actualWidth, 1); // Absolute minimum 1px, but use actual width if larger
+
+                    const durationMinutes = (new Date(span.endTime) - new Date(span.startTime)) / (1000 * 60);
 
                     const color = eventInfo?.color || '#6b7280';
                     const gradient = eventInfo?.gradient || color;
@@ -1936,103 +1956,107 @@ ${formatEventBody(event.body)}
                     defs.appendChild(gradDef);
 
                     // Main state span bar
-                    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    bar.setAttribute('x', x1);
-                    bar.setAttribute('y', barY);
-                    bar.setAttribute('width', spanWidth);
-                    bar.setAttribute('height', barHeight);
-                    bar.setAttribute('fill', `url(#${gradientId})`);
-                    bar.setAttribute('rx', '6');
-                    if (span.fallback) {
-                        bar.setAttribute('stroke', 'rgba(255,255,255,0.4)');
-                        bar.setAttribute('stroke-width', '1');
-                        bar.setAttribute('stroke-dasharray', '4,2');
-                        bar.setAttribute('opacity', '0.7');
+                    try {
+                        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        bar.setAttribute('x', x1);
+                        bar.setAttribute('y', barY);
+                        bar.setAttribute('width', spanWidth);
+                        bar.setAttribute('height', barHeight);
+                        bar.setAttribute('fill', `url(#${gradientId})`);
+                        bar.setAttribute('rx', '6');
+                        if (span.fallback) {
+                            bar.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+                            bar.setAttribute('stroke-width', '1');
+                            bar.setAttribute('stroke-dasharray', '4,2');
+                            bar.setAttribute('opacity', '0.7');
+                        }
+                        bar.style.cursor = 'pointer';
+                        bar.style.transition = 'all 0.2s';
+
+                        // Hover effect
+                        bar.addEventListener('mouseenter', function() {
+                            this.setAttribute('opacity', '1');
+                            this.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                            this.setAttribute('stroke-width', '2');
+                        });
+                        bar.addEventListener('mouseleave', function() {
+                            this.removeAttribute('opacity');
+                            this.removeAttribute('stroke');
+                            this.removeAttribute('stroke-width');
+                        });
+
+                        // Calculate duration
+                        const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
+                        const durationText = duration < 60
+                            ? `${Math.round(duration)}min`
+                            : `${(duration / 60).toFixed(1)}h`;
+
+                        // Tooltip with additional context for warmwater heating
+                        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                        const startTime = new Date(span.startTime).toLocaleString('de-DE');
+                        const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
+                        let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
+                        if (span.code === 'S.125-WARMWATER') {
+                            tooltipText += '\n(Wärmepumpe heizt bei Ventilstellung Warmwasser)';
+                        }
+                        if (span.fallback) {
+                            tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
+                        }
+                        tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
+                        title.textContent = tooltipText;
+                        bar.appendChild(title);
+
+                        svg.appendChild(bar);
+
+                        // Add icon and duration label if span is wide enough
+                        const labelY = barY + barHeight / 2;
+                        const minWidthForLabel = isMobile ? 40 : 60;
+                        const minWidthForMini = isMobile ? 20 : 30;
+
+                        if (spanWidth > minWidthForLabel) {
+                            const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            iconLabel.setAttribute('x', x1 + (isMobile ? 4 : 8));
+                            iconLabel.setAttribute('y', labelY - (isMobile ? 4 : 6));
+                            iconLabel.setAttribute('font-size', isMobile ? '10' : '14');
+                            iconLabel.textContent = eventInfo?.icon || '';
+                            svg.appendChild(iconLabel);
+
+                            const durationLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            durationLabel.setAttribute('x', x1 + spanWidth / 2);
+                            durationLabel.setAttribute('y', labelY);
+                            durationLabel.setAttribute('text-anchor', 'middle');
+                            durationLabel.setAttribute('dominant-baseline', 'middle');
+                            durationLabel.setAttribute('font-size', isMobile ? '9' : '11');
+                            durationLabel.setAttribute('fill', 'white');
+                            durationLabel.setAttribute('font-weight', '700');
+                            durationLabel.setAttribute('style', 'text-shadow: 0 1px 3px rgba(0,0,0,0.5);');
+                            durationLabel.textContent = durationText;
+                            svg.appendChild(durationLabel);
+                        } else if (spanWidth > minWidthForMini) {
+                            const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            miniLabel.setAttribute('x', x1 + spanWidth / 2);
+                            miniLabel.setAttribute('y', labelY);
+                            miniLabel.setAttribute('text-anchor', 'middle');
+                            miniLabel.setAttribute('dominant-baseline', 'middle');
+                            miniLabel.setAttribute('font-size', isMobile ? '7' : '9');
+                            miniLabel.setAttribute('fill', 'white');
+                            miniLabel.setAttribute('font-weight', '700');
+                            miniLabel.textContent = durationText;
+                            svg.appendChild(miniLabel);
+                        }
+
+                        // Shine effect on top
+                        const shine = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        shine.setAttribute('x', x1);
+                        shine.setAttribute('y', barY);
+                        shine.setAttribute('width', spanWidth);
+                        shine.setAttribute('height', barHeight / 3);
+                        shine.setAttribute('fill', 'rgba(255,255,255,0.15)');
+                        shine.setAttribute('rx', '6');
+                        svg.appendChild(shine);
+                    } catch (error) {
+                        console.error(`Error rendering timeline bar for ${span.code}:`, error);
                     }
-                    bar.style.cursor = 'pointer';
-                    bar.style.transition = 'all 0.2s';
-
-                    // Hover effect
-                    bar.addEventListener('mouseenter', function() {
-                        this.setAttribute('opacity', '1');
-                        this.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-                        this.setAttribute('stroke-width', '2');
-                    });
-                    bar.addEventListener('mouseleave', function() {
-                        this.removeAttribute('opacity');
-                        this.removeAttribute('stroke');
-                        this.removeAttribute('stroke-width');
-                    });
-
-                    // Calculate duration
-                    const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
-                    const durationText = duration < 60
-                        ? `${Math.round(duration)}min`
-                        : `${(duration / 60).toFixed(1)}h`;
-
-                    // Tooltip with additional context for warmwater heating
-                    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-                    const startTime = new Date(span.startTime).toLocaleString('de-DE');
-                    const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
-                    let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
-                    if (span.code === 'S.125-WARMWATER') {
-                        tooltipText += '\n(Wärmepumpe heizt bei Ventilstellung Warmwasser)';
-                    }
-                    if (span.fallback) {
-                        tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
-                    }
-                    tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
-                    title.textContent = tooltipText;
-                    bar.appendChild(title);
-
-                    svg.appendChild(bar);
-
-                    // Add icon and duration label if span is wide enough
-                    const labelY = barY + barHeight / 2;
-                    const minWidthForLabel = isMobile ? 40 : 60;
-                    const minWidthForMini = isMobile ? 20 : 30;
-
-                    if (spanWidth > minWidthForLabel) {
-                        const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                        iconLabel.setAttribute('x', x1 + (isMobile ? 4 : 8));
-                        iconLabel.setAttribute('y', labelY - (isMobile ? 4 : 6));
-                        iconLabel.setAttribute('font-size', isMobile ? '10' : '14');
-                        iconLabel.textContent = eventInfo?.icon || '';
-                        svg.appendChild(iconLabel);
-
-                        const durationLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                        durationLabel.setAttribute('x', x1 + spanWidth / 2);
-                        durationLabel.setAttribute('y', labelY);
-                        durationLabel.setAttribute('text-anchor', 'middle');
-                        durationLabel.setAttribute('dominant-baseline', 'middle');
-                        durationLabel.setAttribute('font-size', isMobile ? '9' : '11');
-                        durationLabel.setAttribute('fill', 'white');
-                        durationLabel.setAttribute('font-weight', '700');
-                        durationLabel.setAttribute('style', 'text-shadow: 0 1px 3px rgba(0,0,0,0.5);');
-                        durationLabel.textContent = durationText;
-                        svg.appendChild(durationLabel);
-                    } else if (spanWidth > minWidthForMini) {
-                        const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                        miniLabel.setAttribute('x', x1 + spanWidth / 2);
-                        miniLabel.setAttribute('y', labelY);
-                        miniLabel.setAttribute('text-anchor', 'middle');
-                        miniLabel.setAttribute('dominant-baseline', 'middle');
-                        miniLabel.setAttribute('font-size', isMobile ? '7' : '9');
-                        miniLabel.setAttribute('fill', 'white');
-                        miniLabel.setAttribute('font-weight', '700');
-                        miniLabel.textContent = durationText;
-                        svg.appendChild(miniLabel);
-                    }
-
-                    // Shine effect on top
-                    const shine = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    shine.setAttribute('x', x1);
-                    shine.setAttribute('y', barY);
-                    shine.setAttribute('width', spanWidth);
-                    shine.setAttribute('height', barHeight / 3);
-                    shine.setAttribute('fill', 'rgba(255,255,255,0.15)');
-                    shine.setAttribute('rx', '6');
-                    svg.appendChild(shine);
                 });
 
                 // Draw event markers (circles at start/end) with glow
