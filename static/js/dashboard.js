@@ -948,12 +948,26 @@
                 const formatted = formatValue(kf.primarySupplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                // For heat pumps (Vitocal), use "Lufteintrittstemperatur" instead of "Primärkreis-Vorlauf"
-                // Check if this is a Vitocal by looking for compressor-specific sensors (even if compressor is off)
-                const isVitocal = kf.compressorActive || kf.compressorSpeed || kf.compressorInletTemp ||
-                                 kf.compressorOutletTemp || kf.compressorOilTemp || kf.compressorMotorTemp ||
-                                 kf.compressorPressure;
-                const label = isVitocal ? 'Lufteintritts-temperatur' : 'Primärkreis-Vorlauf';
+                // Determine label: check device settings first, then fall back to auto-detection
+                let label = 'Primärkreis-Vorlauf'; // Default
+
+                // Check if there's a device setting override
+                const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+                const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+
+                if (deviceSetting && deviceSetting.useAirIntakeTemperatureLabel !== null && deviceSetting.useAirIntakeTemperatureLabel !== undefined) {
+                    // Use the explicit setting from device settings
+                    label = deviceSetting.useAirIntakeTemperatureLabel ? 'Lufteintritts-temperatur' : 'Primärkreis-Vorlauf';
+                } else {
+                    // Fall back to auto-detection based on compressor sensors
+                    const isVitocal = kf.compressorActive || kf.compressorSpeed || kf.compressorInletTemp ||
+                                     kf.compressorOutletTemp || kf.compressorOilTemp || kf.compressorMotorTemp ||
+                                     kf.compressorPressure;
+                    if (isVitocal) {
+                        label = 'Lufteintritts-temperatur';
+                    }
+                }
+
                 temps += `
                     <div class="temp-item">
                         <span class="temp-label">${label}</span>
@@ -3846,11 +3860,12 @@
                 const response = await fetch(`/api/device-settings/get?accountId=${encodeURIComponent(accountId)}&installationId=${encodeURIComponent(installationId)}&deviceId=${encodeURIComponent(deviceId)}`);
                 const data = await response.json();
 
-                if (data.success && data.compressorRpmMin && data.compressorRpmMax) {
+                if (data.success) {
                     const deviceKey = `${installationId}_${deviceId}`;
                     window.deviceSettingsCache[deviceKey] = {
-                        min: data.compressorRpmMin,
-                        max: data.compressorRpmMax
+                        min: data.compressorRpmMin || 0,
+                        max: data.compressorRpmMax || 0,
+                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel // null = auto-detect, true/false = override
                     };
                 }
             } catch (error) {
@@ -3875,17 +3890,26 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.useAirIntakeTemperatureLabel);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, null);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, useAirIntakeTemperatureLabel) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
+
+            // Determine radio button state
+            let radioState = 'auto'; // default
+            if (useAirIntakeTemperatureLabel === true) {
+                radioState = 'air';
+            } else if (useAirIntakeTemperatureLabel === false) {
+                radioState = 'primary';
+            }
+
             modal.innerHTML = `
                 <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
                     <h2 style="margin-top: 0; color: #fff;">⚙️ Geräteeinstellungen</h2>
@@ -3905,6 +3929,35 @@
                         </label>
                         <input type="number" id="rpmMax" value="${currentMax}"
                                style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
+                            Temperaturbezeichnung für Primärkreis
+                        </label>
+                        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px;">
+                            <div style="margin-bottom: 8px;">
+                                <input type="radio" id="labelAuto" name="tempLabel" value="auto" ${radioState === 'auto' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="labelAuto" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Automatisch erkennen (Standard)
+                                </label>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <input type="radio" id="labelAir" name="tempLabel" value="air" ${radioState === 'air' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="labelAir" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Lufteintrittstemperatur
+                                </label>
+                            </div>
+                            <div>
+                                <input type="radio" id="labelPrimary" name="tempLabel" value="primary" ${radioState === 'primary' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="labelPrimary" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Primärkreisvorlauf
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 30px;">
@@ -3957,6 +4010,16 @@
                 return;
             }
 
+            // Get temperature label setting from radio buttons
+            const radioValue = document.querySelector('input[name="tempLabel"]:checked').value;
+            let useAirIntakeTemperatureLabel = null;
+            if (radioValue === 'air') {
+                useAirIntakeTemperatureLabel = true;
+            } else if (radioValue === 'primary') {
+                useAirIntakeTemperatureLabel = false;
+            }
+            // else 'auto' means null (auto-detect)
+
             try {
                 const response = await fetch('/api/device-settings/set', {
                     method: 'POST',
@@ -3966,7 +4029,8 @@
                         installationId: installationId,
                         deviceId: deviceId,
                         compressorRpmMin: rpmMin,
-                        compressorRpmMax: rpmMax
+                        compressorRpmMax: rpmMax,
+                        useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel
                     })
                 });
 
@@ -3975,12 +4039,17 @@
                 if (data.success) {
                     // Update cache
                     const deviceKey = `${installationId}_${deviceId}`;
-                    window.deviceSettingsCache[deviceKey] = { min: rpmMin, max: rpmMax };
+                    if (!window.deviceSettingsCache[deviceKey]) {
+                        window.deviceSettingsCache[deviceKey] = {};
+                    }
+                    window.deviceSettingsCache[deviceKey].min = rpmMin;
+                    window.deviceSettingsCache[deviceKey].max = rpmMax;
+                    window.deviceSettingsCache[deviceKey].useAirIntakeTemperatureLabel = useAirIntakeTemperatureLabel;
 
                     alert('Einstellungen gespeichert!');
                     closeDeviceSettingsModal();
 
-                    // Reload dashboard to show updated percentages
+                    // Reload dashboard to show updated labels and percentages
                     loadDashboard();
                 } else {
                     alert('Fehler beim Speichern: ' + data.error);

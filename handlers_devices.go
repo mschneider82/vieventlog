@@ -34,19 +34,21 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 	deviceKey := fmt.Sprintf("%s_%s", installationID, deviceID)
 	settings, err := GetDeviceSettings(accountID, deviceKey)
 	if err != nil {
-		// No settings found is not an error - return empty settings
+		// No settings found is not an error - return empty settings with success
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(DeviceSettingsResponse{
-			Success: true,
+			Success:                      true,
+			UseAirIntakeTemperatureLabel: nil, // nil means auto-detect
 		})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
-		Success:          true,
-		CompressorRpmMin: settings.CompressorRpmMin,
-		CompressorRpmMax: settings.CompressorRpmMax,
+		Success:                      true,
+		CompressorRpmMin:             settings.CompressorRpmMin,
+		CompressorRpmMax:             settings.CompressorRpmMax,
+		UseAirIntakeTemperatureLabel: settings.UseAirIntakeTemperatureLabel,
 	})
 }
 
@@ -76,9 +78,18 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deviceKey := fmt.Sprintf("%s_%s", req.InstallationID, req.DeviceID)
-	settings := &DeviceSettings{
-		CompressorRpmMin: req.CompressorRpmMin,
-		CompressorRpmMax: req.CompressorRpmMax,
+
+	// Get or create device settings to preserve existing values
+	settings, err := GetDeviceSettings(req.AccountID, deviceKey)
+	if err != nil {
+		settings = &DeviceSettings{}
+	}
+
+	// Update fields from request
+	settings.CompressorRpmMin = req.CompressorRpmMin
+	settings.CompressorRpmMax = req.CompressorRpmMax
+	if req.UseAirIntakeTemperatureLabel != nil {
+		settings.UseAirIntakeTemperatureLabel = req.UseAirIntakeTemperatureLabel
 	}
 
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
@@ -90,8 +101,12 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Device settings saved for %s (account: %s): min=%d, max=%d\n",
+	logMsg := fmt.Sprintf("Device settings saved for %s (account: %s): min=%d, max=%d",
 		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax)
+	if req.UseAirIntakeTemperatureLabel != nil {
+		logMsg += fmt.Sprintf(", useAirIntakeLabel=%v", *req.UseAirIntakeTemperatureLabel)
+	}
+	log.Println(logMsg)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{Success: true})
