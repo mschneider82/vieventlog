@@ -354,10 +354,14 @@
                         for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
                             if (category && category[featureName]) {
                                 const feature = category[featureName];
-                                if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
-                                    const nestedValue = feature.value[propertyName];
-                                    if (nestedValue && nestedValue.value !== undefined) {
-                                        return nestedValue.value;
+                                if (feature.type === 'object') {
+                                    // Support both "value" and "properties" formats
+                                    const container = feature.value || feature.properties;
+                                    if (container && typeof container === 'object') {
+                                        const nestedValue = container[propertyName];
+                                        if (nestedValue && nestedValue.value !== undefined) {
+                                            return nestedValue.value;
+                                        }
                                     }
                                 }
                             }
@@ -400,6 +404,7 @@
                         minSupply: minSupply,
                         roomTempSetpoint: circuitRoomTempSetpoint
                     };
+                    console.log(`📊 Stored heating curve data for circuit ${circuitId}:`, window.heatingCurveData[circuitId]);
                 }
 
                 // Compressor/burner status card with all details
@@ -447,13 +452,17 @@
             // Render D3 charts after DOM is updated (only for heating devices)
             if (deviceType !== 'zigbee' && window.heatingCurveData) {
                 setTimeout(() => {
+                    console.log('📈 Starting to render all heating curve charts...');
+                    console.log('Available circuits in heatingCurveData:', Object.keys(window.heatingCurveData));
                     // Render chart for each circuit that has heating curve data
                     for (const circuitId in window.heatingCurveData) {
                         if (circuitId !== 'slope' && circuitId !== 'shift' && circuitId !== 'currentOutside' &&
                             circuitId !== 'currentSupply' && circuitId !== 'maxSupply' && circuitId !== 'minSupply' &&
                             circuitId !== 'roomTempSetpoint') {
                             const data = window.heatingCurveData[circuitId];
+                            console.log(`  Circuit ${circuitId}: data=${JSON.stringify(data)}`);
                             if (data && (data.slope !== null || data.shift !== null)) {
+                                console.log(`  └─ Rendering chart for circuit ${circuitId}`);
                                 renderHeatingCurveChart(parseInt(circuitId));
                             }
                         }
@@ -500,15 +509,19 @@
                     if (category[featureName]) {
                         const feature = category[featureName];
                         // Check if it has nested properties (Go now returns type="object" with nested FeatureValues)
-                        if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
-            const nestedValue = feature.value[propertyName];
-            if (nestedValue && nestedValue.value !== undefined) {
-                return {
-                    type: nestedValue.type || 'number',
-                    value: nestedValue.value,
-                    unit: nestedValue.unit || ''
-                };
-            }
+                        if (feature.type === 'object') {
+                            // Support both "value" and "properties" formats
+                            const container = feature.value || feature.properties;
+                            if (container && typeof container === 'object') {
+                                const nestedValue = container[propertyName];
+                                if (nestedValue && nestedValue.value !== undefined) {
+                                    return {
+                                        type: nestedValue.type || 'number',
+                                        value: nestedValue.value,
+                                        unit: nestedValue.unit || ''
+                                    };
+                                }
+                            }
                         }
                     }
                 }
@@ -748,7 +761,7 @@
             // Fallback: search for heating.circuits.X features
             console.log('Fallback: searching for circuit features');
             const circuitNumbers = new Set();
-            for (const category of [features.circuits, features.operatingModes, features.temperatures]) {
+            for (const category of [features.circuits, features.operatingModes, features.temperatures, features.dhw, features.other]) {
                 if (category) {
                     for (const key of Object.keys(category)) {
                         const match = key.match(/^heating\.circuits\.(\d+)\./);
@@ -1192,12 +1205,13 @@
         // Render heating circuit card for a specific circuit
         function renderHeatingCircuitCard(features, circuitId, deviceInfo) {
             const circuitPrefix = `heating.circuits.${circuitId}`;
+            console.log(`🔄 renderHeatingCircuitCard called for circuit ${circuitId} (prefix: ${circuitPrefix})`);
 
             // Extract circuit-specific features
             const find = (exactNames) => {
                 if (!Array.isArray(exactNames)) exactNames = [exactNames];
                 for (const exactName of exactNames) {
-                    for (const category of [features.temperatures, features.circuits, features.operatingModes, features.other]) {
+                    for (const category of [features.temperatures, features.circuits, features.operatingModes, features.dhw, features.other]) {
                         if (category && category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
                             return category[exactName];
                         }
@@ -1207,17 +1221,21 @@
             };
 
             const findNested = (featureName, propertyName) => {
-                for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
+                for (const category of [features.circuits, features.operatingModes, features.temperatures, features.dhw, features.other]) {
                     if (category && category[featureName]) {
                         const feature = category[featureName];
-                        if (feature.type === 'object' && feature.value && typeof feature.value === 'object') {
-                            const nestedValue = feature.value[propertyName];
-                            if (nestedValue && nestedValue.value !== undefined) {
-                                return {
-                                    type: nestedValue.type || 'number',
-                                    value: nestedValue.value,
-                                    unit: nestedValue.unit || ''
-                                };
+                        if (feature.type === 'object') {
+                            // Support both "value" and "properties" formats
+                            const container = feature.value || feature.properties;
+                            if (container && typeof container === 'object') {
+                                const nestedValue = container[propertyName];
+                                if (nestedValue && nestedValue.value !== undefined) {
+                                    return {
+                                        type: nestedValue.type || 'number',
+                                        value: nestedValue.value,
+                                        unit: nestedValue.unit || ''
+                                    };
+                                }
                             }
                         }
                     }
@@ -1233,6 +1251,7 @@
             const heatingCurveSlope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
             const heatingCurveShift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
             const supplyTempMax = findNested(`${circuitPrefix}.temperature.levels`, 'max');
+            console.log(`  └─ Heating curve data - slope: ${heatingCurveSlope}, shift: ${heatingCurveShift}, supplyTempMax: ${supplyTempMax}`);
 
             // Get program temperatures (normal, comfort, reduced) - these are nested properties
             const normalTemp = findNested(`${circuitPrefix}.operating.programs.normal`, 'temperature');
