@@ -592,6 +592,7 @@
 
                 // DHW
                 dhwTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage', 'heating.dhw.sensors.temperature.dhwCylinder']),
+                dhwCylinderMiddleTemp: findNested('heating.dhw.sensors.temperature.dhwCylinder', 'middle'),
                 dhwTarget: find(['heating.dhw.temperature.main']),
                 dhwTarget2: find(['heating.dhw.temperature.temp2']),
                 dhwStatus: find(['heating.dhw.operating.modes.active']),
@@ -1698,6 +1699,12 @@
             <div class="status-item">
                 <span class="status-label">Ist-Temperatur</span>
                 <span class="status-value">${formatValue(kf.dhwTemp)}</span>
+            </div>
+                        ` : ''}
+                        ${kf.dhwCylinderMiddleTemp ? `
+            <div class="status-item">
+                <span class="status-label">Mittlere Speichertemperatur</span>
+                <span class="status-value">${formatValue(kf.dhwCylinderMiddleTemp)}</span>
             </div>
                         ` : ''}
                         ${kf.dhwTarget ? `
