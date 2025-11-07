@@ -728,6 +728,34 @@
                     return f || null;
                 })(),
 
+                // Compressor-specific energy consumption/production (Vitocal)
+                // Only available with includeDeviceFeatures=true
+                compressorPowerConsumptionDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.dhw');
+                    return f || null;
+                })(),
+                compressorPowerConsumptionHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.heating');
+                    return f || null;
+                })(),
+                compressorHeatProductionDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.dhw');
+                    return f || null;
+                })(),
+                compressorHeatProductionHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.heating');
+                    return f || null;
+                })(),
+                compressorHeatProductionCooling: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.cooling');
+                    return f || null;
+                })(),
+
             };
         }
 
@@ -2169,10 +2197,14 @@
             const hasPowerConsumptionArrays = kf.powerConsumptionDhw || kf.powerConsumptionHeating;
             const hasHeatProductionArrays = kf.heatProductionDhw && kf.heatProductionHeating;
             const hasHeatProductionSummary = kf.heatProductionSummaryDhw || kf.heatProductionSummaryHeating;
+            const hasCompressorEnergyData = kf.compressorPowerConsumptionDhw || kf.compressorPowerConsumptionHeating ||
+                                            kf.compressorHeatProductionDhw || kf.compressorHeatProductionHeating ||
+                                            kf.compressorHeatProductionCooling;
 
             console.log('Power consumption arrays:', hasPowerConsumptionArrays);
             console.log('Heat production arrays:', hasHeatProductionArrays);
             console.log('Heat production summary:', hasHeatProductionSummary);
+            console.log('Compressor energy data:', hasCompressorEnergyData);
 
             let html = '';
 
@@ -2186,6 +2218,11 @@
                 html += renderHeatProductionArrayCard(kf, getArrayValue);
             } else if (hasHeatProductionSummary) {
                 html += renderHeatProductionSummaryCard(kf, getSummaryValue);
+            }
+
+            // Card 3: Compressor-specific energy consumption and production (Vitocal)
+            if (hasCompressorEnergyData) {
+                html += renderCompressorEnergyCard(kf, getArrayValue);
             }
 
             return html;
@@ -2384,6 +2421,98 @@
                     <div class="stat-content">${contentHtml}</div>
                 </div>
             `;
+        }
+
+        // Compressor-specific energy consumption and production card (Vitocal)
+        function renderCompressorEnergyCard(kf, getArrayValue) {
+            const getWeekLabel = (index) => {
+                const now = new Date();
+                const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
+                const onejan = new Date(d.getFullYear(), 0, 1);
+                const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+                return `KW ${week}`;
+            };
+
+            // Build weekly power consumption data
+            let powerTabsHtml = '', powerContentHtml = '';
+            const powerConsumptionArray = kf.compressorPowerConsumptionDhw?.properties?.week?.value ||
+                                         kf.compressorPowerConsumptionHeating?.properties?.week?.value || [];
+            const maxWeeks = Math.min(powerConsumptionArray.length, 6);
+
+            if (kf.compressorPowerConsumptionDhw || kf.compressorPowerConsumptionHeating) {
+                for (let i = 0; i < maxWeeks; i++) {
+                    const powerDhw = getArrayValue(kf.compressorPowerConsumptionDhw, 'week', i);
+                    const powerHeating = getArrayValue(kf.compressorPowerConsumptionHeating, 'week', i);
+                    if (powerDhw === null && powerHeating === null) continue;
+
+                    const totalPower = (powerDhw || 0) + (powerHeating || 0);
+                    powerTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'comp-power-week-${i}')">${getWeekLabel(i)}</button>`;
+                    powerContentHtml += `
+                        <div id="comp-power-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                            <div class="stat-grid">
+                                ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                                ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                                ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Build weekly heat production data
+            let heatTabsHtml = '', heatContentHtml = '';
+            const heatProductionArray = kf.compressorHeatProductionDhw?.properties?.week?.value ||
+                                       kf.compressorHeatProductionHeating?.properties?.week?.value ||
+                                       kf.compressorHeatProductionCooling?.properties?.week?.value || [];
+            const maxHeatWeeks = Math.min(heatProductionArray.length, 6);
+
+            if (kf.compressorHeatProductionDhw || kf.compressorHeatProductionHeating || kf.compressorHeatProductionCooling) {
+                for (let i = 0; i < maxHeatWeeks; i++) {
+                    const heatDhw = getArrayValue(kf.compressorHeatProductionDhw, 'week', i);
+                    const heatHeating = getArrayValue(kf.compressorHeatProductionHeating, 'week', i);
+                    const heatCooling = getArrayValue(kf.compressorHeatProductionCooling, 'week', i);
+                    if (heatDhw === null && heatHeating === null && heatCooling === null) continue;
+
+                    const totalHeat = (heatDhw || 0) + (heatHeating || 0) + (heatCooling || 0);
+                    heatTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'comp-heat-week-${i}')">${getWeekLabel(i)}</button>`;
+                    heatContentHtml += `
+                        <div id="comp-heat-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                            <div class="stat-grid">
+                                ${heatDhw !== null ? `<div class="stat-item stat-heat"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(heatDhw)} kWh</span></div>` : ''}
+                                ${heatHeating !== null ? `<div class="stat-item stat-heat"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(heatHeating)} kWh</span></div>` : ''}
+                                ${heatCooling !== null ? `<div class="stat-item stat-cool"><span class="stat-label">❄️ Kühlung</span><span class="stat-value">${formatNum(heatCooling)} kWh</span></div>` : ''}
+                                ${totalHeat > 0 ? `<div class="stat-item stat-heat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalHeat)} kWh</span></div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            if (!powerTabsHtml && !heatTabsHtml) return '';
+
+            let html = '';
+
+            if (powerTabsHtml) {
+                html += `
+                    <div class="card">
+                        <div class="card-header"><h2>⚡ Verdichter Stromverbrauch (Wöchentlich)</h2></div>
+                        <div class="stat-tabs stat-tabs-scrollable">${powerTabsHtml}</div>
+                        <div class="stat-content">${powerContentHtml}</div>
+                    </div>
+                `;
+            }
+
+            if (heatTabsHtml) {
+                html += `
+                    <div class="card">
+                        <div class="card-header"><h2>🌡️ Verdichter Wärmeproduktion (Wöchentlich)</h2></div>
+                        <div class="stat-tabs stat-tabs-scrollable">${heatTabsHtml}</div>
+                        <div class="stat-content">${heatContentHtml}</div>
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
         // Fallback: Render statistics using summary features
