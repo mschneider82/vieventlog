@@ -593,7 +593,9 @@
                 supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']),
                 returnTemp: find(['heating.sensors.temperature.return']),
                 primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),
+                primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']),
                 secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),
+                secondaryReturnTemp: find(['heating.secondaryCircuit.sensors.temperature.return', 'heating.sensors.temperature.return']),
                 bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
                 bufferTempTop: find(['heating.buffer.sensors.temperature.top', 'heating.bufferCylinder.sensors.temperature.top']),
                 boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
@@ -989,7 +991,38 @@
                 `;
             }
             // Calculate and show Spreizung (supply - return temperature difference)
-            if (kf.supplyTemp && kf.returnTemp) {
+            // Primärkreis Spreizung
+            if (kf.primarySupplyTemp && kf.primaryReturnTemp) {
+                const supplyValue = kf.primarySupplyTemp.value;
+                const returnValue = kf.primaryReturnTemp.value;
+                const spreizung = supplyValue - returnValue;
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Spreizung Primärkreis</span>
+                        <div>
+                            <span class="temp-value">${formatNum(spreizung)}</span>
+                            <span class="temp-unit">K</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Sekundärkreis Spreizung
+            if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                const supplyValue = kf.secondarySupplyTemp.value;
+                const returnValue = kf.secondaryReturnTemp.value;
+                const spreizung = supplyValue - returnValue;
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Spreizung Sekundärkreis</span>
+                        <div>
+                            <span class="temp-value">${formatNum(spreizung)}</span>
+                            <span class="temp-unit">K</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Fallback für alte Berechnung (wenn nur allgemeine Temperaturen vorhanden sind)
+            if (kf.supplyTemp && kf.returnTemp && !kf.primarySupplyTemp) {
                 const supplyValue = kf.supplyTemp.value;
                 const returnValue = kf.returnTemp.value;
                 const spreizung = supplyValue - returnValue;
