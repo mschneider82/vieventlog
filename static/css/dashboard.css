@@ -1138,7 +1138,7 @@
 
         /* Toggle Button for Fan Ring Heating */
         .toggle-btn {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
             color: white;
             border: none;
             padding: 6px 12px;
@@ -1147,13 +1147,13 @@
             font-size: 14px;
             font-weight: 500;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);
+            box-shadow: 0 4px 6px rgba(107, 114, 128, 0.3);
         }
 
         .toggle-btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
             transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(239, 68, 68, 0.4);
+            box-shadow: 0 6px 12px rgba(107, 114, 128, 0.4);
         }
 
         .toggle-btn.active {
