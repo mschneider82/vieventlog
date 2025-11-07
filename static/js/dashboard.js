@@ -344,8 +344,25 @@
                     const circuitPrefix = `heating.circuits.${circuitId}`;
                     const find = (exactName) => {
                         for (const category of [features.circuits, features.operatingModes, features.temperatures, features.other]) {
-                            if (category && category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
-                                return category[exactName];
+                            if (category && category[exactName]) {
+                                const feature = category[exactName];
+                                // Handle both simple values and Objects with properties/value
+                                if (feature.type === 'object') {
+                                    // For objects, try to extract the actual value from properties or value
+                                    const container = feature.value || feature.properties;
+                                    if (container && typeof container === 'object') {
+                                        // Look for a "value" property that has an actual numeric value
+                                        if (container.value && container.value.value !== undefined) {
+                                            return container.value; // Return the value object
+                                        }
+                                        // Or return the container itself if it has a direct value
+                                        if (container.value !== undefined && typeof container.value === 'number') {
+                                            return { value: container.value, type: feature.type, unit: feature.unit };
+                                        }
+                                    }
+                                } else if (feature.value !== null && feature.value !== undefined) {
+                                    return feature;
+                                }
                             }
                         }
                         return null;
@@ -482,8 +499,25 @@
                 for (const exactName of exactNames) {
                     for (const category of [features.temperatures, features.dhw, features.circuits,
                            features.operatingModes, features.other]) {
-                        if (category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
-            return category[exactName];
+                        if (category[exactName]) {
+                            const feature = category[exactName];
+                            // Handle both simple values and Objects with properties/value
+                            if (feature.type === 'object') {
+                                // For objects, try to extract the actual value from properties or value
+                                const container = feature.value || feature.properties;
+                                if (container && typeof container === 'object') {
+                                    // Look for a "value" property that has an actual numeric value
+                                    if (container.value && container.value.value !== undefined) {
+                                        return container.value; // Return the value object
+                                    }
+                                    // Or return the container itself if it has a direct value
+                                    if (container.value !== undefined && typeof container.value === 'number') {
+                                        return { value: container.value, type: feature.type, unit: feature.unit };
+                                    }
+                                }
+                            } else if (feature.value !== null && feature.value !== undefined) {
+                                return feature;
+                            }
                         }
                     }
                 }
@@ -1241,8 +1275,25 @@
                 if (!Array.isArray(exactNames)) exactNames = [exactNames];
                 for (const exactName of exactNames) {
                     for (const category of [features.temperatures, features.circuits, features.operatingModes, features.dhw, features.other]) {
-                        if (category && category[exactName] && category[exactName].value !== null && category[exactName].value !== undefined) {
-                            return category[exactName];
+                        if (category && category[exactName]) {
+                            const feature = category[exactName];
+                            // Handle both simple values and Objects with properties/value
+                            if (feature.type === 'object') {
+                                // For objects, try to extract the actual value from properties or value
+                                const container = feature.value || feature.properties;
+                                if (container && typeof container === 'object') {
+                                    // Look for a "value" property that has an actual numeric value
+                                    if (container.value && container.value.value !== undefined) {
+                                        return container.value; // Return the value object
+                                    }
+                                    // Or return the container itself if it has a direct value
+                                    if (container.value !== undefined && typeof container.value === 'number') {
+                                        return { value: container.value, type: feature.type, unit: feature.unit };
+                                    }
+                                }
+                            } else if (feature.value !== null && feature.value !== undefined) {
+                                return feature;
+                            }
                         }
                     }
                 }
