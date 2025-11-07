@@ -360,7 +360,11 @@
                                             return { value: container.value, type: feature.type, unit: feature.unit };
                                         }
                                     }
-                                } else if (feature.value !== null && feature.value !== undefined) {
+                                    // For object types without specific numeric values, return the whole feature
+                                    return feature;
+                                }
+                                // For non-object types, check if it has a value
+                                if (feature.value !== null && feature.value !== undefined) {
                                     return feature;
                                 }
                             }
@@ -515,7 +519,12 @@
                                         return { value: container.value, type: feature.type, unit: feature.unit };
                                     }
                                 }
-                            } else if (feature.value !== null && feature.value !== undefined) {
+                                // For object types without specific numeric values, return the whole feature
+                                // This handles cases like heating.compressors.0.statistics
+                                return feature;
+                            }
+                            // For non-object types, check if it has a value
+                            if (feature.value !== null && feature.value !== undefined) {
                                 return feature;
                             }
                         }
@@ -1307,7 +1316,11 @@
                                         return { value: container.value, type: feature.type, unit: feature.unit };
                                     }
                                 }
-                            } else if (feature.value !== null && feature.value !== undefined) {
+                                // For object types without specific numeric values, return the whole feature
+                                return feature;
+                            }
+                            // For non-object types, check if it has a value
+                            if (feature.value !== null && feature.value !== undefined) {
                                 return feature;
                             }
                         }
