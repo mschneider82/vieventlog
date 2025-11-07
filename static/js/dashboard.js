@@ -451,6 +451,7 @@
 
             // Render D3 charts after DOM is updated (only for heating devices)
             if (deviceType !== 'zigbee' && window.heatingCurveData) {
+                // Use longer timeout to allow DOM to fully layout (especially important with multiple circuits)
                 setTimeout(() => {
                     console.log('📈 Starting to render all heating curve charts...');
                     console.log('Available circuits in heatingCurveData:', Object.keys(window.heatingCurveData));
@@ -467,7 +468,7 @@
                             }
                         }
                     }
-                }, 100);
+                }, 300); // Increased timeout from 100ms to 300ms for better DOM layout with multiple circuits
             }
         }
 
@@ -732,27 +733,27 @@
                 // Only available with includeDeviceFeatures=true
                 compressorPowerConsumptionDhw: (() => {
                     if (!features.rawFeatures) return null;
-                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.dhw');
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.dhw.week');
                     return f || null;
                 })(),
                 compressorPowerConsumptionHeating: (() => {
                     if (!features.rawFeatures) return null;
-                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.heating');
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.power.consumption.heating.week');
                     return f || null;
                 })(),
                 compressorHeatProductionDhw: (() => {
                     if (!features.rawFeatures) return null;
-                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.dhw');
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.dhw.week');
                     return f || null;
                 })(),
                 compressorHeatProductionHeating: (() => {
                     if (!features.rawFeatures) return null;
-                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.heating');
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.heating.week');
                     return f || null;
                 })(),
                 compressorHeatProductionCooling: (() => {
                     if (!features.rawFeatures) return null;
-                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.cooling');
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.compressors.0.heat.production.cooling.week');
                     return f || null;
                 })(),
 
@@ -1855,6 +1856,8 @@
             const width = chartElement.clientWidth - margin.left - margin.right;
             const height = 400 - margin.top - margin.bottom;
 
+            console.log(`📏 Chart dimensions for circuit ${circuitId}: clientWidth=${chartElement.clientWidth}, width=${width}, height=${height}`);
+
             // Create SVG
             const svg = d3.select('#' + chartId)
                 .append('svg')
@@ -2423,91 +2426,58 @@
             `;
         }
 
-        // Compressor-specific energy consumption and production card (Vitocal)
+        // Compressor-specific energy consumption and production card (Vitocal - single week values)
         function renderCompressorEnergyCard(kf, getArrayValue) {
-            const getWeekLabel = (index) => {
-                const now = new Date();
-                const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
-                const onejan = new Date(d.getFullYear(), 0, 1);
-                const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
-                return `KW ${week}`;
+            // Helper to extract single value from feature
+            const getValue = (feature) => {
+                if (!feature) return null;
+                // Handle direct value property
+                if (feature.value !== undefined) {
+                    return feature.value;
+                }
+                // Handle properties.value structure
+                if (feature.properties && feature.properties.value && feature.properties.value.value !== undefined) {
+                    return feature.properties.value.value;
+                }
+                return null;
             };
-
-            // Build weekly power consumption data
-            let powerTabsHtml = '', powerContentHtml = '';
-            const powerConsumptionArray = kf.compressorPowerConsumptionDhw?.properties?.week?.value ||
-                                         kf.compressorPowerConsumptionHeating?.properties?.week?.value || [];
-            const maxWeeks = Math.min(powerConsumptionArray.length, 6);
-
-            if (kf.compressorPowerConsumptionDhw || kf.compressorPowerConsumptionHeating) {
-                for (let i = 0; i < maxWeeks; i++) {
-                    const powerDhw = getArrayValue(kf.compressorPowerConsumptionDhw, 'week', i);
-                    const powerHeating = getArrayValue(kf.compressorPowerConsumptionHeating, 'week', i);
-                    if (powerDhw === null && powerHeating === null) continue;
-
-                    const totalPower = (powerDhw || 0) + (powerHeating || 0);
-                    powerTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'comp-power-week-${i}')">${getWeekLabel(i)}</button>`;
-                    powerContentHtml += `
-                        <div id="comp-power-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
-                            <div class="stat-grid">
-                                ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
-                                ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
-                                ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
-            // Build weekly heat production data
-            let heatTabsHtml = '', heatContentHtml = '';
-            const heatProductionArray = kf.compressorHeatProductionDhw?.properties?.week?.value ||
-                                       kf.compressorHeatProductionHeating?.properties?.week?.value ||
-                                       kf.compressorHeatProductionCooling?.properties?.week?.value || [];
-            const maxHeatWeeks = Math.min(heatProductionArray.length, 6);
-
-            if (kf.compressorHeatProductionDhw || kf.compressorHeatProductionHeating || kf.compressorHeatProductionCooling) {
-                for (let i = 0; i < maxHeatWeeks; i++) {
-                    const heatDhw = getArrayValue(kf.compressorHeatProductionDhw, 'week', i);
-                    const heatHeating = getArrayValue(kf.compressorHeatProductionHeating, 'week', i);
-                    const heatCooling = getArrayValue(kf.compressorHeatProductionCooling, 'week', i);
-                    if (heatDhw === null && heatHeating === null && heatCooling === null) continue;
-
-                    const totalHeat = (heatDhw || 0) + (heatHeating || 0) + (heatCooling || 0);
-                    heatTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'comp-heat-week-${i}')">${getWeekLabel(i)}</button>`;
-                    heatContentHtml += `
-                        <div id="comp-heat-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
-                            <div class="stat-grid">
-                                ${heatDhw !== null ? `<div class="stat-item stat-heat"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(heatDhw)} kWh</span></div>` : ''}
-                                ${heatHeating !== null ? `<div class="stat-item stat-heat"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(heatHeating)} kWh</span></div>` : ''}
-                                ${heatCooling !== null ? `<div class="stat-item stat-cool"><span class="stat-label">❄️ Kühlung</span><span class="stat-value">${formatNum(heatCooling)} kWh</span></div>` : ''}
-                                ${totalHeat > 0 ? `<div class="stat-item stat-heat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalHeat)} kWh</span></div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
-            if (!powerTabsHtml && !heatTabsHtml) return '';
 
             let html = '';
 
-            if (powerTabsHtml) {
+            // Build power consumption card
+            const powerDhw = getValue(kf.compressorPowerConsumptionDhw);
+            const powerHeating = getValue(kf.compressorPowerConsumptionHeating);
+
+            if (powerDhw !== null || powerHeating !== null) {
+                const totalPower = (powerDhw || 0) + (powerHeating || 0);
                 html += `
                     <div class="card">
                         <div class="card-header"><h2>⚡ Verdichter Stromverbrauch (Wöchentlich)</h2></div>
-                        <div class="stat-tabs stat-tabs-scrollable">${powerTabsHtml}</div>
-                        <div class="stat-content">${powerContentHtml}</div>
+                        <div class="stat-grid">
+                            ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
+                            ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
+                            ${totalPower > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalPower)} kWh</span></div>` : ''}
+                        </div>
                     </div>
                 `;
             }
 
-            if (heatTabsHtml) {
+            // Build heat production card
+            const heatDhw = getValue(kf.compressorHeatProductionDhw);
+            const heatHeating = getValue(kf.compressorHeatProductionHeating);
+            const heatCooling = getValue(kf.compressorHeatProductionCooling);
+
+            if (heatDhw !== null || heatHeating !== null || heatCooling !== null) {
+                const totalHeat = (heatDhw || 0) + (heatHeating || 0) + (heatCooling || 0);
                 html += `
                     <div class="card">
                         <div class="card-header"><h2>🌡️ Verdichter Wärmeproduktion (Wöchentlich)</h2></div>
-                        <div class="stat-tabs stat-tabs-scrollable">${heatTabsHtml}</div>
-                        <div class="stat-content">${heatContentHtml}</div>
+                        <div class="stat-grid">
+                            ${heatDhw !== null ? `<div class="stat-item stat-heat"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(heatDhw)} kWh</span></div>` : ''}
+                            ${heatHeating !== null ? `<div class="stat-item stat-heat"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(heatHeating)} kWh</span></div>` : ''}
+                            ${heatCooling !== null ? `<div class="stat-item stat-cool"><span class="stat-label">❄️ Kühlung</span><span class="stat-value">${formatNum(heatCooling)} kWh</span></div>` : ''}
+                            ${totalHeat > 0 ? `<div class="stat-item stat-heat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalHeat)} kWh</span></div>` : ''}
+                        </div>
                     </div>
                 `;
             }
