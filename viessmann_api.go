@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -420,111 +419,4 @@ func executeAPIRequest(method, url, accessToken string, requestBody map[string]i
 	}
 
 	return resp.StatusCode, parsedBody, nil
-}
-
-// calculatePVStringMetrics calculates power and current for each PV string based on settings and API data
-func calculatePVStringMetrics(features *DeviceFeatures, pvSettings *PVStringSettings, accountID, deviceKey string) map[string]FeatureValue {
-	calculated := make(map[string]FeatureValue)
-
-	// If no settings configured, return empty map
-	if pvSettings == nil || len(pvSettings.Strings) == 0 {
-		return calculated
-	}
-
-	// Extract P_gesamt (total PV production) from features
-	var pTotal float64
-	if pvProd, ok := features.Other["photovoltaic.production.current"]; ok {
-		if val, ok := pvProd.Value.(float64); ok {
-			pTotal = val * 1000 // Convert kW to W
-		}
-	}
-
-	// Extract string voltages from features
-	stringVoltages := make(map[int]float64)
-	if voltFeature, ok := features.Other["photovoltaic.string.voltage"]; ok {
-		if voltMap, ok := voltFeature.Value.(map[string]interface{}); ok {
-			// Map API string names to indices (stringOne=1, stringTwo=2, stringThree=3, etc.)
-			stringNames := []string{"stringOne", "stringTwo", "stringThree", "stringFour", "stringFive", "stringSix"}
-			for idx, name := range stringNames {
-				if val, exists := voltMap[name]; exists {
-					if floatVal, ok := val.(float64); ok {
-						stringVoltages[idx+1] = floatVal
-					}
-				}
-			}
-		}
-	}
-
-	// Calculate total nominal power: Σ(N_StringX × P_modul)
-	var totalNominalPower float64
-	for _, str := range pvSettings.Strings {
-		totalNominalPower += float64(str.ModuleCount) * str.ModulePower
-	}
-
-	if totalNominalPower == 0 {
-		slog.Warn("Total nominal power is zero, cannot calculate string metrics", "accountId", accountID, "deviceKey", deviceKey)
-		return calculated
-	}
-
-	// Calculate power and current for each configured string
-	for idx, str := range pvSettings.Strings {
-		stringNum := idx + 1
-
-		// Calculate P_StringX = P_gesamt × (N_StringX × P_modul) / totalNominalPower
-		stringNominalPower := float64(str.ModuleCount) * str.ModulePower
-		pString := pTotal * (stringNominalPower / totalNominalPower)
-
-		// Add calculated power to results (in kW for consistency with API)
-		calculated[fmt.Sprintf("pv.string%d.power.calculated", stringNum)] = FeatureValue{
-			Type:  "Number",
-			Value: pString / 1000, // Convert W to kW
-			Unit:  "kW",
-		}
-
-		// Calculate I_StringX = P_StringX / U_StringX (only if voltage > 0)
-		if voltage, ok := stringVoltages[stringNum]; ok && voltage > 0 {
-			iString := pString / voltage
-			calculated[fmt.Sprintf("pv.string%d.current.calculated", stringNum)] = FeatureValue{
-				Type:  "Number",
-				Value: iString,
-				Unit:  "A",
-			}
-		} else {
-			// Voltage is 0 or not available, set current to N/A
-			calculated[fmt.Sprintf("pv.string%d.current.calculated", stringNum)] = FeatureValue{
-				Type:  "String",
-				Value: "N/A",
-				Unit:  "",
-			}
-		}
-
-		// Also store string name for display
-		calculated[fmt.Sprintf("pv.string%d.name", stringNum)] = FeatureValue{
-			Type:  "String",
-			Value: str.Name,
-			Unit:  "",
-		}
-	}
-
-	return calculated
-}
-
-// addCalculatedPVMetrics enriches DeviceFeatures with calculated PV string metrics
-func addCalculatedPVMetrics(features *DeviceFeatures, accountID, deviceKey string) {
-	// Load PV settings for this device
-	settings, err := GetDeviceSettings(accountID, deviceKey)
-	if err != nil || settings == nil || settings.PVStrings == nil {
-		// No settings configured, skip calculation
-		return
-	}
-
-	// Calculate metrics
-	calculated := calculatePVStringMetrics(features, settings.PVStrings, accountID, deviceKey)
-
-	// Add calculated values to Other category
-	for key, value := range calculated {
-		features.Other[key] = value
-	}
-
-	slog.Debug("Added calculated PV metrics", "accountId", accountID, "deviceKey", deviceKey, "calculatedCount", len(calculated))
 }

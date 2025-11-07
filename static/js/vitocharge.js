@@ -2,9 +2,6 @@ let currentInstallationId = null;
 let installations = [];
 let autoRefreshInterval = null;
 let debugMode = false;
-let currentAccountId = null;
-let currentDeviceId = null;
-let pvSettings = null;
 
 // Parse URL parameters
 const urlParams = new URLSearchParams(window.location.search);
@@ -133,19 +130,11 @@ async function loadVitochargeData(forceRefresh = false) {
         const gatewaySerial = vitochargeDevice.gatewaySerial || '';
         const deviceId = vitochargeDevice.deviceId;
 
-        // Store device info for PV settings
-        currentDeviceId = deviceId;
-        currentAccountId = vitochargeDevice.accountId || null; // Account ID from device
-
         console.log('Loading Vitocharge:', {
             installationId: currentInstallationId,
             gatewaySerial: gatewaySerial,
-            deviceId: deviceId,
-            accountId: currentAccountId
+            deviceId: deviceId
         });
-
-        // Load PV settings for this device
-        await loadPVSettings();
 
         const refreshParam = forceRefresh ? '&refresh=true' : '';
         const response = await fetch(`/api/features?installationId=${currentInstallationId}&gatewaySerial=${gatewaySerial}&deviceId=${deviceId}${refreshParam}`);
@@ -473,88 +462,40 @@ function renderVitocharge(features, deviceInfo, wallboxFeatures = null, wallboxD
             </div>
     `;
 
-    // PV String Details - ALWAYS show, not just when active
-    // Check if we have calculated values from backend
-    const hasCalculatedValues = features.other && Object.keys(features.other).some(k => k.startsWith('pv.string'));
+    // PV String Details (only if at least one string is active)
+    const hasActiveStrings = pvStringCurrents.one > 0 || pvStringCurrents.two > 0 || pvStringCurrents.three > 0;
+    if (hasActiveStrings) {
+        html += `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 14px; color: #a0a0b0; margin-bottom: 10px; font-weight: 600;">🔌 PV-Strings</div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+        `;
 
-    html += `
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <div style="font-size: 14px; color: #a0a0b0; font-weight: 600;">🔌 PV-Strings</div>
-                ${hasCalculatedValues ? '<span style="font-size: 11px; color: #10b981; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px;">⚙️ Berechnet</span>' : '<span style="font-size: 11px; color: #6b7280; background: rgba(107, 114, 128, 0.1); padding: 4px 8px; border-radius: 4px;">📊 API-Werte</span>'}
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
-    `;
-
-    // Determine how many strings to display
-    let stringsToShow = [];
-
-    if (hasCalculatedValues) {
-        // Use calculated values - show all configured strings
-        for (let i = 1; i <= 6; i++) {
-            const nameKey = `pv.string${i}.name`;
-            const powerKey = `pv.string${i}.power.calculated`;
-            const currentKey = `pv.string${i}.current.calculated`;
-            const voltageKey = `photovoltaic.string.voltage`;
-
-            if (getValue(nameKey)) {
-                const name = getValue(nameKey)?.value || `String ${i}`;
-                const power = getValue(powerKey)?.value || 0; // kW
-                const current = getValue(currentKey)?.value || 0; // A or "N/A"
-
-                // Get voltage from API
-                let voltage = 0;
-                const voltFeature = getValue(voltageKey);
-                if (voltFeature && voltFeature.value) {
-                    const stringNames = ['stringOne', 'stringTwo', 'stringThree', 'stringFour', 'stringFive', 'stringSix'];
-                    const voltKey = stringNames[i - 1];
-                    if (voltFeature.value[voltKey] !== undefined) {
-                        voltage = voltFeature.value[voltKey];
-                    }
-                }
-
-                stringsToShow.push({ name, voltage, current, power, calculated: true });
-            }
-        }
-    } else {
-        // Fallback to API values (legacy display)
-        const apiStrings = [
+        const strings = [
             { name: 'String 1', voltage: pvStringVoltages.one, current: pvStringCurrents.one },
             { name: 'String 2', voltage: pvStringVoltages.two, current: pvStringCurrents.two },
             { name: 'String 3', voltage: pvStringVoltages.three, current: pvStringCurrents.three }
         ];
-        stringsToShow = apiStrings.filter(s => s.voltage > 0 || s.current > 0).map(s => ({
-            ...s,
-            power: (s.voltage * s.current) / 1000, // Calculate power in kW
-            calculated: false
-        }));
-    }
 
-    // Render strings
-    if (stringsToShow.length === 0) {
-        html += `<div style="color: #6b7280; font-size: 13px; grid-column: 1/-1; text-align: center; padding: 20px;">Keine PV-String-Daten verfügbar. Konfigurieren Sie PV-Strings über den Button "⚙️ PV-Strings".</div>`;
-    } else {
-        stringsToShow.forEach(str => {
-            const isActive = str.power > 0.01; // Active if power > 10W
+        strings.forEach(str => {
+            const isActive = str.current > 0.1;
             const statusColor = isActive ? '#10b981' : '#6b7280';
             const statusIcon = isActive ? '🟢' : '⚫';
-            const currentDisplay = typeof str.current === 'string' ? str.current : formatNum(str.current) + ' A';
 
             html += `
-                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size: 11px; color: #a0a0b0; margin-bottom: 6px;">${statusIcon} ${str.name}</div>
-                    ${str.calculated ? `<div style="font-size: 14px; color: ${statusColor}; font-weight: 600; margin-bottom: 2px;">${formatNum(str.power)} kW</div>` : ''}
-                    <div style="font-size: 13px; color: ${statusColor}; font-weight: ${str.calculated ? '500' : '600'};">${formatNum(str.voltage)} V</div>
-                    <div style="font-size: 12px; color: #a0a0b0;">${currentDisplay}</div>
+                <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 11px; color: #a0a0b0; margin-bottom: 4px;">${statusIcon} ${str.name}</div>
+                    <div style="font-size: 13px; color: ${statusColor}; font-weight: 600;">${formatNum(str.voltage)} V</div>
+                    <div style="font-size: 12px; color: #a0a0b0;">${formatNum(str.current)} A</div>
                 </div>
             `;
         });
-    }
 
-    html += `
+        html += `
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 
     html += `</div>`;
 
@@ -811,190 +752,5 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
     loadVitochargeData(true);
 });
 
-document.getElementById('pvSettingsBtn').addEventListener('click', () => {
-    showPVSettingsModal();
-});
-
 // Initialize
 init();
-
-// ============= PV String Settings =============
-
-async function loadPVSettings() {
-    if (!currentAccountId || !currentInstallationId || !currentDeviceId) {
-        console.log('Cannot load PV settings: missing account/installation/device info');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/pv-settings/get', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                accountId: currentAccountId,
-                installationId: currentInstallationId,
-                deviceId: currentDeviceId
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load PV settings: ' + response.status);
-        }
-
-        const data = await response.json();
-        pvSettings = data.settings; // may be null if not configured
-        console.log('Loaded PV settings:', pvSettings);
-    } catch (error) {
-        console.error('Error loading PV settings:', error);
-        pvSettings = null;
-    }
-}
-
-async function savePVSettings(settings) {
-    if (!currentAccountId || !currentInstallationId || !currentDeviceId) {
-        throw new Error('Missing account/installation/device info');
-    }
-
-    const response = await fetch('/api/pv-settings/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            accountId: currentAccountId,
-            installationId: currentInstallationId,
-            deviceId: currentDeviceId,
-            settings: settings
-        })
-    });
-
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error('Failed to save PV settings: ' + text);
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-        throw new Error(data.error || 'Unknown error saving PV settings');
-    }
-
-    pvSettings = data.settings;
-    console.log('Saved PV settings:', pvSettings);
-}
-
-function showPVSettingsModal() {
-    // Create modal HTML
-    const modalHTML = `
-        <div id="pvSettingsModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;">
-            <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1);">
-                <h2 style="margin-top: 0; color: #fff; margin-bottom: 20px;">⚙️ PV-String Konfiguration</h2>
-                <p style="color: #a0a0b0; font-size: 14px; margin-bottom: 20px;">
-                    Konfigurieren Sie die PV-Strings für präzise Leistungs- und Stromberechnungen (±5% Genauigkeit).
-                </p>
-                <div id="pvStringsContainer"></div>
-                <button id="addStringBtn" style="margin-top: 15px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                    ➕ String hinzufügen
-                </button>
-                <div style="margin-top: 25px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="pvSettingsCancelBtn" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                        Abbrechen
-                    </button>
-                    <button id="pvSettingsSaveBtn" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                        💾 Speichern
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-    // Populate with existing settings
-    const container = document.getElementById('pvStringsContainer');
-    if (pvSettings && pvSettings.strings && pvSettings.strings.length > 0) {
-        pvSettings.strings.forEach((str, idx) => {
-            addStringRow(container, idx + 1, str.name, str.moduleCount, str.modulePower);
-        });
-    } else {
-        // Add one default string
-        addStringRow(container, 1, 'String 1', 10, 400);
-    }
-
-    // Event listeners
-    document.getElementById('addStringBtn').addEventListener('click', () => {
-        const count = container.children.length + 1;
-        addStringRow(container, count, `String ${count}`, 10, 400);
-    });
-
-    document.getElementById('pvSettingsCancelBtn').addEventListener('click', () => {
-        document.getElementById('pvSettingsModal').remove();
-    });
-
-    document.getElementById('pvSettingsSaveBtn').addEventListener('click', async () => {
-        try {
-            const strings = [];
-            const rows = container.querySelectorAll('.pv-string-row');
-
-            rows.forEach(row => {
-                const name = row.querySelector('.string-name').value.trim();
-                const moduleCount = parseInt(row.querySelector('.module-count').value);
-                const modulePower = parseFloat(row.querySelector('.module-power').value);
-
-                if (name && moduleCount > 0 && modulePower > 0) {
-                    strings.push({ name, moduleCount, modulePower });
-                }
-            });
-
-            if (strings.length === 0) {
-                alert('Bitte mindestens einen String konfigurieren.');
-                return;
-            }
-
-            await savePVSettings({ strings });
-            document.getElementById('pvSettingsModal').remove();
-
-            // Reload dashboard to show calculated values
-            await loadVitochargeData(true);
-
-        } catch (error) {
-            alert('Fehler beim Speichern: ' + error.message);
-        }
-    });
-}
-
-function addStringRow(container, number, name, moduleCount, modulePower) {
-    const rowHTML = `
-        <div class="pv-string-row" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <label style="color: #667eea; font-weight: 600;">String ${number}</label>
-                <button class="remove-string-btn" style="background: #ef4444; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">
-                    🗑️ Entfernen
-                </button>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                <div>
-                    <label style="display: block; color: #a0a0b0; font-size: 12px; margin-bottom: 5px;">Name</label>
-                    <input type="text" class="string-name" value="${name}" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
-                </div>
-                <div>
-                    <label style="display: block; color: #a0a0b0; font-size: 12px; margin-bottom: 5px;">Anzahl Module</label>
-                    <input type="number" class="module-count" value="${moduleCount}" min="1" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
-                </div>
-                <div>
-                    <label style="display: block; color: #a0a0b0; font-size: 12px; margin-bottom: 5px;">Leistung/Modul [W]</label>
-                    <input type="number" class="module-power" value="${modulePower}" min="1" step="0.1" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
-                </div>
-            </div>
-        </div>
-    `;
-
-    container.insertAdjacentHTML('beforeend', rowHTML);
-
-    // Add remove button handler
-    const lastRow = container.lastElementChild;
-    lastRow.querySelector('.remove-string-btn').addEventListener('click', () => {
-        if (container.children.length > 1) {
-            lastRow.remove();
-        } else {
-            alert('Mindestens ein String muss konfiguriert sein.');
-        }
-    });
-}

@@ -242,18 +242,3 @@ type HybridProControlResponse struct {
 	Error    string                    `json:"error,omitempty"`
 	Settings *HybridProControlSettings `json:"settings,omitempty"`
 }
-
-// PVSettingsRequest for getting/setting PV string configuration
-type PVSettingsRequest struct {
-	AccountID      string            `json:"accountId"`
-	InstallationID string            `json:"installationId"`
-	DeviceID       string            `json:"deviceId"`
-	Settings       *PVStringSettings `json:"settings,omitempty"`
-}
-
-// PVSettingsResponse returns current PV settings
-type PVSettingsResponse struct {
-	Success  bool              `json:"success"`
-	Error    string            `json:"error,omitempty"`
-	Settings *PVStringSettings `json:"settings,omitempty"`
-}
