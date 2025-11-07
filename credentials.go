@@ -34,10 +34,11 @@ type Credentials struct {
 }
 
 type DeviceSettings struct {
-	Name             string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
-	CompressorRpmMin int                       `json:"compressorRpmMin,omitempty"`
-	CompressorRpmMax int                       `json:"compressorRpmMax,omitempty"`
-	HybridProControl *HybridProControlSettings `json:"hybridProControl,omitempty"`
+	Name                            string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
+	CompressorRpmMin                int                       `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax                int                       `json:"compressorRpmMax,omitempty"`
+	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
+	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
 }
 
 type HybridProControlSettings struct {

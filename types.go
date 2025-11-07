@@ -172,18 +172,20 @@ type DeviceFeatures struct {
 }
 
 type DeviceSettingsRequest struct {
-	AccountID        string `json:"accountId"`
-	InstallationID   string `json:"installationId"`
-	DeviceID         string `json:"deviceId"`
-	CompressorRpmMin int    `json:"compressorRpmMin"`
-	CompressorRpmMax int    `json:"compressorRpmMax"`
+	AccountID                       string `json:"accountId"`
+	InstallationID                  string `json:"installationId"`
+	DeviceID                        string `json:"deviceId"`
+	CompressorRpmMin                int    `json:"compressorRpmMin"`
+	CompressorRpmMax                int    `json:"compressorRpmMax"`
+	UseAirIntakeTemperatureLabel    *bool  `json:"useAirIntakeTemperatureLabel,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
-	Success          bool   `json:"success"`
-	Error            string `json:"error,omitempty"`
-	CompressorRpmMin int    `json:"compressorRpmMin,omitempty"`
-	CompressorRpmMax int    `json:"compressorRpmMax,omitempty"`
+	Success                         bool   `json:"success"`
+	Error                           string `json:"error,omitempty"`
+	CompressorRpmMin                int    `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax                int    `json:"compressorRpmMax,omitempty"`
+	UseAirIntakeTemperatureLabel    *bool  `json:"useAirIntakeTemperatureLabel,omitempty"`
 }
 
 type DebugDeviceInfo struct {
