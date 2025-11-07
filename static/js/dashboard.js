@@ -825,6 +825,20 @@
                     </div>
                 `;
             }
+            if (kf.dhwTemp) {
+                const formatted = formatValue(kf.dhwTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Warmwasser</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
             if (kf.supplyTemp) {
                 const formatted = formatValue(kf.supplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
