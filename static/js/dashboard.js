@@ -586,6 +586,7 @@
                 primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),
                 secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),
                 bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
+                bufferTempTop: find(['heating.buffer.sensors.temperature.top', 'heating.bufferCylinder.sensors.temperature.top']),
                 boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
                 roomTemp: find(['heating.circuits.0.sensors.temperature.room']),
                 circuitTemp: find(['heating.circuits.0.temperature']),
@@ -1014,6 +1015,20 @@
                 temps += `
                     <div class="temp-item">
                         <span class="temp-label">Puffertemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            if (kf.bufferTempTop) {
+                const formatted = formatValue(kf.bufferTempTop);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                temps += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur Oben</span>
                         <div>
                             <span class="temp-value">${value}</span>
                             <span class="temp-unit">${unit}</span>
