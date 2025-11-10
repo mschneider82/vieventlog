@@ -39,6 +39,7 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(DeviceSettingsResponse{
 			Success:                      true,
 			UseAirIntakeTemperatureLabel: nil, // nil means auto-detect
+			HasHotWaterBuffer:            nil, // nil means auto-detect
 		})
 		return
 	}
@@ -49,6 +50,7 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		CompressorRpmMin:             settings.CompressorRpmMin,
 		CompressorRpmMax:             settings.CompressorRpmMax,
 		UseAirIntakeTemperatureLabel: settings.UseAirIntakeTemperatureLabel,
+		HasHotWaterBuffer:            settings.HasHotWaterBuffer,
 	})
 }
 
@@ -91,6 +93,9 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	if req.UseAirIntakeTemperatureLabel != nil {
 		settings.UseAirIntakeTemperatureLabel = req.UseAirIntakeTemperatureLabel
 	}
+	if req.HasHotWaterBuffer != nil {
+		settings.HasHotWaterBuffer = req.HasHotWaterBuffer
+	}
 
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -105,6 +110,9 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax)
 	if req.UseAirIntakeTemperatureLabel != nil {
 		logMsg += fmt.Sprintf(", useAirIntakeLabel=%v", *req.UseAirIntakeTemperatureLabel)
+	}
+	if req.HasHotWaterBuffer != nil {
+		logMsg += fmt.Sprintf(", hasHotWaterBuffer=%v", *req.HasHotWaterBuffer)
 	}
 	log.Println(logMsg)
 

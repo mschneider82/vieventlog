@@ -178,6 +178,7 @@ type DeviceSettingsRequest struct {
 	CompressorRpmMin                int    `json:"compressorRpmMin"`
 	CompressorRpmMax                int    `json:"compressorRpmMax"`
 	UseAirIntakeTemperatureLabel    *bool  `json:"useAirIntakeTemperatureLabel,omitempty"`
+	HasHotWaterBuffer               *bool  `json:"hasHotWaterBuffer,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
@@ -186,6 +187,7 @@ type DeviceSettingsResponse struct {
 	CompressorRpmMin                int    `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax                int    `json:"compressorRpmMax,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool  `json:"useAirIntakeTemperatureLabel,omitempty"`
+	HasHotWaterBuffer               *bool  `json:"hasHotWaterBuffer,omitempty"`
 }
 
 type DebugDeviceInfo struct {
