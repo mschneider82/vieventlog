@@ -314,12 +314,12 @@
 
                 // Store data for circuit 0 (backward compatibility)
                 window.heatingCurveData[0] = {
-                    slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
-                    shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
-                    currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
-                    currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
-                    maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
-                    minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null,
+                    slope: keyFeatures.heatingCurveSlope ? unwrapValue(keyFeatures.heatingCurveSlope.value) : null,
+                    shift: keyFeatures.heatingCurveShift ? unwrapValue(keyFeatures.heatingCurveShift.value) : null,
+                    currentOutside: keyFeatures.outsideTemp ? unwrapValue(keyFeatures.outsideTemp.value) : null,
+                    currentSupply: keyFeatures.supplyTemp ? unwrapValue(keyFeatures.supplyTemp.value) : null,
+                    maxSupply: keyFeatures.supplyTempMax ? unwrapValue(keyFeatures.supplyTempMax.value) : null,
+                    minSupply: keyFeatures.supplyTempMin ? unwrapValue(keyFeatures.supplyTempMin.value) : null,
                     roomTempSetpoint: roomTempSetpoint
                 };
                 // Keep legacy format for backward compatibility (for chart rendering)
@@ -381,7 +381,8 @@
                                     if (container && typeof container === 'object') {
                                         const nestedValue = container[propertyName];
                                         if (nestedValue && nestedValue.value !== undefined) {
-                                            return nestedValue.value;
+                                            // Unwrap nested values to get the actual numeric value
+                                            return unwrapValue(nestedValue.value);
                                         }
                                     }
                                 }
@@ -419,8 +420,8 @@
                     window.heatingCurveData[circuitId] = {
                         slope: slope,
                         shift: shift,
-                        currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
-                        currentSupply: circuitSupplyTemp ? circuitSupplyTemp.value : null,
+                        currentOutside: keyFeatures.outsideTemp ? unwrapValue(keyFeatures.outsideTemp.value) : null,
+                        currentSupply: circuitSupplyTemp ? unwrapValue(circuitSupplyTemp.value) : null,
                         maxSupply: maxSupply,
                         minSupply: minSupply,
                         roomTempSetpoint: circuitRoomTempSetpoint
@@ -561,7 +562,7 @@
                                 if (nestedValue && nestedValue.value !== undefined) {
                                     return {
                                         type: nestedValue.type || 'number',
-                                        value: nestedValue.value,
+                                        value: unwrapValue(nestedValue.value),
                                         unit: nestedValue.unit || ''
                                     };
                                 }
@@ -1462,7 +1463,7 @@
                                 if (nestedValue && nestedValue.value !== undefined) {
                                     return {
                                         type: nestedValue.type || 'number',
-                                        value: nestedValue.value,
+                                        value: unwrapValue(nestedValue.value),
                                         unit: nestedValue.unit || ''
                                     };
                                 }
@@ -2036,8 +2037,24 @@
                 return;
             }
 
-            const {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint} = data;
+            let {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint} = data;
+
+            // Unwrap values if they are still objects (safety check)
+            slope = unwrapValue(slope);
+            shift = unwrapValue(shift);
+            currentOutside = unwrapValue(currentOutside);
+            currentSupply = unwrapValue(currentSupply);
+            maxSupply = unwrapValue(maxSupply);
+            minSupply = unwrapValue(minSupply);
+
             console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint});
+
+            // Validate that we have valid numeric values for slope and shift
+            if (typeof slope !== 'number' || typeof shift !== 'number') {
+                console.error('❌ Invalid slope or shift values:', {slope, shift});
+                chartElement.innerHTML = '<div style="color: #ef4444; padding: 20px; text-align: center;">Ungültige Heizkurven-Daten (Neigung oder Niveau fehlt)</div>';
+                return;
+            }
 
             // Clear any existing content
             chartElement.innerHTML = '';
@@ -4886,8 +4903,8 @@
                 let shift = 0;
                 let slope = 1.0;
                 if (window.heatingCurveData && window.heatingCurveData[circuitId]) {
-                    shift = window.heatingCurveData[circuitId].shift || 0;
-                    slope = window.heatingCurveData[circuitId].slope || 1.0;
+                    shift = unwrapValue(window.heatingCurveData[circuitId].shift) || 0;
+                    slope = unwrapValue(window.heatingCurveData[circuitId].slope) || 1.0;
                 }
 
                 // Update the changed value
