@@ -1247,6 +1247,66 @@
                             <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatValue(kf.compressorCurrent) : '--'}</span>
                         </div>
                     ` : ''}
+                    ${(() => {
+                        // Calculate thermal power and COP if all required values are available
+                        if (!kf.volumetricFlow || !kf.compressorPower) return '';
+
+                        // Get device settings to determine which spreizung to use
+                        const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+                        const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+                        let showSecondaryCircuitSpreizung = true; // default
+                        if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+                            showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+                        }
+
+                        // Calculate spreizung based on setting
+                        let spreizung = null;
+                        let supplyTemp = null;
+                        if (showSecondaryCircuitSpreizung) {
+                            // Mit HW-Puffer: Sekundärkreis Spreizung
+                            if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                                spreizung = kf.secondarySupplyTemp.value - kf.secondaryReturnTemp.value;
+                                supplyTemp = kf.secondarySupplyTemp.value;
+                            }
+                        } else {
+                            // Ohne HW-Puffer: Heizkreis Spreizung
+                            if (kf.supplyTemp && kf.returnTemp) {
+                                spreizung = kf.supplyTemp.value - kf.returnTemp.value;
+                                supplyTemp = kf.supplyTemp.value;
+                            }
+                        }
+
+                        if (spreizung === null || spreizung <= 0 || supplyTemp === null) return '';
+
+                        // Calculate water density based on supply temperature
+                        const waterDensity = getWaterDensity(supplyTemp); // kg/m³
+                        const specificHeatCapacity = 4180; // J/(kg·K)
+
+                        // Convert volumetric flow from l/h to m³/s
+                        const volumetricFlowValue = kf.volumetricFlow.value;
+                        const volumetricFlowM3s = volumetricFlowValue / 3600000; // l/h to m³/s
+
+                        // Calculate mass flow: ṁ = ρ × V̇
+                        const massFlow = waterDensity * volumetricFlowM3s; // kg/s
+
+                        // Calculate thermal power: Q = ṁ × c × ΔT
+                        const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
+
+                        // Calculate COP: COP = Q / P_el
+                        const electricalPowerW = kf.compressorPower.value; // W
+                        const cop = thermalPowerW / electricalPowerW;
+
+                        return `
+                            <div class="status-item">
+                                <span class="status-label">Thermische Leistung</span>
+                                <span class="status-value">${formatNum(thermalPowerW)} W</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">COP (aktuell)</span>
+                                <span class="status-value">${formatNum(cop, 2)}</span>
+                            </div>
+                        `;
+                    })()}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
                             <span class="status-label">Einlassdruck</span>
@@ -3654,12 +3714,70 @@
             return modes[mode] || mode;
         }
 
-        function formatNum(val) {
+        function formatNum(val, decimals = 1) {
             if (val === null || val === undefined) return '--';
             if (typeof val === 'number') {
-                return val.toFixed(1);
+                return val.toFixed(decimals);
             }
             return val;
+        }
+
+        // Calculate water density based on temperature (in °C)
+        // Returns density in kg/m³
+        function getWaterDensity(tempC) {
+            // Density table from DIN EN 12831 at 1013 hPa
+            const densityTable = [
+                { temp: 0, density: 999.84 },
+                { temp: 1, density: 999.90 },
+                { temp: 2, density: 999.94 },
+                { temp: 3, density: 999.96 },
+                { temp: 4, density: 999.97 },
+                { temp: 5, density: 999.96 },
+                { temp: 6, density: 999.94 },
+                { temp: 7, density: 999.90 },
+                { temp: 8, density: 999.85 },
+                { temp: 9, density: 999.78 },
+                { temp: 10, density: 999.70 },
+                { temp: 15, density: 999.10 },
+                { temp: 20, density: 998.21 },
+                { temp: 25, density: 997.05 },
+                { temp: 30, density: 995.65 },
+                { temp: 35, density: 994.04 },
+                { temp: 40, density: 992.22 },
+                { temp: 45, density: 990.22 },
+                { temp: 50, density: 988.04 },
+                { temp: 55, density: 985.69 },
+                { temp: 60, density: 983.20 },
+                { temp: 65, density: 980.55 },
+                { temp: 70, density: 977.76 },
+                { temp: 75, density: 974.84 },
+                { temp: 80, density: 971.79 },
+                { temp: 85, density: 968.61 },
+                { temp: 90, density: 965.30 },
+                { temp: 95, density: 961.89 },
+                { temp: 100, density: 958.30 }
+            ];
+
+            // Clamp temperature to table range
+            if (tempC <= 0) return 999.84;
+            if (tempC >= 100) return 958.30;
+
+            // Find surrounding values for linear interpolation
+            for (let i = 0; i < densityTable.length - 1; i++) {
+                if (tempC >= densityTable[i].temp && tempC <= densityTable[i + 1].temp) {
+                    const t1 = densityTable[i].temp;
+                    const t2 = densityTable[i + 1].temp;
+                    const d1 = densityTable[i].density;
+                    const d2 = densityTable[i + 1].density;
+
+                    // Linear interpolation
+                    const ratio = (tempC - t1) / (t2 - t1);
+                    return d1 + ratio * (d2 - d1);
+                }
+            }
+
+            // Fallback (should never reach here)
+            return 992.22; // 40°C default
         }
 
         // Check if a feature value contains a valid numeric value (not a status object)
