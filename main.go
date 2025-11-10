@@ -135,6 +135,22 @@ func main() {
 	// API test endpoint
 	http.HandleFunc("/api/test-request", testRequestHandler)
 
+	// Event archive endpoints
+	http.HandleFunc("/api/event-archive/settings", eventArchiveSettingsGetHandler)
+	http.HandleFunc("/api/event-archive/settings/set", eventArchiveSettingsSetHandler)
+	http.HandleFunc("/api/event-archive/stats", eventArchiveStatsHandler)
+
+	// Start event archive scheduler if enabled
+	go func() {
+		// Small delay to ensure everything is initialized
+		time.Sleep(2 * time.Second)
+
+		err := StartEventArchiveScheduler()
+		if err != nil {
+			log.Printf("Event archive scheduler initialization: %v", err)
+		}
+	}()
+
 	// Get bind address from environment, with backward compatibility for PORT
 	bindAddress := os.Getenv("BIND_ADDRESS")
 	if bindAddress == "" {

@@ -302,6 +302,85 @@
         </div>
 
         <div class="section">
+            <h2>Event-Archivierung</h2>
+            <form id="archiveSettingsForm">
+                <div class="form-group" style="margin-bottom: 30px;">
+                    <label style="display: flex; align-items: flex-start; cursor: pointer; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; gap: 20px; width: 100%;">
+                        <div class="toggle-switch" style="flex-shrink: 0;">
+                            <input type="checkbox" id="archiveEnabled">
+                            <span class="toggle-slider"></span>
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <span style="color: #e0e0e0; font-size: 15px; font-weight: 500; display: block; margin-bottom: 6px;">Event-Archivierung aktivieren</span>
+                            <small style="color: #a0a0b0; display: block; font-size: 13px; line-height: 1.5;">
+                                Speichert Events in einer SQLite-Datenbank für längere Aufbewahrung
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="archiveSettings" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Aufbewahrungsdauer (Tage)</label>
+                            <input type="number" id="retentionDays" min="1" max="3650" value="30" placeholder="30">
+                            <small style="color: #a0a0b0;">Wie lange Events gespeichert werden (z.B. 30, 365)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Refresh-Interval (Minuten)</label>
+                            <input type="number" id="refreshInterval" min="1" max="1440" value="60" placeholder="60" onchange="updateApiCallEstimation()">
+                            <small style="color: #a0a0b0;">Wie oft Events automatisch abgerufen werden</small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Datenbank-Pfad</label>
+                        <input type="text" id="databasePath" placeholder="./viessmann_events.db">
+                        <small style="color: #a0a0b0;">Speicherort der SQLite-Datenbank</small>
+                    </div>
+
+                    <!-- API Call Estimation -->
+                    <div id="apiCallEstimation" style="margin-top: 20px; padding: 15px; background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px;">
+                        <div style="color: #e0e0e0; font-size: 13px;">
+                            <div style="font-weight: 500; margin-bottom: 8px; color: #a3b9ff;">📊 Geschätzte API-Nutzung</div>
+                            <div style="color: #c0c0d0;">
+                                Bei aktuellen Einstellungen (<span id="estRefreshInterval">60</span> Min. Interval):
+                            </div>
+                            <div style="margin-top: 8px; font-size: 14px;">
+                                <strong style="color: #fff;">~<span id="estMonthlyCalls">720</span> API-Calls</strong> pro Monat
+                                <span style="color: #a0a0b0; font-size: 12px;">(<span id="estDailyCalls">24</span> pro Tag)</span>
+                            </div>
+                            <div style="margin-top: 8px; font-size: 12px; color: #a0a0b0;">
+                                💡 1 API-Call pro Installation pro Refresh
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="saveArchiveButton">Einstellungen speichern</button>
+            </form>
+
+            <div id="archiveStats" style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 6px; display: none;">
+                <div style="color: #e0e0e0; font-size: 14px;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>Status:</strong> <span id="statsSchedulerStatus">-</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Gespeicherte Events:</strong> <span id="statsTotalEvents">-</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Ältestes Event:</strong> <span id="statsOldestEvent">-</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Datenbank-Pfad:</strong> <span id="statsDatabasePath">-</span>
+                    </div>
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; color: #10b981; font-size: 13px;">
+                        ℹ️ Events werden automatisch archiviert beim Abrufen und alle <span id="refreshIntervalInfo">60</span> Minuten im Hintergrund
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
             <h2>Gespeicherte Accounts</h2>
             <div id="accountsList">
                 <div class="no-accounts">Lade Accounts...</div>
@@ -440,8 +519,142 @@
             }, 5000);
         }
 
+        // Event Archive Settings
+        async function loadArchiveSettings() {
+            try {
+                const response = await fetch('/api/event-archive/settings');
+                if (!response.ok) throw new Error('Fehler beim Laden der Einstellungen');
+
+                const settings = await response.json();
+                document.getElementById('archiveEnabled').checked = settings.enabled || false;
+                document.getElementById('retentionDays').value = settings.retentionDays || 30;
+                document.getElementById('refreshInterval').value = settings.refreshInterval || 60;
+                document.getElementById('databasePath').value = settings.databasePath || './viessmann_events.db';
+
+                // Update refresh interval in info message
+                const refreshIntervalInfo = document.getElementById('refreshIntervalInfo');
+                if (refreshIntervalInfo) {
+                    refreshIntervalInfo.textContent = settings.refreshInterval || 60;
+                }
+
+                // Update API call estimation
+                updateApiCallEstimation();
+
+                // Toggle settings visibility
+                toggleArchiveSettings(settings.enabled);
+
+                // Load stats if enabled
+                if (settings.enabled) {
+                    loadArchiveStats();
+                }
+            } catch (error) {
+                console.error('Error loading archive settings:', error);
+            }
+        }
+
+        function toggleArchiveSettings(enabled) {
+            const settingsDiv = document.getElementById('archiveSettings');
+            const statsDiv = document.getElementById('archiveStats');
+            settingsDiv.style.display = enabled ? 'block' : 'none';
+            statsDiv.style.display = enabled ? 'block' : 'none';
+        }
+
+        document.getElementById('archiveEnabled').addEventListener('change', (e) => {
+            toggleArchiveSettings(e.target.checked);
+        });
+
+        document.getElementById('archiveSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const button = document.getElementById('saveArchiveButton');
+            button.disabled = true;
+            button.textContent = 'Speichere...';
+
+            const settings = {
+                enabled: document.getElementById('archiveEnabled').checked,
+                retentionDays: parseInt(document.getElementById('retentionDays').value),
+                refreshInterval: parseInt(document.getElementById('refreshInterval').value),
+                databasePath: document.getElementById('databasePath').value
+            };
+
+            try {
+                const response = await fetch('/api/event-archive/settings/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Fehler beim Speichern');
+
+                showMessage('Archivierungs-Einstellungen wurden gespeichert!', 'success');
+
+                // Update refresh interval in info message
+                const refreshIntervalInfo = document.getElementById('refreshIntervalInfo');
+                if (refreshIntervalInfo) {
+                    refreshIntervalInfo.textContent = settings.refreshInterval;
+                }
+
+                // Update API call estimation
+                updateApiCallEstimation();
+
+                // Reload stats
+                if (settings.enabled) {
+                    setTimeout(() => loadArchiveStats(), 1000);
+                }
+            } catch (error) {
+                console.error('Error saving archive settings:', error);
+                showMessage('Fehler beim Speichern: ' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Einstellungen speichern';
+            }
+        });
+
+        async function loadArchiveStats() {
+            try {
+                const response = await fetch('/api/event-archive/stats');
+                if (!response.ok) throw new Error('Fehler beim Laden der Statistiken');
+
+                const stats = await response.json();
+                document.getElementById('statsSchedulerStatus').textContent =
+                    stats.schedulerRunning ? '✓ Läuft' : '✗ Gestoppt';
+                document.getElementById('statsTotalEvents').textContent =
+                    stats.totalEvents || 0;
+                document.getElementById('statsOldestEvent').textContent =
+                    stats.oldestEvent ? new Date(stats.oldestEvent).toLocaleString('de-DE') : 'Keine Events';
+                document.getElementById('statsDatabasePath').textContent =
+                    stats.databasePath || '-';
+            } catch (error) {
+                console.error('Error loading archive stats:', error);
+            }
+        }
+
+        // Update API call estimation based on refresh interval
+        function updateApiCallEstimation() {
+            const refreshInterval = parseInt(document.getElementById('refreshInterval').value) || 60;
+
+            // Calculate calls per day and per month
+            // Assumes 1 API call per installation per refresh
+            const callsPerDay = Math.round((24 * 60) / refreshInterval);
+            const callsPerMonth = Math.round(callsPerDay * 30);
+
+            // Update UI
+            document.getElementById('estRefreshInterval').textContent = refreshInterval;
+            document.getElementById('estDailyCalls').textContent = callsPerDay;
+            document.getElementById('estMonthlyCalls').textContent = callsPerMonth;
+        }
+
         // Initial load
         loadAccounts();
+        loadArchiveSettings();
+
+        // Refresh stats every 30 seconds if enabled
+        setInterval(() => {
+            if (document.getElementById('archiveEnabled').checked) {
+                loadArchiveStats();
+            }
+        }, 30000);
     </script>
 </body>
 </html>

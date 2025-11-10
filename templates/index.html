@@ -618,7 +618,8 @@
                     <option value="7">Letzte 7 Tage</option>
                     <option value="14">Letzte 14 Tage</option>
                     <option value="30">Letzte 30 Tage</option>
-                    <option value="365">Alle</option>
+                    <option value="90">Letzte 90 Tage</option>
+                    <option value="365">Alle (1 Jahr)</option>
                 </select>
             </div>
 
@@ -719,10 +720,14 @@
         let autoRefreshInterval = null;
         let autoRefreshEnabled = false;
 
+        // Pagination state
+        let displayedEventCount = 100; // Initial: show 100 events
+        const eventsPerPage = 100; // Load 100 more each time
+
         // Centralized filter state
         let globalFilters = {
             // Zeitraum filter (determines API call AND display for both views)
-            days: 1, // Default: Last 24 hours (365, 30, 14, 7, 3, 1)
+            days: 1, // Default: Last 24 hours (365, 90, 30, 14, 7, 3, 1)
 
             // Client-side filters (filter loaded events)
             device: 'all',
@@ -884,6 +889,9 @@
          * Refresh event list and timeline with current filters
          */
         function refreshViews() {
+            // Reset pagination when filters change or new data is loaded
+            displayedEventCount = eventsPerPage;
+
             const filteredEvents = applyFilters(allEvents);
             renderEvents(filteredEvents);
             renderTimeline(filteredEvents);
@@ -908,8 +916,12 @@
                 return;
             }
 
+            // Limit displayed events for performance
+            const eventsToDisplay = filteredEvents.slice(0, displayedEventCount);
+            const hasMore = filteredEvents.length > displayedEventCount;
+
             // Render events
-            container.innerHTML = filteredEvents.map((event, index) => {
+            container.innerHTML = eventsToDisplay.map((event, index) => {
                 const category = categorizeEvent(event);
                 let statusIndicator = '';
                 if (event.active !== null && event.errorCode) {
@@ -974,6 +986,34 @@ ${formatEventBody(event.body)}
                     </div>
                 `;
             }).join('');
+
+            // Add "Load More" button if there are more events
+            if (hasMore) {
+                const remaining = filteredEvents.length - displayedEventCount;
+                container.innerHTML += `
+                    <div style="text-align: center; padding: 20px;">
+                        <button onclick="loadMoreEvents()" style="
+                            padding: 12px 24px;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 14px;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        ">
+                            Mehr laden (${remaining} weitere Events)
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        function loadMoreEvents() {
+            displayedEventCount += eventsPerPage;
+            // Re-render with increased count
+            const filteredEvents = applyFilters(allEvents);
+            renderEvents(filteredEvents);
         }
 
         function toggleEvent(index) {
