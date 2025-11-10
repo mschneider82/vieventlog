@@ -38,7 +38,8 @@ type DeviceSettings struct {
 	CompressorRpmMin                int                       `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax                int                       `json:"compressorRpmMax,omitempty"`
 	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
-	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
+	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"`    // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
+	HasHotWaterBuffer               *bool                     `json:"hasHotWaterBuffer,omitempty"`               // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
 }
 
 type HybridProControlSettings struct {

@@ -1006,35 +1006,49 @@
                     </div>
                 `;
             }
-            // Sekundärkreis Spreizung
-            if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                const supplyValue = kf.secondarySupplyTemp.value;
-                const returnValue = kf.secondaryReturnTemp.value;
-                const spreizung = supplyValue - returnValue;
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Spreizung Sekundärkreis</span>
-                        <div>
-                            <span class="temp-value">${formatNum(spreizung)}</span>
-                            <span class="temp-unit">K</span>
-                        </div>
-                    </div>
-                `;
+            // Spreizung calculation - check device settings for override
+            const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+            const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+
+            // Determine which spreizung to show based on settings
+            let showSecondaryCircuitSpreizung = true; // default: show secondary circuit (mit HW-Puffer)
+            if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+                // Use explicit setting: true = mit HW-Puffer (secondary circuit), false = ohne HW-Puffer (heating circuit)
+                showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
             }
-            // Fallback für alte Berechnung (wenn nur allgemeine Temperaturen vorhanden sind)
-            if (kf.supplyTemp && kf.returnTemp && !kf.primarySupplyTemp) {
-                const supplyValue = kf.supplyTemp.value;
-                const returnValue = kf.returnTemp.value;
-                const spreizung = supplyValue - returnValue;
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Spreizung</span>
-                        <div>
-                            <span class="temp-value">${formatNum(spreizung)}</span>
-                            <span class="temp-unit">K</span>
+
+            if (showSecondaryCircuitSpreizung) {
+                // Sekundärkreis Spreizung (mit HW-Puffer)
+                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                    const supplyValue = kf.secondarySupplyTemp.value;
+                    const returnValue = kf.secondaryReturnTemp.value;
+                    const spreizung = supplyValue - returnValue;
+                    temps += `
+                        <div class="temp-item">
+                            <span class="temp-label">Spreizung Sekundärkreis</span>
+                            <div>
+                                <span class="temp-value">${formatNum(spreizung)}</span>
+                                <span class="temp-unit">K</span>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
+            } else {
+                // Heizkreis Spreizung (ohne HW-Puffer: Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
+                if (kf.supplyTemp && kf.returnTemp) {
+                    const supplyValue = kf.supplyTemp.value;
+                    const returnValue = kf.returnTemp.value;
+                    const spreizung = supplyValue - returnValue;
+                    temps += `
+                        <div class="temp-item">
+                            <span class="temp-label">Spreizung Heizkreis</span>
+                            <div>
+                                <span class="temp-value">${formatNum(spreizung)}</span>
+                                <span class="temp-unit">K</span>
+                            </div>
+                        </div>
+                    `;
+                }
             }
             if (kf.boilerTemp) {
                 const formatted = formatValue(kf.boilerTemp);
@@ -4102,7 +4116,8 @@
                     window.deviceSettingsCache[deviceKey] = {
                         min: data.compressorRpmMin || 0,
                         max: data.compressorRpmMax || 0,
-                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel // null = auto-detect, true/false = override
+                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // null = auto-detect, true/false = override
+                        hasHotWaterBuffer: data.hasHotWaterBuffer // null = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer
                     };
                 }
             } catch (error) {
@@ -4127,24 +4142,32 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.useAirIntakeTemperatureLabel);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0, null);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, null, null);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, useAirIntakeTemperatureLabel) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
 
-            // Determine radio button state
+            // Determine radio button state for temperature label
             let radioState = 'auto'; // default
             if (useAirIntakeTemperatureLabel === true) {
                 radioState = 'air';
             } else if (useAirIntakeTemperatureLabel === false) {
                 radioState = 'primary';
+            }
+
+            // Determine radio button state for spreizung
+            let spreizungState = 'auto'; // default
+            if (hasHotWaterBuffer === true) {
+                spreizungState = 'with';
+            } else if (hasHotWaterBuffer === false) {
+                spreizungState = 'without';
             }
 
             modal.innerHTML = `
@@ -4192,6 +4215,35 @@
                                        style="cursor: pointer;">
                                 <label for="labelPrimary" style="color: #a0a0b0; cursor: pointer; display: inline;">
                                     Primärkreisvorlauf
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
+                            Spreizungsberechnung
+                        </label>
+                        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px;">
+                            <div style="margin-bottom: 8px;">
+                                <input type="radio" id="spreizungAuto" name="spreizung" value="auto" ${spreizungState === 'auto' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="spreizungAuto" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Automatisch erkennen (Standard)
+                                </label>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <input type="radio" id="spreizungWith" name="spreizung" value="with" ${spreizungState === 'with' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="spreizungWith" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Mit HW-Puffer (Sekundärkreis)
+                                </label>
+                            </div>
+                            <div>
+                                <input type="radio" id="spreizungWithout" name="spreizung" value="without" ${spreizungState === 'without' ? 'checked' : ''}
+                                       style="cursor: pointer;">
+                                <label for="spreizungWithout" style="color: #a0a0b0; cursor: pointer; display: inline;">
+                                    Ohne HW-Puffer (Heizkreis)
                                 </label>
                             </div>
                         </div>
@@ -4257,6 +4309,16 @@
             }
             // else 'auto' means null (auto-detect)
 
+            // Get spreizung setting from radio buttons
+            const spreizungValue = document.querySelector('input[name="spreizung"]:checked').value;
+            let hasHotWaterBuffer = null;
+            if (spreizungValue === 'with') {
+                hasHotWaterBuffer = true;
+            } else if (spreizungValue === 'without') {
+                hasHotWaterBuffer = false;
+            }
+            // else 'auto' means null (auto-detect)
+
             try {
                 const response = await fetch('/api/device-settings/set', {
                     method: 'POST',
@@ -4267,7 +4329,8 @@
                         deviceId: deviceId,
                         compressorRpmMin: rpmMin,
                         compressorRpmMax: rpmMax,
-                        useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel
+                        useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel,
+                        hasHotWaterBuffer: hasHotWaterBuffer
                     })
                 });
 
@@ -4282,6 +4345,7 @@
                     window.deviceSettingsCache[deviceKey].min = rpmMin;
                     window.deviceSettingsCache[deviceKey].max = rpmMax;
                     window.deviceSettingsCache[deviceKey].useAirIntakeTemperatureLabel = useAirIntakeTemperatureLabel;
+                    window.deviceSettingsCache[deviceKey].hasHotWaterBuffer = hasHotWaterBuffer;
 
                     alert('Einstellungen gespeichert!');
                     closeDeviceSettingsModal();
