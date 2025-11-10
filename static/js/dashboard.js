@@ -213,6 +213,14 @@
             const contentDiv = document.getElementById('dashboardContent');
             contentDiv.className = 'dashboard-grid';
 
+            // Helper function to unwrap nested value objects (available locally in renderDashboard)
+            const unwrapValue = (val) => {
+                while (val && typeof val === 'object' && val.value !== undefined) {
+                    val = val.value;
+                }
+                return val;
+            };
+
             // Store features globally for debugging
             window.currentFeaturesData = features;
 
@@ -314,12 +322,12 @@
 
                 // Store data for circuit 0 (backward compatibility)
                 window.heatingCurveData[0] = {
-                    slope: keyFeatures.heatingCurveSlope ? unwrapValue(keyFeatures.heatingCurveSlope.value) : null,
-                    shift: keyFeatures.heatingCurveShift ? unwrapValue(keyFeatures.heatingCurveShift.value) : null,
-                    currentOutside: keyFeatures.outsideTemp ? unwrapValue(keyFeatures.outsideTemp.value) : null,
-                    currentSupply: keyFeatures.supplyTemp ? unwrapValue(keyFeatures.supplyTemp.value) : null,
-                    maxSupply: keyFeatures.supplyTempMax ? unwrapValue(keyFeatures.supplyTempMax.value) : null,
-                    minSupply: keyFeatures.supplyTempMin ? unwrapValue(keyFeatures.supplyTempMin.value) : null,
+                    slope: keyFeatures.heatingCurveSlope ? keyFeatures.heatingCurveSlope.value : null,
+                    shift: keyFeatures.heatingCurveShift ? keyFeatures.heatingCurveShift.value : null,
+                    currentOutside: keyFeatures.outsideTemp ? keyFeatures.outsideTemp.value : null,
+                    currentSupply: keyFeatures.supplyTemp ? keyFeatures.supplyTemp.value : null,
+                    maxSupply: keyFeatures.supplyTempMax ? keyFeatures.supplyTempMax.value : null,
+                    minSupply: keyFeatures.supplyTempMin ? keyFeatures.supplyTempMin.value : null,
                     roomTempSetpoint: roomTempSetpoint
                 };
                 // Keep legacy format for backward compatibility (for chart rendering)
@@ -381,8 +389,7 @@
                                     if (container && typeof container === 'object') {
                                         const nestedValue = container[propertyName];
                                         if (nestedValue && nestedValue.value !== undefined) {
-                                            // Unwrap nested values to get the actual numeric value
-                                            return unwrapValue(nestedValue.value);
+                                            return nestedValue.value;
                                         }
                                     }
                                 }
@@ -417,11 +424,15 @@
                         }
                     }
 
+                    // Unwrap values that might be nested objects
+                    const unwrappedOutsideTemp = keyFeatures.outsideTemp ? unwrapValue(keyFeatures.outsideTemp.value) : null;
+                    const unwrappedSupplyTemp = circuitSupplyTemp ? unwrapValue(circuitSupplyTemp.value) : null;
+
                     window.heatingCurveData[circuitId] = {
                         slope: slope,
                         shift: shift,
-                        currentOutside: keyFeatures.outsideTemp ? unwrapValue(keyFeatures.outsideTemp.value) : null,
-                        currentSupply: circuitSupplyTemp ? unwrapValue(circuitSupplyTemp.value) : null,
+                        currentOutside: typeof unwrappedOutsideTemp === 'number' ? unwrappedOutsideTemp : null,
+                        currentSupply: typeof unwrappedSupplyTemp === 'number' ? unwrappedSupplyTemp : null,
                         maxSupply: maxSupply,
                         minSupply: minSupply,
                         roomTempSetpoint: circuitRoomTempSetpoint
@@ -562,7 +573,7 @@
                                 if (nestedValue && nestedValue.value !== undefined) {
                                     return {
                                         type: nestedValue.type || 'number',
-                                        value: unwrapValue(nestedValue.value),
+                                        value: nestedValue.value,
                                         unit: nestedValue.unit || ''
                                     };
                                 }
@@ -1463,7 +1474,7 @@
                                 if (nestedValue && nestedValue.value !== undefined) {
                                     return {
                                         type: nestedValue.type || 'number',
-                                        value: unwrapValue(nestedValue.value),
+                                        value: nestedValue.value,
                                         unit: nestedValue.unit || ''
                                     };
                                 }
@@ -2015,6 +2026,14 @@
         function renderHeatingCurveChart(circuitId) {
             console.log('📈 Starting to render heating curve chart for circuit', circuitId);
 
+            // Helper function to unwrap nested value objects
+            const unwrapValue = (val) => {
+                while (val && typeof val === 'object' && val.value !== undefined) {
+                    val = val.value;
+                }
+                return val;
+            };
+
             const chartId = 'heatingCurveChart_' + circuitId;
             const chartElement = document.getElementById(chartId);
 
@@ -2039,22 +2058,17 @@
 
             let {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint} = data;
 
-            // Unwrap values if they are still objects (safety check)
-            slope = unwrapValue(slope);
-            shift = unwrapValue(shift);
-            currentOutside = unwrapValue(currentOutside);
-            currentSupply = unwrapValue(currentSupply);
-            maxSupply = unwrapValue(maxSupply);
-            minSupply = unwrapValue(minSupply);
+            // Ensure numeric values (unwrap if still objects)
+            if (typeof currentSupply === 'object' && currentSupply !== null) {
+                console.warn('⚠️ currentSupply is an object, attempting to unwrap:', currentSupply);
+                currentSupply = unwrapValue(currentSupply);
+            }
+            if (typeof currentOutside === 'object' && currentOutside !== null) {
+                console.warn('⚠️ currentOutside is an object, attempting to unwrap:', currentOutside);
+                currentOutside = unwrapValue(currentOutside);
+            }
 
             console.log('Chart parameters:', {slope, shift, currentOutside, currentSupply, maxSupply, minSupply, roomTempSetpoint});
-
-            // Validate that we have valid numeric values for slope and shift
-            if (typeof slope !== 'number' || typeof shift !== 'number') {
-                console.error('❌ Invalid slope or shift values:', {slope, shift});
-                chartElement.innerHTML = '<div style="color: #ef4444; padding: 20px; text-align: center;">Ungültige Heizkurven-Daten (Neigung oder Niveau fehlt)</div>';
-                return;
-            }
 
             // Clear any existing content
             chartElement.innerHTML = '';
@@ -4903,8 +4917,8 @@
                 let shift = 0;
                 let slope = 1.0;
                 if (window.heatingCurveData && window.heatingCurveData[circuitId]) {
-                    shift = unwrapValue(window.heatingCurveData[circuitId].shift) || 0;
-                    slope = unwrapValue(window.heatingCurveData[circuitId].slope) || 1.0;
+                    shift = window.heatingCurveData[circuitId].shift || 0;
+                    slope = window.heatingCurveData[circuitId].slope || 1.0;
                 }
 
                 // Update the changed value
