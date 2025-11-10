@@ -1020,34 +1020,38 @@
             if (showSecondaryCircuitSpreizung) {
                 // Sekundärkreis Spreizung (mit HW-Puffer)
                 if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                    const supplyValue = kf.secondarySupplyTemp.value;
-                    const returnValue = kf.secondaryReturnTemp.value;
-                    const spreizung = supplyValue - returnValue;
-                    temps += `
-                        <div class="temp-item">
-                            <span class="temp-label">Spreizung Sekundärkreis</span>
-                            <div>
-                                <span class="temp-value">${formatNum(spreizung)}</span>
-                                <span class="temp-unit">K</span>
+                    const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
+                    const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
+                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
+                        const spreizung = supplyValue - returnValue;
+                        temps += `
+                            <div class="temp-item">
+                                <span class="temp-label">Spreizung Sekundärkreis</span>
+                                <div>
+                                    <span class="temp-value">${formatNum(spreizung)}</span>
+                                    <span class="temp-unit">K</span>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 }
             } else {
                 // Heizkreis Spreizung (ohne HW-Puffer: Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
                 if (kf.supplyTemp && kf.returnTemp) {
-                    const supplyValue = kf.supplyTemp.value;
-                    const returnValue = kf.returnTemp.value;
-                    const spreizung = supplyValue - returnValue;
-                    temps += `
-                        <div class="temp-item">
-                            <span class="temp-label">Spreizung Heizkreis</span>
-                            <div>
-                                <span class="temp-value">${formatNum(spreizung)}</span>
-                                <span class="temp-unit">K</span>
+                    const supplyValue = unwrapValue(kf.supplyTemp.value);
+                    const returnValue = unwrapValue(kf.returnTemp.value);
+                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
+                        const spreizung = supplyValue - returnValue;
+                        temps += `
+                            <div class="temp-item">
+                                <span class="temp-label">Spreizung Heizkreis</span>
+                                <div>
+                                    <span class="temp-value">${formatNum(spreizung)}</span>
+                                    <span class="temp-unit">K</span>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 }
             }
             if (kf.boilerTemp) {
@@ -1265,14 +1269,22 @@
                         if (showSecondaryCircuitSpreizung) {
                             // Mit HW-Puffer: Sekundärkreis Spreizung
                             if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                                spreizung = kf.secondarySupplyTemp.value - kf.secondaryReturnTemp.value;
-                                supplyTemp = kf.secondarySupplyTemp.value;
+                                const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
+                                const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
+                                if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                                    spreizung = supplyVal - returnVal;
+                                    supplyTemp = supplyVal;
+                                }
                             }
                         } else {
                             // Ohne HW-Puffer: Heizkreis Spreizung
                             if (kf.supplyTemp && kf.returnTemp) {
-                                spreizung = kf.supplyTemp.value - kf.returnTemp.value;
-                                supplyTemp = kf.supplyTemp.value;
+                                const supplyVal = unwrapValue(kf.supplyTemp.value);
+                                const returnVal = unwrapValue(kf.returnTemp.value);
+                                if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                                    spreizung = supplyVal - returnVal;
+                                    supplyTemp = supplyVal;
+                                }
                             }
                         }
 
@@ -1283,7 +1295,8 @@
                         const specificHeatCapacity = 4180; // J/(kg·K)
 
                         // Convert volumetric flow from l/h to m³/s
-                        const volumetricFlowValue = kf.volumetricFlow.value;
+                        const volumetricFlowValue = unwrapValue(kf.volumetricFlow.value);
+                        if (typeof volumetricFlowValue !== 'number') return '';
                         const volumetricFlowM3s = volumetricFlowValue / 3600000; // l/h to m³/s
 
                         // Calculate mass flow: ṁ = ρ × V̇
@@ -1293,7 +1306,8 @@
                         const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
 
                         // Calculate COP: COP = Q / P_el
-                        const electricalPowerW = kf.compressorPower.value; // W
+                        const electricalPowerW = unwrapValue(kf.compressorPower.value); // W
+                        if (typeof electricalPowerW !== 'number' || electricalPowerW <= 0) return '';
                         const cop = thermalPowerW / electricalPowerW;
 
                         return `
@@ -3831,12 +3845,28 @@
             return unitMap[unit] || unit;
         }
 
+        // Helper function to unwrap nested value objects
+        // Handles cases where value contains another {value: X, unit: Y} structure
+        function unwrapValue(val) {
+            // Recursively unwrap nested objects
+            while (val && typeof val === 'object' && val.value !== undefined) {
+                val = val.value;
+            }
+            return val;
+        }
+
         function formatValue(featureValue) {
             if (!featureValue || featureValue.value === undefined) {
                 return '--';
             }
-            let val = featureValue.value;
+            let val = unwrapValue(featureValue.value);
             const unit = featureValue.unit;
+
+            // Handle case where val is still an object (should not happen after unwrap, but be safe)
+            if (typeof val === 'object') {
+                console.warn('formatValue: Could not unwrap value, got object:', val);
+                return '--';
+            }
 
             // Special case: Convert watt to kilowatt
             if (unit === 'watt' && val >= 1000) {
