@@ -34,12 +34,12 @@ type Credentials struct {
 }
 
 type DeviceSettings struct {
-	Name                            string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
-	CompressorRpmMin                int                       `json:"compressorRpmMin,omitempty"`
-	CompressorRpmMax                int                       `json:"compressorRpmMax,omitempty"`
-	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
-	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"`    // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
-	HasHotWaterBuffer               *bool                     `json:"hasHotWaterBuffer,omitempty"`               // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
+	Name                         string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
+	CompressorRpmMin             int                       `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax             int                       `json:"compressorRpmMax,omitempty"`
+	HybridProControl             *HybridProControlSettings `json:"hybridProControl,omitempty"`
+	UseAirIntakeTemperatureLabel *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
+	HasHotWaterBuffer            *bool                     `json:"hasHotWaterBuffer,omitempty"`            // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
 }
 
 type HybridProControlSettings struct {
@@ -75,8 +75,16 @@ type Account struct {
 	RoomSettings   map[string]*RoomSettings   `json:"roomSettings,omitempty"`   // Key: "{installationId}:{roomId}"
 }
 
+type EventArchiveSettings struct {
+	Enabled         bool   `json:"enabled"`         // Whether event archiving is enabled
+	RetentionDays   int    `json:"retentionDays"`   // How many days to keep events (e.g., 30, 365)
+	RefreshInterval int    `json:"refreshInterval"` // Background refresh interval in minutes (e.g., 60)
+	DatabasePath    string `json:"databasePath"`    // Path to SQLite database file
+}
+
 type AccountStore struct {
-	Accounts map[string]*Account `json:"accounts"` // Key is account ID
+	Accounts             map[string]*Account   `json:"accounts"`             // Key is account ID
+	EventArchiveSettings *EventArchiveSettings `json:"eventArchiveSettings"` // Global event archive settings
 }
 
 // SaveCredentials stores credentials using the configured storage backend
@@ -260,5 +268,38 @@ func SetAccountActive(accountID string, active bool) error {
 	}
 
 	account.Active = active
+	return SaveAccounts(store)
+}
+
+// --- Event Archive Settings Functions ---
+
+// GetEventArchiveSettings retrieves the global event archive settings
+func GetEventArchiveSettings() (*EventArchiveSettings, error) {
+	store, err := LoadAccounts()
+	if err != nil {
+		return nil, err
+	}
+
+	if store.EventArchiveSettings == nil {
+		// Return default settings if not configured
+		return &EventArchiveSettings{
+			Enabled:         false,
+			RetentionDays:   30,
+			RefreshInterval: 60,
+			DatabasePath:    "./viessmann_events.db",
+		}, nil
+	}
+
+	return store.EventArchiveSettings, nil
+}
+
+// SetEventArchiveSettings updates the global event archive settings
+func SetEventArchiveSettings(settings *EventArchiveSettings) error {
+	store, err := LoadAccounts()
+	if err != nil {
+		return err
+	}
+
+	store.EventArchiveSettings = settings
 	return SaveAccounts(store)
 }

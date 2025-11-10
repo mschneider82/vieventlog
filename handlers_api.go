@@ -12,6 +12,7 @@ import (
 
 // eventsHandler handles GET /api/events
 // Returns events for the last N days (default: 7)
+// Merges events from API and database (if archiving is enabled)
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	daysStr := r.URL.Query().Get("days")
 	days := 7
@@ -21,14 +22,105 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	events, err := fetchEvents(days)
+	// Fetch events from API
+	apiEvents, err := fetchEvents(days)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Check if archiving is enabled
+	archiveSettings, err := GetEventArchiveSettings()
+	if err != nil {
+		log.Printf("Warning: failed to get archive settings: %v", err)
+	}
+
+	// If archiving is enabled, save API events to DB and merge with DB events
+	var allEvents []Event
+	if archiveSettings != nil && archiveSettings.Enabled {
+		// Save fresh API events to database (with deduplication)
+		if len(apiEvents) > 0 {
+			go func() {
+				err := SaveEventsToDB(apiEvents)
+				if err != nil {
+					log.Printf("Warning: failed to save events to DB: %v", err)
+				}
+			}()
+		}
+
+		// Fetch events from database for the requested time range
+		endTime := time.Now()
+		startTime := endTime.AddDate(0, 0, -days)
+
+		dbEvents, err := GetEventsFromDB(startTime, endTime, 0)
+		if err != nil {
+			log.Printf("Warning: failed to fetch events from DB: %v", err)
+			allEvents = apiEvents
+		} else {
+			// Merge and deduplicate events
+			allEvents = mergeAndDeduplicateEvents(apiEvents, dbEvents)
+		}
+	} else {
+		allEvents = apiEvents
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	json.NewEncoder(w).Encode(allEvents)
+}
+
+// mergeAndDeduplicateEvents merges events from API and DB, removes duplicates
+// and sorts by timestamp descending
+func mergeAndDeduplicateEvents(apiEvents, dbEvents []Event) []Event {
+	// Use a map to track unique events by hash
+	eventMap := make(map[string]Event)
+
+	// Add API events first (they are more recent/authoritative)
+	for i := range apiEvents {
+		hash := ComputeEventHash(&apiEvents[i])
+		eventMap[hash] = apiEvents[i]
+	}
+
+	// Add DB events (only if not already present)
+	for i := range dbEvents {
+		hash := ComputeEventHash(&dbEvents[i])
+		if _, exists := eventMap[hash]; !exists {
+			eventMap[hash] = dbEvents[i]
+		}
+	}
+
+	// Convert map back to slice
+	merged := make([]Event, 0, len(eventMap))
+	for _, event := range eventMap {
+		merged = append(merged, event)
+	}
+
+	// Sort by EventTimestamp descending (newest first)
+	sortEventsByTimestamp(merged)
+
+	return merged
+}
+
+// sortEventsByTimestamp sorts events by EventTimestamp descending
+func sortEventsByTimestamp(events []Event) {
+	// Simple bubble sort (good enough for event lists)
+	n := len(events)
+	for i := 0; i < n-1; i++ {
+		for j := 0; j < n-i-1; j++ {
+			// Parse timestamps for comparison
+			t1, err1 := time.Parse(time.RFC3339, events[j].EventTimestamp)
+			t2, err2 := time.Parse(time.RFC3339, events[j+1].EventTimestamp)
+
+			// If parsing fails, skip
+			if err1 != nil || err2 != nil {
+				continue
+			}
+
+			// Sort descending (newer first)
+			if t1.Before(t2) {
+				events[j], events[j+1] = events[j+1], events[j]
+			}
+		}
+	}
 }
 
 // statusHandler handles GET /api/status
