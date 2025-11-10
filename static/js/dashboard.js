@@ -1626,7 +1626,7 @@
                         <span class="status-value">
                             <select onchange="changeRoomTemp(${circuitId}, '${reducedApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
-                for (let temp = 10; temp <= 30; temp++) {
+                for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(reducedProg.value) === temp ? 'selected' : '';
                     html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
                 }
@@ -1644,7 +1644,7 @@
                         <span class="status-value">
                             <select onchange="changeRoomTemp(${circuitId}, '${normalApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
-                for (let temp = 10; temp <= 30; temp++) {
+                for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(normalProg.value) === temp ? 'selected' : '';
                     html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
                 }
@@ -1662,7 +1662,7 @@
                         <span class="status-value">
                             <select onchange="changeRoomTemp(${circuitId}, '${comfortApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
-                for (let temp = 10; temp <= 30; temp++) {
+                for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(comfortProg.value) === temp ? 'selected' : '';
                     html += `<option value="${temp}" ${selected}>${temp}°C</option>`;
                 }
@@ -2055,6 +2055,11 @@
                     VT = maxSupply;
                 }
 
+                // Floor at min supply temperature (Viessmann behavior)
+                if (minSupply !== null && VT < minSupply) {
+                    VT = minSupply;
+                }
+
                 return VT;
             }
 
@@ -2078,8 +2083,13 @@
                 .domain([20, -30])
                 .range([0, width]);
 
+            // Dynamic Y-axis based on min/max supply temperature
+            // Add 5°C padding for better visibility
+            const yMin = minSupply !== null ? Math.max(0, minSupply - 5) : 20;
+            const yMax = maxSupply !== null ? maxSupply + 5 : 70;
+
             const yScale = d3.scaleLinear()
-                .domain([20, 70])
+                .domain([yMin, yMax])
                 .range([height, 0]);
 
             // Grid lines
