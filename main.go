@@ -2,9 +2,13 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,6 +45,51 @@ var (
 	refreshToken string
 	tokenExpiry  time.Time
 )
+
+// tryBindAddress versucht auf der angegebenen Adresse zu binden.
+// Wenn der Port belegt ist, wird Port+1 versucht (max 1x Retry).
+// Gibt die finale Bind-Adresse und den lokalen URL-Präfix für den Benutzer zurück.
+func tryBindAddress(bindAddress string) (string, string) {
+	// Parse the bind address to get host and port
+	parts := strings.Split(bindAddress, ":")
+	if len(parts) < 2 {
+		return bindAddress, bindAddress
+	}
+
+	host := strings.Join(parts[:len(parts)-1], ":")
+	portStr := parts[len(parts)-1]
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return bindAddress, bindAddress
+	}
+
+	// Try primary port
+	if canBind(host, port) {
+		return bindAddress, fmt.Sprintf("http://localhost:%d", port)
+	}
+
+	log.Printf("Port %d is in use (possibly AirPlay Receiver on macOS). Trying port %d...", port, port+1)
+
+	// Try fallback port (port+1)
+	if canBind(host, port+1) {
+		fallbackAddress := fmt.Sprintf("%s:%d", host, port+1)
+		return fallbackAddress, fmt.Sprintf("http://localhost:%d", port+1)
+	}
+
+	// Both ports are in use, return original and let ListenAndServe fail with clear error
+	return bindAddress, fmt.Sprintf("http://localhost:%d", port)
+}
+
+// canBind prüft, ob auf einem bestimmten Port gebunden werden kann
+func canBind(host string, port int) bool {
+	addr := fmt.Sprintf("%s:%d", host, port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	listener.Close()
+	return true
+}
 
 func main() {
 	// Initialize account management
@@ -158,10 +207,14 @@ func main() {
 		bindAddress = "0.0.0.0:" + port
 	}
 
-	log.Printf("Starting Event Viewer on %s\n", bindAddress)
+	// Try to bind to the address, with fallback for port conflicts (e.g., macOS AirPlay)
+	finalBindAddress, userURL := tryBindAddress(bindAddress)
+
+	log.Printf("Starting Event Viewer")
+	log.Printf("Open your browser at: %s", userURL)
 
 	// Wrap with Basic Auth middleware if configured
 	handler := BasicAuthMiddleware(http.DefaultServeMux)
 
-	log.Fatal(http.ListenAndServe(bindAddress, handler))
+	log.Fatal(http.ListenAndServe(finalBindAddress, handler))
 }

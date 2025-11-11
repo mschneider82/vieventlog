@@ -113,10 +113,12 @@ cd vieventlog_X.X.X_*
 
 **Schritt 4: Browser öffnen**
 
-Nach dem Start öffnen Sie Ihren Browser und navigieren zu:
+Nach dem Start öffnen Sie Ihren Browser und navigieren zur angezeigten URL. Der Application zeigt die richtige URL beim Start an:
 ```
 http://localhost:5000
 ```
+
+**macOS Hinweis zu Port 5000:** macOS belegt standardmäßig Port 5000 mit dem AirPlay Receiver. Falls dieser aktiv ist, versucht ViEventLog automatisch Port 5001. Sie sehen beim Start die korrekte URL (z.B. `http://localhost:5001`). Falls Sie Port 5000 bevorzugen, können Sie AirPlay Receiver in den Systemeinstellungen deaktivieren.
 
 ### Option 2: Aus Quellcode kompilieren
 
@@ -192,6 +194,15 @@ Standardmäßig läuft ViEventLog auf Port 5000. Sie können einen anderen Port 
 ```bash
 PORT=8080 ./vieventlog
 ```
+
+**macOS und AirPlay Receiver:**
+
+Falls Port 5000 durch den AirPlay Receiver belegt ist:
+- **Automatisch:** ViEventLog versucht automatisch Port 5001 als Fallback
+- **Manuell:** Mit `PORT=8080 ./vieventlog` einen anderen Port wählen
+- **AirPlay deaktivieren:** Systemeinstellungen → Allgemein → AirDrop und Handoff → "AirPlay Receiver" deaktivieren
+
+Die beim Start angezeigte URL ist immer korrekt!
 
 ## Docker-Deployment
 
