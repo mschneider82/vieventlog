@@ -1485,6 +1485,28 @@
                 return null;
             };
 
+            // Find feature in rawFeatures with isEnabled check
+            const findRawFeature = (featureName) => {
+                if (!features.rawFeatures) return null;
+                const rawFeature = features.rawFeatures.find(f => f.feature === featureName);
+                if (!rawFeature) return null;
+
+                // Check if feature is enabled (from API response)
+                // The raw feature has isEnabled at the top level
+                const featureData = rawFeature.properties || rawFeature;
+                if (rawFeature.isEnabled === false) return null;
+
+                // Extract value from properties.value
+                if (featureData.value && featureData.value.value !== undefined) {
+                    return {
+                        type: featureData.value.type || 'number',
+                        value: featureData.value.value,
+                        unit: featureData.value.unit || ''
+                    };
+                }
+                return null;
+            };
+
             const circuitName = find([`${circuitPrefix}.name`]);
             const operatingMode = find([`${circuitPrefix}.operating.modes.active`]);
             const operatingProgram = find([`${circuitPrefix}.operating.programs.active`]);
@@ -1493,6 +1515,11 @@
             const heatingCurveSlope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
             const heatingCurveShift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
             const supplyTempMax = findNested(`${circuitPrefix}.temperature.levels`, 'max');
+
+            // Get burner demand temperature (only for circuit 0 = Heizkreis 1)
+            // Only show if isEnabled is true
+            const burnerDemandTemp = (circuitId === 0) ? findRawFeature('heating.burners.0.demand.temperature') : null;
+
             console.log(`  └─ Heating curve data - slope: ${heatingCurveSlope}, shift: ${heatingCurveShift}, supplyTempMax: ${supplyTempMax}`);
 
             // Get program temperatures (normal, comfort, reduced) - these are nested properties
@@ -1691,6 +1718,16 @@
                     <div class="status-item">
                         <span class="status-label">Vorlauftemperatur</span>
                         <span class="status-value">${formatValue(circuitTemp)}</span>
+                    </div>
+                `;
+            }
+
+            // Burner demand temperature (Solltemperatur) - only for Vitocal circuit 0
+            if (burnerDemandTemp) {
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Solltemperatur</span>
+                        <span class="status-value">${formatValue(burnerDemandTemp)}</span>
                     </div>
                 `;
             }
