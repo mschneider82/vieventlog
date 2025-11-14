@@ -174,6 +174,7 @@ var statusCodes = map[string]string{
 	"S.400": "Aktiver Frostschutz externer Heiz-/Kuehlwasser-Pufferspeicher eingeschaltet",
 	"S.401": "Aktiver Frostschutz externer Heizwasser-Pufferspeicher eingeschaltet",
 	"S.402": "Aktiver Frostschutz externer Kuehlwasser-Pufferspeicher eingeschaltet",
+	"S.427": "Leistungsbegrenzung durch den Netzbetreiber nach § 14a EnWG",
 
 	// Missing codes from PDF
 	"S.140": "Trinkwassererwaermung angefordert",
