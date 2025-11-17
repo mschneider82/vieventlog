@@ -1583,6 +1583,7 @@ ${formatEventBody(event.body)}
             const start = api.coord([api.value(1), categoryIndex]);
             const end = api.coord([api.value(2), categoryIndex]);
             const height = api.size([0, 1])[1] * 0.6;
+            const duration = api.value(3); // Duration in minutes
 
             const rectShape = echarts.graphic.clipRectByRect(
                 {
@@ -1599,12 +1600,46 @@ ${formatEventBody(event.body)}
                 }
             );
 
-            return rectShape && {
+            if (!rectShape) return null;
+
+            const barWidth = end[0] - start[0];
+            const minWidthForText = 40; // Minimum pixel width to show duration text
+
+            // Create base rect
+            const elements = [{
                 type: 'rect',
                 transition: ['shape'],
                 shape: rectShape,
                 style: api.style(),
                 z: (params.data && params.data.z) || 1
+            }];
+
+            // Add duration text if bar is wide enough
+            if (barWidth >= minWidthForText && duration !== undefined) {
+                const durationStr = formatDurationECharts(duration);
+                elements.push({
+                    type: 'text',
+                    style: {
+                        text: durationStr,
+                        x: start[0] + barWidth / 2,
+                        y: start[1],
+                        fill: 'white',
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle',
+                        textShadowColor: 'rgba(0,0,0,0.8)',
+                        textShadowBlur: 3,
+                        textShadowOffsetX: 1,
+                        textShadowOffsetY: 1
+                    },
+                    z: ((params.data && params.data.z) || 1) + 1
+                });
+            }
+
+            return {
+                type: 'group',
+                children: elements
             };
         }
 
