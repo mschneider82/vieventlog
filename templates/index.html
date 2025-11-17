@@ -777,6 +777,7 @@
                 'I.120': true,  // Silentmode - Geräuschreduzierter Betrieb
                 'I.121': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 1 aktiv
                 'I.122': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 2 aktiv
+                'I.135': true,  // Abtauen aktiv im Regelbetrieb
                 'other': true
             },
 
@@ -1275,7 +1276,8 @@ ${formatEventBody(event.body)}
                 'S.169': { label: 'Bypass zu', description: 'Lüftungsbypass geschlossen', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '🚫' },
                 'I.120': { label: 'Silentmode', description: 'Geräuschreduzierter Betrieb Wärmepumpe aktiv', color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', icon: '🔇' },
                 'I.121': { label: 'Feuchte HK1', description: 'Feuchteanbauschalter Heizkreis 1 aktiv', color: '#fbbf24', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', icon: '💦' },
-                'I.122': { label: 'Feuchte HK2', description: 'Feuchteanbauschalter Heizkreis 2 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '💦' }
+                'I.122': { label: 'Feuchte HK2', description: 'Feuchteanbauschalter Heizkreis 2 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '💦' },
+                'I.135': { label: 'Abtauen', description: 'Abtauen aktiv im Regelbetrieb', color: '#0ea5e9', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', icon: '❄️' }
             };
 
             // Setup filter buttons (same as original)
