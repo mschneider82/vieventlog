@@ -584,6 +584,9 @@
             }
         }
     </style>
+    <!-- ECharts 6.0.0 and Luxon 3.7.2 (embedded in binary) -->
+    <script src="/static/js/echarts.min.js"></script>
+    <script src="/static/js/luxon.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -702,6 +705,16 @@
         <div class="events-container">
             <div class="events-header">
                 <h2>Events</h2>
+                <button id="resetZoomBtn" onclick="resetTimelineZoom()"
+                        style="padding: 7px 13px; border: 1px solid rgba(255,255,255,0.2);
+                               background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                               color: white; border-radius: 6px; cursor: pointer; font-size: 12px;
+                               font-weight: 500; transition: all 0.2s; display: none;
+                               align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+                               margin-left: 10px;"
+                        title="Zoom zurücksetzen und alle Events anzeigen">
+                    🔄 Alle Events anzeigen
+                </button>
                 <div class="event-count" id="eventCount">0 Events</div>
             </div>
             <div class="events-list" id="eventsList">
@@ -758,7 +771,10 @@
                 'I.121': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 1 aktiv
                 'I.122': true,  // Feuchteanbauschalter Heiz-/Kühlkreis 2 aktiv
                 'other': true
-            }
+            },
+
+            // Timeline zoom range filter (set by ECharts dataZoom)
+            timeRange: null  // { start: timestamp, end: timestamp } or null for all
         };
 
         // ========================================
@@ -830,6 +846,14 @@
                 filtered = filtered.filter(event => {
                     const eventTime = new Date(event.eventTimestamp || event.createdAt);
                     return eventTime >= cutoffTime;
+                });
+            }
+
+            // Timeline zoom range filter (from ECharts dataZoom)
+            if (globalFilters.timeRange) {
+                filtered = filtered.filter(event => {
+                    const eventTime = new Date(event.eventTimestamp || event.createdAt).getTime();
+                    return eventTime >= globalFilters.timeRange.start && eventTime <= globalFilters.timeRange.end;
                 });
             }
 
@@ -1194,11 +1218,24 @@ ${formatEventBody(event.body)}
         // ========================================
 
         /**
-         * Render timeline with already filtered events
+         * Render timeline with already filtered events using ECharts
          * Events are pre-filtered by applyFilters() (including time range)
          * Timeline only applies event type filter (globalFilters.timelineTypes)
          */
         function renderTimeline(events) {
+            renderTimelineECharts(events);
+        }
+
+        // ========================================
+        // ECHARTS TIMELINE RENDERING
+        // ========================================
+        let timelineChart = null;
+        const DateTime = luxon.DateTime;
+
+        /**
+         * Render timeline using ECharts (replaces SVG rendering)
+         */
+        function renderTimelineECharts(events) {
             const container = document.getElementById('timeline');
             const controlsContainer = document.getElementById('timelineControls');
 
@@ -1207,14 +1244,8 @@ ${formatEventBody(event.body)}
                 return;
             }
 
-            // NOTE: We don't filter events here anymore because valve position events (S.115, S.116, etc.)
-            // are needed for the state machine logic even though they don't create their own bars.
-            // The filter will be applied later when rendering bars, not when processing state transitions.
-            const filteredEvents = events;
-
-            // Setup filter buttons
+            // Event type definitions (same as original)
             const eventTypes = {
-                // Wärmepumpen-Status
                 'S.125': { label: 'Heizen', description: 'Wärmepumpe im Heizbetrieb', color: '#ef4444', gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', icon: '🔥' },
                 'S.125-WARMWATER': { label: 'WW-Bereitung', description: 'Warmwasserbereitung aktiv', color: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', icon: '🚿' },
                 'S.126': { label: 'Kühlen', description: 'Wärmepumpe im Kühlbetrieb', color: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', icon: '❄️' },
@@ -1222,28 +1253,23 @@ ${formatEventBody(event.body)}
                 'S.123': { label: 'Aus', description: 'Wärmepumpe ausgeschaltet', color: '#64748b', gradient: 'linear-gradient(135deg, #64748b 0%, #475569 100%)', icon: '⏸' },
                 'S.124': { label: 'Vorlauf', description: 'Wärmepumpe Vorlaufphase', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⏫' },
                 'S.129': { label: 'Nachlauf', description: 'Wärmepumpe Nachlaufphase', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '⏬' },
-
-                // Ventil-Positionen
                 'S.112': { label: 'V-Init', description: 'Ventil initialisiert', color: '#94a3b8', gradient: 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)', icon: '🔧' },
-                'S.113': { label: 'V schaltet→WW', description: 'Ventil schaltet zu Warmwasser', color: '#c084fc', gradient: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)', icon: '→' },
-                'S.114': { label: 'V schaltet→HK1', description: 'Ventil schaltet zu Heizkreis 1', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '→' },
-                'S.115': { label: 'V-Position WW', description: 'Ventil in Warmwasser-Position', color: '#a78bfa', gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', icon: '🔀' },
-                'S.116': { label: 'V-Position HK1', description: 'Ventil in Heizkreis 1 Position', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔀' },
-                'S.117': { label: 'V-Position HK2', description: 'Ventil in Heizkreis 2 Position', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '🔀' },
-                'S.118': { label: 'V-Position Puffer', description: 'Ventil in Pufferspeicher-Position', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
+                'S.113': { label: 'V→WW', description: 'Ventil schaltet zu Warmwasser', color: '#c084fc', gradient: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)', icon: '→' },
+                'S.114': { label: 'V→HK1', description: 'Ventil schaltet zu Heizkreis 1', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '→' },
+                'S.115': { label: 'V-WW', description: 'Ventil in Warmwasser-Position', color: '#a78bfa', gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)', icon: '🔀' },
+                'S.116': { label: 'V-HK1', description: 'Ventil in Heizkreis 1 Position', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔀' },
+                'S.117': { label: 'V-HK2', description: 'Ventil in Heizkreis 2 Position', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '🔀' },
+                'S.118': { label: 'V-Puffer', description: 'Ventil in Pufferspeicher-Position', color: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '🔄' },
                 'S.134': { label: 'V-Leerlauf', description: 'Ventil im Leerlauf', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '⭕' },
                 'S.135': { label: 'V-Abtauen', description: 'Ventil in Abtau-Position', color: '#22d3ee', gradient: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)', icon: '🔀' },
                 'S.136': { label: 'V-Raumheizung', description: 'Ventil in Raumheizungs-Position', color: '#84cc16', gradient: 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)', icon: '🏠' },
-
-                // Lüftung & Bypass
                 'S.168': { label: 'Bypass offen', description: 'Lüftungsbypass geöffnet', color: '#22c55e', gradient: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', icon: '🌬️' },
                 'S.169': { label: 'Bypass zu', description: 'Lüftungsbypass geschlossen', color: '#6b7280', gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', icon: '🚫' },
-
-                // Taupunkt/Feuchteschutz
-                'I.121': { label: 'Feuchte HK1', description: 'Feuchteanbauschalter Heizkreis 1 aktiv - Taupunkt unterschritten', color: '#fbbf24', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', icon: '💦' },
-                'I.122': { label: 'Feuchte HK2', description: 'Feuchteanbauschalter Heizkreis 2 aktiv - Taupunkt unterschritten', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '💦' }
+                'I.121': { label: 'Feuchte HK1', description: 'Feuchteanbauschalter Heizkreis 1 aktiv', color: '#fbbf24', gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', icon: '💦' },
+                'I.122': { label: 'Feuchte HK2', description: 'Feuchteanbauschalter Heizkreis 2 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '💦' }
             };
 
+            // Setup filter buttons (same as original)
             controlsContainer.innerHTML = Object.entries(eventTypes).map(([code, info]) => {
                 const active = globalFilters.timelineTypes[code] !== false;
                 return `
@@ -1261,145 +1287,362 @@ ${formatEventBody(event.body)}
                 `;
             }).join('');
 
-            // Sort events by timestamp
-            const sortedEvents = [...filteredEvents].sort((a, b) => {
-                const aTime = new Date(a.eventTimestamp || a.createdAt);
-                const bTime = new Date(b.eventTimestamp || b.createdAt);
-                return aTime - bTime;
-            });
+            // Process events with state machine (from grafana prototype)
+            const { data, categories } = processEventsForECharts(events, eventTypes);
 
-            if (sortedEvents.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Keine Events nach Filterung</div>';
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Keine Events im ausgewählten Zeitraum gefunden</div>';
                 return;
             }
 
-            // Clear container
-            container.innerHTML = '';
+            // Initialize or get chart
+            if (!timelineChart) {
+                timelineChart = echarts.init(container, 'dark');
+            }
 
-            // Parse timestamps - IMPORTANT: Use ALL events for time extent, not just first/last
-            // This ensures that events in the middle are not clipped
-            let minTime = new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt);
-            let maxTime = new Date(sortedEvents[0].eventTimestamp || sortedEvents[0].createdAt);
+            // Calculate dynamic height
+            const rowHeight = 50;
+            const chartHeight = Math.max(400, categories.length * rowHeight + 150);
+            container.style.height = chartHeight + 'px';
+            timelineChart.resize();
 
-            sortedEvents.forEach(event => {
-                const eventTime = new Date(event.eventTimestamp || event.createdAt);
-                if (eventTime < minTime) minTime = eventTime;
-                if (eventTime > maxTime) maxTime = eventTime;
+            // ECharts configuration
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: function (params) {
+                        try {
+                            const { name, value, data } = params;
+                            if (!value || !Array.isArray(value) || value.length < 4) {
+                                return `<div style="padding: 8px;">${name}</div>`;
+                            }
+                            const startTime = value[1];
+                            const endTime = value[2];
+                            const duration = value[3];
+                            if (!startTime || !endTime || isNaN(startTime) || isNaN(endTime)) {
+                                return `<div style="padding: 8px;">${name}</div>`;
+                            }
+                            const start = DateTime.fromMillis(startTime).toFormat('dd.MM.yyyy HH:mm:ss');
+                            const end = DateTime.fromMillis(endTime).toFormat('dd.MM.yyyy HH:mm:ss');
+                            const durationStr = formatDurationECharts(duration);
+                            return `
+                                <div style="padding: 8px;">
+                                    <div style="font-weight: bold; margin-bottom: 4px;">
+                                        ${data?.icon || '•'} ${name}
+                                    </div>
+                                    <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">
+                                        ${data?.description || ''}
+                                    </div>
+                                    <div style="font-size: 12px;">
+                                        <strong>Start:</strong> ${start}<br>
+                                        <strong>Ende:</strong> ${end}<br>
+                                        <strong>Dauer:</strong> ${durationStr}
+                                    </div>
+                                </div>
+                            `;
+                        } catch (error) {
+                            return `<div style="padding: 8px;">${params.name || 'Event'}</div>`;
+                        }
+                    }
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none',
+                            title: { zoom: 'Bereich zoomen', back: 'Zurück' }
+                        },
+                        restore: { title: 'Zurücksetzen' },
+                        saveAsImage: { title: 'Als Bild speichern', name: 'vieventlog-timeline' }
+                    },
+                    iconStyle: { borderColor: '#e0e0e0' },
+                    emphasis: { iconStyle: { borderColor: '#667eea' } }
+                },
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        filterMode: 'weakFilter',
+                        xAxisIndex: [0],
+                        bottom: 10,
+                        height: 30,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        backgroundColor: 'rgba(0,0,0,0.3)',
+                        fillerColor: 'rgba(102, 126, 234, 0.2)',
+                        handleStyle: { color: '#667eea' },
+                        textStyle: { color: '#e0e0e0' },
+                        labelFormatter: function(value) {
+                            try {
+                                return DateTime.fromMillis(value).toFormat('dd.MM HH:mm');
+                            } catch (e) {
+                                return '';
+                            }
+                        }
+                    },
+                    {
+                        type: 'inside',
+                        xAxisIndex: [0],
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true
+                    }
+                ],
+                grid: { left: 250, right: 50, top: 60, bottom: 80 },
+                xAxis: {
+                    type: 'time',
+                    axisLabel: {
+                        formatter: function(value) {
+                            return DateTime.fromMillis(value).toFormat('dd.MM\nHH:mm');
+                        },
+                        color: '#a0a0b0'
+                    },
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    splitLine: { show: true, lineStyle: { color: 'rgba(255,255,255,0.1)', type: 'dashed' } }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: categories,
+                    inverse: true, // First category at top
+                    axisLabel: {
+                        color: '#e0e0e0',
+                        fontSize: 11,
+                        lineHeight: 16,
+                        formatter: function(value) {
+                            // Apply rich text styling for installation headers
+                            if (value && value.startsWith('📍')) {
+                                return `{header|${value}}`;
+                            }
+                            return value;
+                        },
+                        rich: {
+                            header: {
+                                color: '#ffffff',
+                                fontWeight: 'bold',
+                                fontSize: 11,
+                                lineHeight: 16,
+                                backgroundColor: 'rgba(102, 126, 234, 0.3)',
+                                borderRadius: 4,
+                                padding: [6, 8, 6, 6]
+                            }
+                        }
+                    },
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: 'rgba(102, 126, 234, 0.15)',
+                            width: 1,
+                            type: 'solid'
+                        }
+                    }
+                },
+                series: [{
+                    type: 'custom',
+                    renderItem: renderGanttItemECharts,
+                    encode: { x: [1, 2], y: 0 },
+                    data: data
+                }]
+            };
+
+            timelineChart.setOption(option);
+
+            // Listen to dataZoom events to filter event list
+            timelineChart.off('datazoom');
+            timelineChart.on('datazoom', function(params) {
+                const option = timelineChart.getOption();
+                const dataZoom = option.dataZoom[0];
+
+                if (dataZoom && dataZoom.startValue !== undefined && dataZoom.endValue !== undefined) {
+                    // Set the time range filter
+                    globalFilters.timeRange = {
+                        start: dataZoom.startValue,
+                        end: dataZoom.endValue
+                    };
+
+                    // Update the reset button visibility
+                    const resetBtn = document.getElementById('resetZoomBtn');
+                    if (resetBtn) {
+                        resetBtn.style.display = 'inline-flex';
+                    }
+
+                    // Re-render events with the new time range filter
+                    const filteredEvents = applyFilters(allEvents);
+                    renderEvents(filteredEvents);
+                }
             });
 
-            const timeExtent = [minTime, maxTime];
+            // Handle window resize
+            window.removeEventListener('resize', handleTimelineResize);
+            window.addEventListener('resize', handleTimelineResize);
+        }
 
-            // Group events by device and status code to create state spans
+        function handleTimelineResize() {
+            if (timelineChart) {
+                timelineChart.resize();
+            }
+        }
+
+        /**
+         * Reset timeline zoom and show all events
+         */
+        function resetTimelineZoom() {
+            if (timelineChart) {
+                // Reset the dataZoom to show all data
+                timelineChart.dispatchAction({
+                    type: 'dataZoom',
+                    start: 0,
+                    end: 100
+                });
+            }
+
+            // Clear the time range filter
+            globalFilters.timeRange = null;
+
+            // Hide the reset button
+            const resetBtn = document.getElementById('resetZoomBtn');
+            if (resetBtn) {
+                resetBtn.style.display = 'none';
+            }
+
+            // Re-render events without time range filter
+            const filteredEvents = applyFilters(allEvents);
+            renderEvents(filteredEvents);
+        }
+
+        function formatDurationECharts(minutes) {
+            if (minutes < 1) {
+                return `${Math.round(minutes * 60)}s`;
+            } else if (minutes < 60) {
+                return `${Math.round(minutes)}min`;
+            } else if (minutes < 1440) {
+                let hours = Math.floor(minutes / 60);
+                let mins = Math.round(minutes % 60);
+                // Handle minute overflow (e.g., 59.5 rounds to 60)
+                if (mins === 60) {
+                    hours += 1;
+                    mins = 0;
+                }
+                return mins === 0 ? `${hours}h` : `${hours}h ${mins}min`;
+            } else {
+                const days = Math.floor(minutes / 1440);
+                const remainingMinutes = minutes % 1440;
+                let hours = Math.floor(remainingMinutes / 60);
+                let mins = Math.round(remainingMinutes % 60);
+                // Handle minute overflow
+                if (mins === 60) {
+                    hours += 1;
+                    mins = 0;
+                }
+                return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
+            }
+        }
+
+        function renderGanttItemECharts(params, api) {
+            const categoryIndex = api.value(0);
+            const start = api.coord([api.value(1), categoryIndex]);
+            const end = api.coord([api.value(2), categoryIndex]);
+            const height = api.size([0, 1])[1] * 0.6;
+
+            const rectShape = echarts.graphic.clipRectByRect(
+                {
+                    x: start[0],
+                    y: start[1] - height / 2,
+                    width: end[0] - start[0],
+                    height: height
+                },
+                {
+                    x: params.coordSys.x,
+                    y: params.coordSys.y,
+                    width: params.coordSys.width,
+                    height: params.coordSys.height
+                }
+            );
+
+            return rectShape && {
+                type: 'rect',
+                transition: ['shape'],
+                shape: rectShape,
+                style: api.style(),
+                z: (params.data && params.data.z) || 1
+            };
+        }
+
+        function processEventsForECharts(events, eventTypes) {
+            // Group events by device
             const lanes = {};
-            sortedEvents.forEach(event => {
+            events.forEach(event => {
                 const laneKey = `${event.installationId}_${event.modelId}_${event.deviceId}`;
                 if (!lanes[laneKey]) {
-                    const installation = event.installationId || 'Unknown';
                     lanes[laneKey] = {
                         name: `${event.modelId} (${event.deviceId})`,
-                        installationId: installation,
+                        installationId: event.installationId || 'Unknown',
                         events: [],
-                        hasValveSpans: false // Track if this lane has valve position events
+                        hasValveSpans: false
                     };
                 }
                 lanes[laneKey].events.push(event);
             });
 
-            // Process each lane to create state spans with valve position awareness
+            // Helper functions
+            const isValveCode = (c) => {
+                return c && ((c >= 'S.112' && c <= 'S.118') || (c >= 'S.134' && c <= 'S.136'));
+            };
+
+            const valvePositionMap = {
+                'S.112': 'init', 'S.113': 'switching-ww', 'S.114': 'switching-hk1',
+                'S.115': 'warmwater', 'S.116': 'heating-hk1', 'S.117': 'heating-hk2',
+                'S.118': 'buffer', 'S.134': 'idle', 'S.135': 'defrost', 'S.136': 'room'
+            };
+
+            // Process each lane to create state spans
             Object.values(lanes).forEach(lane => {
                 lane.spans = [];
-                lane.valveSpans = []; // Separate spans for valve positions
-                const activeStates = {}; // Track active states by error code
-                const activeValveStates = {}; // Track active valve position states separately
-                let currentValvePosition = null; // Track 4/3-way valve position
+                lane.valveSpans = [];
+                const activeStates = {};
+                const activeValveStates = {};
+                let currentValvePosition = null;
 
-                lane.events.forEach(event => {
+                // Sort events by time
+                const sortedEvents = lane.events.sort((a, b) => {
+                    const aTime = new Date(a.eventTimestamp || a.createdAt);
+                    const bTime = new Date(b.eventTimestamp || b.createdAt);
+                    return aTime - bTime;
+                });
+
+                sortedEvents.forEach(event => {
                     const code = event.errorCode;
                     if (!code) return;
+                    const eventTime = event.eventTimestamp || event.createdAt;
 
-                    // Define valve position codes
-                    const isValveCode = (c) => {
-                        return c && (
-                            (c >= 'S.112' && c <= 'S.118') ||
-                            (c >= 'S.134' && c <= 'S.136')
-                        );
-                    };
-
-                    // Handle valve position changes (all valve-related codes)
-                    const valvePositionMap = {
-                        'S.112': 'init',        // Initialisierung
-                        'S.113': 'switching-ww', // Schaltet -> Trinkwasser
-                        'S.114': 'switching-hk1', // Schaltet -> Heiz-/Kühlkreis 1
-                        'S.115': 'warmwater',   // Position Trinkwasser
-                        'S.116': 'heating-hk1', // Position Heiz-/Kühlkreis 1
-                        'S.117': 'heating-hk2', // Position Heiz-/Kühlkreis 2
-                        'S.118': 'buffer',      // Position Pufferspeicher
-                        'S.134': 'idle',        // Leerlauf
-                        'S.135': 'defrost',     // Abtauen
-                        'S.136': 'room'         // Raumbeheizung/Raumkühlung
-                    };
-
-                    // Separate handling for valve position codes
+                    // Handle valve position codes separately
                     if (isValveCode(code)) {
                         lane.hasValveSpans = true;
-
                         if (event.active === true) {
-                            // Start of a new valve state
-                            activeValveStates[code] = {
-                                startTime: event.eventTimestamp || event.createdAt,
-                                startEvent: event
-                            };
-                        } else if (event.active === false) {
-                            // End of a valve state
-                            if (activeValveStates[code]) {
-                                lane.valveSpans.push({
-                                    code: code,
-                                    startTime: activeValveStates[code].startTime,
-                                    endTime: event.eventTimestamp || event.createdAt,
-                                    startEvent: activeValveStates[code].startEvent,
-                                    endEvent: event
-                                });
-                                delete activeValveStates[code];
-                            }
-                        } else if (event.active === null || event.active === undefined) {
-                            // Fallback: Treat events without active field as instant events
-                            const eventTime = event.eventTimestamp || event.createdAt;
-                            const endTime = new Date(new Date(eventTime).getTime() + 5 * 60 * 1000).toISOString();
+                            activeValveStates[code] = { startTime: eventTime, startEvent: event };
+                        } else if (event.active === false && activeValveStates[code]) {
                             lane.valveSpans.push({
                                 code: code,
-                                startTime: eventTime,
-                                endTime: endTime,
-                                startEvent: event,
-                                endEvent: null,
-                                fallback: true
+                                startTime: activeValveStates[code].startTime,
+                                endTime: eventTime,
+                                startEvent: activeValveStates[code].startEvent,
+                                endEvent: event
                             });
+                            delete activeValveStates[code];
                         }
                     }
 
-                    // Only continue with non-valve code processing below
+                    // Handle valve position transitions for S.125-WARMWATER overlay
                     if (valvePositionMap[code]) {
                         if (event.active === true) {
                             const newValvePosition = valvePositionMap[code];
-                            const eventTime = event.eventTimestamp || event.createdAt;
-
-                            // Migration: If S.125 is already running when valve switches to warmwater
                             if (code === 'S.115' && activeStates['S.125']) {
-                                // DON'T end the S.125 span - it continues in the background
-                                // Instead, start a S.125-WARMWATER span as an overlay
-                                // The original S.125 continues and will be ended when S.125 BEENDET event arrives
                                 activeStates['S.125-WARMWATER'] = {
                                     startTime: eventTime,
                                     startEvent: event,
                                     originalCode: 'S.125',
                                     valvePosition: 'warmwater',
-                                    parentS125: activeStates['S.125']  // Reference to parent heating state
+                                    parentS125: activeStates['S.125']
                                 };
                             }
-
-                            // Migration: If S.125-WARMWATER is active when valve switches away from warmwater
-                            // This applies to heating circuits (S.116, S.117), puffer (S.118), defrost (S.135), room (S.136), idle (S.134)
                             if (activeStates['S.125-WARMWATER'] && (code === 'S.116' || code === 'S.117' || code === 'S.118' || code === 'S.134' || code === 'S.135' || code === 'S.136')) {
-                                // End the S.125-WARMWATER span (the overlay)
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
@@ -1409,21 +1652,11 @@ ${formatEventBody(event.body)}
                                     endEvent: event,
                                     valvePosition: 'warmwater'
                                 });
-
-                                // Parent S.125 continues - don't create a new span, just track valve position
-                                // The background S.125 continues until its actual BEENDET event
-                                currentValvePosition = newValvePosition;
-
                                 delete activeStates['S.125-WARMWATER'];
                             }
-
                             currentValvePosition = newValvePosition;
                         } else if (event.active === false) {
-                            const eventTime = event.eventTimestamp || event.createdAt;
-
-                            // When warmwater valve ends, end the S.125-WARMWATER overlay span
                             if (code === 'S.115' && activeStates['S.125-WARMWATER']) {
-                                // End the S.125-WARMWATER overlay span
                                 lane.spans.push({
                                     code: 'S.125-WARMWATER',
                                     originalCode: 'S.125',
@@ -1433,71 +1666,43 @@ ${formatEventBody(event.body)}
                                     endEvent: event,
                                     valvePosition: 'warmwater'
                                 });
-
                                 delete activeStates['S.125-WARMWATER'];
-                                // Parent S.125 continues - don't do anything
-                                currentValvePosition = null;
-                            }
-
-                            // When heating circuit valve ends, just track the position change
-                            if ((code === 'S.116' || code === 'S.117' || code === 'S.118' || code === 'S.134' || code === 'S.135' || code === 'S.136')) {
-                                // S.125 continues in the background, just update valve position
                                 currentValvePosition = null;
                             }
                         }
                     }
 
-                    // Keep original code - don't auto-rename to S.125-WARMWATER
-                    // S.125-WARMWATER spans are created explicitly as overlays when S.115 starts during S.125
-                    // Using auto-rename causes the entire heating span to be misnamed when S.115 was already active
-                    let effectiveCode = code;
-
-                    if (event.active === true) {
-                        // Start of a new state
-                        activeStates[effectiveCode] = {
-                            startTime: event.eventTimestamp || event.createdAt,
-                            startEvent: event,
-                            originalCode: code,
-                            valvePosition: currentValvePosition
-                        };
-                    } else if (event.active === false) {
-                        // End of a state
-                        if (activeStates[effectiveCode]) {
-                            lane.spans.push({
-                                code: effectiveCode,
+                    // Process main state events (non-valve codes)
+                    if (!isValveCode(code)) {
+                        if (event.active === true) {
+                            activeStates[code] = {
+                                startTime: eventTime,
+                                startEvent: event,
                                 originalCode: code,
-                                startTime: activeStates[effectiveCode].startTime,
-                                endTime: event.eventTimestamp || event.createdAt,
-                                startEvent: activeStates[effectiveCode].startEvent,
+                                valvePosition: currentValvePosition
+                            };
+                        } else if (event.active === false && activeStates[code]) {
+                            lane.spans.push({
+                                code: code,
+                                originalCode: code,
+                                startTime: activeStates[code].startTime,
+                                endTime: eventTime,
+                                startEvent: activeStates[code].startEvent,
                                 endEvent: event,
-                                valvePosition: activeStates[effectiveCode].valvePosition
+                                valvePosition: activeStates[code].valvePosition
                             });
-                            delete activeStates[effectiveCode];
+                            delete activeStates[code];
                         }
-                    } else if (event.active === null || event.active === undefined) {
-                        // Fallback: Treat events without active field as instant events with minimum duration
-                        const eventTime = event.eventTimestamp || event.createdAt;
-                        const endTime = new Date(new Date(eventTime).getTime() + 5 * 60 * 1000).toISOString(); // 5 min default duration
-                        lane.spans.push({
-                            code: effectiveCode,
-                            originalCode: code,
-                            startTime: eventTime,
-                            endTime: endTime,
-                            startEvent: event,
-                            endEvent: null,
-                            fallback: true,
-                            valvePosition: currentValvePosition
-                        });
                     }
                 });
 
-                // Add ongoing states (still active)
-                Object.entries(activeStates).forEach(([effectiveCode, state]) => {
+                // Add ongoing states
+                Object.entries(activeStates).forEach(([code, state]) => {
                     lane.spans.push({
-                        code: effectiveCode,
+                        code: code,
                         originalCode: state.originalCode,
                         startTime: state.startTime,
-                        endTime: new Date().toISOString(), // Current time
+                        endTime: new Date().toISOString(),
                         startEvent: state.startEvent,
                         endEvent: null,
                         ongoing: true,
@@ -1505,799 +1710,138 @@ ${formatEventBody(event.body)}
                     });
                 });
 
-                // Add ongoing valve states (still active)
                 Object.entries(activeValveStates).forEach(([code, state]) => {
                     lane.valveSpans.push({
                         code: code,
                         startTime: state.startTime,
-                        endTime: new Date().toISOString(), // Current time
+                        endTime: new Date().toISOString(),
                         startEvent: state.startEvent,
                         endEvent: null,
                         ongoing: true
                     });
                 });
-
-                // Sort spans by start time, then by end time to ensure correct ordering
-                lane.spans.sort((a, b) => {
-                    const aStart = new Date(a.startTime).getTime();
-                    const bStart = new Date(b.startTime).getTime();
-                    if (aStart !== bStart) return aStart - bStart;
-                    return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
-                });
-
-                // Post-process spans to fix gaps caused by state transitions at same timestamp
-                // When one span ends at time T and another starts at time T, adjust the end time
-                // of the first span to match the start time of the next to avoid gaps
-                for (let i = 0; i < lane.spans.length - 1; i++) {
-                    const currentSpan = lane.spans[i];
-                    const nextSpan = lane.spans[i + 1];
-
-                    // Check if next span starts exactly when current span ends
-                    const currentEnd = new Date(currentSpan.endTime).getTime();
-                    const nextStart = new Date(nextSpan.startTime).getTime();
-
-                    // If there's a tiny gap (less than 1 second), extend current span to match next start
-                    if (nextStart > currentEnd && nextStart - currentEnd < 1000) {
-                        currentSpan.endTime = nextSpan.startTime;
-                    }
-                }
-
-                // Same for valve spans
-                for (let i = 0; i < lane.valveSpans.length - 1; i++) {
-                    const currentSpan = lane.valveSpans[i];
-                    const nextSpan = lane.valveSpans[i + 1];
-
-                    const currentEnd = new Date(currentSpan.endTime).getTime();
-                    const nextStart = new Date(nextSpan.startTime).getTime();
-
-                    if (nextStart > currentEnd && nextStart - currentEnd < 1000) {
-                        currentSpan.endTime = nextSpan.startTime;
-                    }
-                }
             });
 
-            const laneArray = Object.values(lanes);
-
-            // Calculate timeline dimensions based on number of lanes and screen size
-            const isMobile = window.innerWidth <= 768;
-            const containerWidth = container.offsetWidth || window.innerWidth;
-
-            // IMPORTANT: Width must be sufficient to show all events with good spacing
-            // Base width on time extent (hourly resolution) rather than just event count
-            const timeRangeHours = (timeExtent[1] - timeExtent[0]) / (1000 * 60 * 60);
-            const pixelsPerHour = isMobile ? 40 : 60; // 40px per hour on mobile, 60px on desktop
-            const timeBasedWidth = Math.ceil(timeRangeHours * pixelsPerHour) + (isMobile ? 40 : 80);
-
-            const minWidth = isMobile ? containerWidth - 40 : 1400;
-            const eventBasedWidth = Math.max(minWidth, sortedEvents.length * (isMobile ? 3 : 6));
-
-            // Use whichever is larger: time-based or event-based
-            const width = Math.max(timeBasedWidth, eventBasedWidth);
-
-            // Define margins first
-            const margin = { top: 30, right: isMobile ? 20 : 40, bottom: 70, left: isMobile ? 120 : 280 };
-
-            // Calculate total lane units (main lanes + valve sub-lanes)
-            const totalLaneUnits = laneArray.reduce((sum, lane) => {
-                return sum + 1 + (lane.hasValveSpans ? 0.35 : 0); // 1 main lane + 0.35 smaller valve lane if needed
-            }, 0);
-
-            // Design: Card-based layout with adequate space per device
-            // Each device gets a card with valve position + event timeline
-            let minMainLaneHeight;
-            if (isMobile) {
-                minMainLaneHeight = 60;
-            } else {
-                // Generous height per device for good readability
-                minMainLaneHeight = 120; // Each device gets 120px for great readability
-            }
-
-            // Add padding for device card margins and headers
-            const deviceCardMargin = 20; // Space between device cards
-            const deviceCardPadding = 15; // Padding inside each card
-            const deviceCardHeaderHeight = 35; // Height for device name header
-
-            // Calculate total height
-            const minHeight = margin.top + margin.bottom +
-                             (laneArray.length * (minMainLaneHeight + deviceCardMargin + deviceCardHeaderHeight)) +
-                             (laneArray.length * deviceCardPadding * 2) + 40;
-            const height = minHeight;
-
-            // Calculate average lane height based on total lanes
-            const totalLaneSpace = height - margin.top - margin.bottom;
-            const averageLaneHeight = totalLaneSpace / Math.max(totalLaneUnits, 1);
-
-            // Create scale
-            const xScale = (date) => {
-                const t = (new Date(date) - timeExtent[0]) / (timeExtent[1] - timeExtent[0]);
-                return margin.left + t * (width - margin.left - margin.right);
-            };
-
-            // Create SVG (height will be adjusted after rendering all lanes)
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', width);
-            svg.style.display = 'block';
-            container.appendChild(svg);
-
-            // Draw grid and time axis with intelligent intervals (will be drawn after lanes)
-            const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-
-            // Calculate appropriate interval based on time range (timeRangeHours already calculated above)
-            let hourInterval;
-            if (timeRangeHours <= 24) {
-                hourInterval = 1; // Every hour for <= 24h
-            } else if (timeRangeHours <= 48) {
-                hourInterval = 2; // Every 2 hours for <= 48h
-            } else if (timeRangeHours <= 96) {
-                hourInterval = 3; // Every 3 hours for <= 4 days
-            } else if (timeRangeHours <= 168) {
-                hourInterval = 6; // Every 6 hours for <= 7 days
-            } else if (timeRangeHours <= 336) {
-                hourInterval = 12; // Every 12 hours for <= 14 days
-            } else {
-                hourInterval = 24; // Every day for > 14 days
-            }
-
-            // Round start time to previous full hour
-            const axisStartTime = new Date(timeExtent[0]);
-            axisStartTime.setMinutes(0, 0, 0);
-
-            // Generate rounded hour marks
-            const timeMarks = [];
-            let axisCurrentTime = new Date(axisStartTime);
-            while (axisCurrentTime <= timeExtent[1]) {
-                if (axisCurrentTime >= timeExtent[0]) {
-                    timeMarks.push(new Date(axisCurrentTime));
+            // Group lanes by installation
+            const lanesByInstallation = {};
+            Object.entries(lanes).forEach(([laneKey, lane]) => {
+                const instId = lane.installationId;
+                if (!lanesByInstallation[instId]) {
+                    lanesByInstallation[instId] = [];
                 }
-                axisCurrentTime.setHours(axisCurrentTime.getHours() + hourInterval);
-            }
+                lanesByInstallation[instId].push({ laneKey, lane });
+            });
 
-            // Store axis drawing function for later (after lanes are rendered)
-            const drawAxisFn = (finalHeight) => {
-                // Draw grid lines and labels for each time mark
-                timeMarks.forEach((markTime, index) => {
-                    const x = xScale(markTime);
-                    const isFirst = index === 0;
-                    const isLast = index === timeMarks.length - 1;
+            // Helper function to wrap text at specified length
+            const wrapText = (text, maxLength = 25) => {
+                if (text.length <= maxLength) return text;
+                const words = text.split(' ');
+                const lines = [];
+                let currentLine = '';
 
-                    // Grid line
-                    const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                    gridLine.setAttribute('x1', x);
-                    gridLine.setAttribute('y1', margin.top);
-                    gridLine.setAttribute('x2', x);
-                    gridLine.setAttribute('y2', finalHeight - margin.bottom);
-                    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.05)');
-                    gridLine.setAttribute('stroke-width', '1');
-                    if (isFirst || isLast) {
-                        gridLine.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                        gridLine.setAttribute('stroke-width', '2');
-                    }
-                    axisGroup.appendChild(gridLine);
-
-                    // Tick
-                    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                    tick.setAttribute('x1', x);
-                    tick.setAttribute('y1', finalHeight - margin.bottom);
-                    tick.setAttribute('x2', x);
-                    tick.setAttribute('y2', finalHeight - margin.bottom + 6);
-                    tick.setAttribute('stroke', 'rgba(255,255,255,0.3)');
-                    tick.setAttribute('stroke-width', '2');
-                    axisGroup.appendChild(tick);
-
-                    // Time label - show date and time for intervals >= 12h, otherwise just time
-                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    label.setAttribute('x', x);
-                    label.setAttribute('y', finalHeight - margin.bottom + 22);
-                label.setAttribute('text-anchor', 'middle');
-                label.setAttribute('font-size', isMobile ? '9' : '11');
-                label.setAttribute('font-weight', '500');
-                label.setAttribute('fill', '#a0a0b0');
-
-                let labelText;
-                if (hourInterval >= 12) {
-                    // Show date and time for long intervals
-                    labelText = markTime.toLocaleString('de-DE', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                } else {
-                    // Show only time for short intervals
-                    labelText = markTime.toLocaleString('de-DE', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                }
-                label.textContent = labelText;
-                axisGroup.appendChild(label);
-
-                // Date label (only for intervals < 12h and on midnight or every 4th mark)
-                if (hourInterval < 12 && (markTime.getHours() === 0 || index % 4 === 0)) {
-                    const dateLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    dateLabel.setAttribute('x', x);
-                    dateLabel.setAttribute('y', finalHeight - margin.bottom + 38);
-                    dateLabel.setAttribute('text-anchor', 'middle');
-                    dateLabel.setAttribute('font-size', '10');
-                    dateLabel.setAttribute('fill', '#707080');
-                    dateLabel.textContent = markTime.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' });
-                    axisGroup.appendChild(dateLabel);
-                    }
-                });
-            };
-
-            // Draw lanes and state spans (before axis so axis is on top)
-            let currentYOffset = margin.top;
-
-            laneArray.forEach((lane, laneIdx) => {
-                // Card-based layout: fixed heights per device card
-                const cardEventHeight = minMainLaneHeight; // Event timeline height
-                const cardValveHeight = lane.hasValveSpans ? minMainLaneHeight * 0.25 : 0; // Valve lane (25% of event height)
-                const valveSpacing = lane.hasValveSpans ? 8 : 0; // Nice spacing between valve and event
-                const cardPadding = deviceCardPadding;
-
-                // Calculate main and valve lane heights for this device
-                const mainLaneHeight = cardEventHeight;
-                const valveLaneHeight = cardValveHeight;
-                const cardTotalHeight = deviceCardHeaderHeight + cardPadding + valveLaneHeight + valveSpacing + cardEventHeight + cardPadding;
-
-                // Card header start
-                const cardHeaderY = currentYOffset;
-                const cardContentStartY = cardHeaderY + deviceCardHeaderHeight;
-
-                // Valve lane comes FIRST (above events), with padding
-                const yValve = cardContentStartY + cardPadding;
-                const y = yValve + valveLaneHeight + valveSpacing; // Events below valve lane
-
-                // Combined height for main + valve lanes
-                const totalMainHeight = valveLaneHeight + valveSpacing + mainLaneHeight;
-
-                // ===== DEVICE CARD BACKGROUND =====
-                const cardBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                cardBg.setAttribute('x', 5);
-                cardBg.setAttribute('y', cardHeaderY);
-                cardBg.setAttribute('width', width - 10);
-                cardBg.setAttribute('height', cardTotalHeight);
-                cardBg.setAttribute('fill', 'rgba(255,255,255,0.04)');
-                cardBg.setAttribute('stroke', 'rgba(255,255,255,0.12)');
-                cardBg.setAttribute('stroke-width', '1');
-                cardBg.setAttribute('rx', '8');
-                svg.appendChild(cardBg);
-
-                // ===== DEVICE CARD HEADER =====
-                const headerBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                headerBg.setAttribute('x', 5);
-                headerBg.setAttribute('y', cardHeaderY);
-                headerBg.setAttribute('width', width - 10);
-                headerBg.setAttribute('height', deviceCardHeaderHeight);
-                headerBg.setAttribute('fill', 'rgba(139, 92, 246, 0.15)');
-                headerBg.setAttribute('stroke', 'none');
-                headerBg.setAttribute('rx', '8');
-                svg.appendChild(headerBg);
-
-                // Device name in header
-                const headerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                headerText.setAttribute('x', margin.left);
-                headerText.setAttribute('y', cardHeaderY + deviceCardHeaderHeight / 2);
-                headerText.setAttribute('dominant-baseline', 'middle');
-                headerText.setAttribute('font-size', isMobile ? '12' : '14');
-                headerText.setAttribute('fill', '#c7d2ff');
-                headerText.setAttribute('font-weight', '700');
-                const installation = installations[lane.installationId];
-                headerText.textContent = `${lane.name}${installation && installation.location ? ` • ${installation.location}` : ''}`;
-                svg.appendChild(headerText);
-
-                // Lane background for event area
-                const laneBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                laneBg.setAttribute('x', margin.left);
-                laneBg.setAttribute('y', y - 2);
-                laneBg.setAttribute('width', width - margin.left - margin.right);
-                laneBg.setAttribute('height', mainLaneHeight + 4);
-                laneBg.setAttribute('fill', 'rgba(255,255,255,0.02)');
-                laneBg.setAttribute('rx', '4');
-                svg.appendChild(laneBg);
-
-                // If has valve spans, create separate labels for valve and event lanes
-                if (lane.hasValveSpans) {
-                    // Valve lane label background
-                    const valveLabelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    valveLabelBg.setAttribute('x', 10);
-                    valveLabelBg.setAttribute('y', yValve + valveLaneHeight / 2 - 12);
-                    valveLabelBg.setAttribute('width', margin.left - 20);
-                    valveLabelBg.setAttribute('height', 24);
-                    valveLabelBg.setAttribute('fill', 'rgba(255,255,255,0.03)');
-                    valveLabelBg.setAttribute('stroke', 'rgba(255,255,255,0.08)');
-                    valveLabelBg.setAttribute('stroke-width', '0.5');
-                    valveLabelBg.setAttribute('rx', '4');
-                    svg.appendChild(valveLabelBg);
-
-                    // Valve lane label
-                    const valveLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    valveLabel.setAttribute('x', margin.left - 15);
-                    valveLabel.setAttribute('y', yValve + valveLaneHeight / 2);
-                    valveLabel.setAttribute('text-anchor', 'end');
-                    valveLabel.setAttribute('dominant-baseline', 'middle');
-                    valveLabel.setAttribute('font-size', isMobile ? '8' : '9');
-                    valveLabel.setAttribute('fill', '#888898');
-                    valveLabel.setAttribute('font-weight', '400');
-                    valveLabel.textContent = '🔀 V-Pos';
-                    svg.appendChild(valveLabel);
-
-                    // Event lane label background
-                    const eventLabelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    eventLabelBg.setAttribute('x', 10);
-                    eventLabelBg.setAttribute('y', y + mainLaneHeight / 2 - 30);
-                    eventLabelBg.setAttribute('width', margin.left - 20);
-                    eventLabelBg.setAttribute('height', 60);
-                    eventLabelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
-                    eventLabelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                    eventLabelBg.setAttribute('stroke-width', '1');
-                    eventLabelBg.setAttribute('rx', '6');
-                    svg.appendChild(eventLabelBg);
-
-                    // Event lane label (device name + location)
-                    const eventLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    eventLabel.setAttribute('x', margin.left - 15);
-                    eventLabel.setAttribute('y', y + mainLaneHeight / 2);
-                    eventLabel.setAttribute('text-anchor', 'end');
-                    eventLabel.setAttribute('fill', '#e0e0e0');
-
-                    // Line 1: Device name
-                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                    line1.setAttribute('x', margin.left - 15);
-                    line1.setAttribute('dy', '-0.6em');
-                    line1.setAttribute('font-size', isMobile ? '9' : '11');
-                    line1.setAttribute('font-weight', '600');
-                    line1.textContent = lane.name;
-                    eventLabel.appendChild(line1);
-
-                    // Line 2: Installation location (skip on mobile to save space)
-                    if (!isMobile && installation && installation.location) {
-                        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                        line2.setAttribute('x', margin.left - 15);
-                        line2.setAttribute('dy', '1.2em');
-                        line2.setAttribute('font-size', '10');
-                        line2.setAttribute('fill', '#a0a0b0');
-                        line2.setAttribute('font-weight', '400');
-                        line2.textContent = `📍 ${installation.location}`;
-                        eventLabel.appendChild(line2);
-                    }
-
-                    svg.appendChild(eventLabel);
-                } else {
-                    // No valve spans - single label for event lane
-                    const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    labelBg.setAttribute('x', 10);
-                    labelBg.setAttribute('y', y + mainLaneHeight / 2 - 20);
-                    labelBg.setAttribute('width', margin.left - 20);
-                    labelBg.setAttribute('height', 40);
-                    labelBg.setAttribute('fill', 'rgba(255,255,255,0.05)');
-                    labelBg.setAttribute('stroke', 'rgba(255,255,255,0.1)');
-                    labelBg.setAttribute('stroke-width', '1');
-                    labelBg.setAttribute('rx', '6');
-                    svg.appendChild(labelBg);
-
-                    const laneLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    laneLabel.setAttribute('x', margin.left - 15);
-                    laneLabel.setAttribute('y', y + mainLaneHeight / 2);
-                    laneLabel.setAttribute('text-anchor', 'end');
-                    laneLabel.setAttribute('fill', '#e0e0e0');
-
-                    // Line 1: Device name
-                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                    line1.setAttribute('x', margin.left - 15);
-                    line1.setAttribute('dy', '-0.6em');
-                    line1.setAttribute('font-size', isMobile ? '9' : '11');
-                    line1.setAttribute('font-weight', '600');
-                    line1.textContent = lane.name;
-                    laneLabel.appendChild(line1);
-
-                    // Line 2: Installation location (skip on mobile to save space)
-                    if (!isMobile && installation && installation.location) {
-                        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                        line2.setAttribute('x', margin.left - 15);
-                        line2.setAttribute('dy', '1.2em');
-                        line2.setAttribute('font-size', '10');
-                        line2.setAttribute('fill', '#a0a0b0');
-                        line2.setAttribute('font-weight', '400');
-                        line2.textContent = `📍 ${installation.location}`;
-                        laneLabel.appendChild(line2);
-                    }
-
-                    svg.appendChild(laneLabel);
-                }
-
-                // Draw state spans (duration bars)
-                lane.spans.forEach((span, spanIdx) => {
-                    // Apply timeline filter: only render spans that should be displayed
-                    if (globalFilters.timelineTypes[span.code] === false) {
-                        return; // Skip this span
-                    }
-
-                    // Skip valve position codes - they go in separate valve lane
-                    const isValveCode = (c) => {
-                        return c && (
-                            (c >= 'S.112' && c <= 'S.118') ||
-                            (c >= 'S.134' && c <= 'S.136')
-                        );
-                    };
-                    if (isValveCode(span.code)) {
-                        return; // Skip valve codes - they are rendered in valve lane
-                    }
-
-                    // Check if this span type has a visual representation
-                    const eventInfo = eventTypes[span.code];
-                    if (!eventInfo) {
-                        return; // Skip spans without visual definition (e.g., raw valve position events)
-                    }
-
-                    const x1 = xScale(span.startTime);
-                    const x2 = xScale(span.endTime);
-                    const actualWidth = x2 - x1;
-
-                    // IMPORTANT FIX: Don't clamp width to 2px - let actualWidth be used
-                    // This ensures that large spans with significant width are rendered at full size
-                    const spanWidth = Math.max(actualWidth, 1); // Absolute minimum 1px, but use actual width if larger
-
-                    const durationMinutes = (new Date(span.endTime) - new Date(span.startTime)) / (1000 * 60);
-
-                    const color = eventInfo?.color || '#6b7280';
-                    const gradient = eventInfo?.gradient || color;
-
-                    // Calculate bar dimensions
-                    // S.125-WARMWATER (warmwater overlay) should be smaller to show heating bar underneath
-                    let barHeight, barY;
-                    if (span.code === 'S.125-WARMWATER') {
-                        // Warmwater overlay: 75% of lane height, leaving visible space for heating bar above/below
-                        barHeight = Math.max(mainLaneHeight * 0.75, 12);
-                        barY = y + (mainLaneHeight - barHeight) / 2;
+                words.forEach(word => {
+                    if ((currentLine + ' ' + word).length <= maxLength) {
+                        currentLine += (currentLine ? ' ' : '') + word;
                     } else {
-                        // Regular spans: full height minus padding for nice presentation
-                        barHeight = Math.max(mainLaneHeight - 20, 20); // Minimum 20px bar height
-                        barY = y + (mainLaneHeight - barHeight) / 2; // Center bar vertically in lane
-                    }
-
-                    // Shadow/glow effect
-                    const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    shadow.setAttribute('x', x1 - 1);
-                    shadow.setAttribute('y', barY - 2);
-                    shadow.setAttribute('width', spanWidth + 2);
-                    shadow.setAttribute('height', barHeight + 4);
-                    shadow.setAttribute('fill', color);
-                    shadow.setAttribute('opacity', '0.2');
-                    shadow.setAttribute('rx', '6');
-                    shadow.setAttribute('filter', 'blur(4px)');
-                    svg.appendChild(shadow);
-
-                    // Create gradient definition
-                    const defs = svg.querySelector('defs') || document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                    if (!svg.querySelector('defs')) svg.appendChild(defs);
-
-                    const gradientId = `gradient-${laneIdx}-${spanIdx}`;
-                    const gradDef = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-                    gradDef.setAttribute('id', gradientId);
-                    gradDef.setAttribute('x1', '0%');
-                    gradDef.setAttribute('y1', '0%');
-                    gradDef.setAttribute('x2', '0%');
-                    gradDef.setAttribute('y2', '100%');
-
-                    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                    stop1.setAttribute('offset', '0%');
-                    stop1.setAttribute('stop-color', color);
-                    stop1.setAttribute('stop-opacity', '0.95');
-
-                    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                    stop2.setAttribute('offset', '100%');
-                    stop2.setAttribute('stop-color', color);
-                    stop2.setAttribute('stop-opacity', '0.75');
-
-                    gradDef.appendChild(stop1);
-                    gradDef.appendChild(stop2);
-                    defs.appendChild(gradDef);
-
-                    // Main state span bar
-                    try {
-                        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                        bar.setAttribute('x', x1);
-                        bar.setAttribute('y', barY);
-                        bar.setAttribute('width', spanWidth);
-                        bar.setAttribute('height', barHeight);
-                        bar.setAttribute('fill', `url(#${gradientId})`);
-                        bar.setAttribute('rx', '6');
-                        if (span.fallback) {
-                            bar.setAttribute('stroke', 'rgba(255,255,255,0.4)');
-                            bar.setAttribute('stroke-width', '1');
-                            bar.setAttribute('stroke-dasharray', '4,2');
-                            bar.setAttribute('opacity', '0.7');
-                        }
-                        bar.style.cursor = 'pointer';
-                        bar.style.transition = 'all 0.2s';
-
-                        // Hover effect
-                        bar.addEventListener('mouseenter', function() {
-                            this.setAttribute('opacity', '1');
-                            this.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-                            this.setAttribute('stroke-width', '2');
-                        });
-                        bar.addEventListener('mouseleave', function() {
-                            this.removeAttribute('opacity');
-                            this.removeAttribute('stroke');
-                            this.removeAttribute('stroke-width');
-                        });
-
-                        // Calculate duration
-                        const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
-                        const durationText = duration < 60
-                            ? `${Math.round(duration)}min`
-                            : `${(duration / 60).toFixed(1)}h`;
-
-                        // Tooltip with additional context for warmwater heating
-                        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-                        const startTime = new Date(span.startTime).toLocaleString('de-DE');
-                        const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
-                        let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
-                        if (span.code === 'S.125-WARMWATER') {
-                            tooltipText += '\n(Wärmepumpe heizt bei Ventilstellung Warmwasser)';
-                        }
-                        if (span.fallback) {
-                            tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
-                        }
-                        tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
-                        title.textContent = tooltipText;
-                        bar.appendChild(title);
-
-                        svg.appendChild(bar);
-
-                        // Add icon and duration label if span is wide enough
-                        const labelY = barY + barHeight / 2;
-                        const minWidthForLabel = isMobile ? 40 : 60;
-                        const minWidthForMini = isMobile ? 20 : 30;
-
-                        if (spanWidth > minWidthForLabel) {
-                            const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                            iconLabel.setAttribute('x', x1 + (isMobile ? 4 : 8));
-                            iconLabel.setAttribute('y', labelY - (isMobile ? 4 : 6));
-                            iconLabel.setAttribute('font-size', isMobile ? '10' : '14');
-                            iconLabel.textContent = eventInfo?.icon || '';
-                            svg.appendChild(iconLabel);
-
-                            const durationLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                            durationLabel.setAttribute('x', x1 + spanWidth / 2);
-                            durationLabel.setAttribute('y', labelY);
-                            durationLabel.setAttribute('text-anchor', 'middle');
-                            durationLabel.setAttribute('dominant-baseline', 'middle');
-                            durationLabel.setAttribute('font-size', isMobile ? '9' : '11');
-                            durationLabel.setAttribute('fill', 'white');
-                            durationLabel.setAttribute('font-weight', '700');
-                            durationLabel.setAttribute('style', 'text-shadow: 0 1px 3px rgba(0,0,0,0.5);');
-                            durationLabel.textContent = durationText;
-                            svg.appendChild(durationLabel);
-                        } else if (spanWidth > minWidthForMini) {
-                            const miniLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                            miniLabel.setAttribute('x', x1 + spanWidth / 2);
-                            miniLabel.setAttribute('y', labelY);
-                            miniLabel.setAttribute('text-anchor', 'middle');
-                            miniLabel.setAttribute('dominant-baseline', 'middle');
-                            miniLabel.setAttribute('font-size', isMobile ? '7' : '9');
-                            miniLabel.setAttribute('fill', 'white');
-                            miniLabel.setAttribute('font-weight', '700');
-                            miniLabel.textContent = durationText;
-                            svg.appendChild(miniLabel);
-                        }
-
-                        // Shine effect on top
-                        const shine = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                        shine.setAttribute('x', x1);
-                        shine.setAttribute('y', barY);
-                        shine.setAttribute('width', spanWidth);
-                        shine.setAttribute('height', barHeight / 3);
-                        shine.setAttribute('fill', 'rgba(255,255,255,0.15)');
-                        shine.setAttribute('rx', '6');
-                        svg.appendChild(shine);
-                    } catch (error) {
-                        console.error(`Error rendering timeline bar for ${span.code}:`, error);
+                        if (currentLine) lines.push(currentLine);
+                        currentLine = word;
                     }
                 });
+                if (currentLine) lines.push(currentLine);
+                return lines.join('\n');
+            };
 
-                // Draw event markers (circles at start/end) with glow
-                lane.events.forEach(event => {
-                    const eventTime = event.eventTimestamp || event.createdAt;
-                    const x = xScale(eventTime);
-                    const color = eventTypes[event.errorCode]?.color || '#6b7280';
+            // Convert to ECharts format with installation grouping
+            const timelineData = [];
+            const categories = [];
+            let categoryIndex = 0;
 
-                    // Outer glow
-                    const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    glow.setAttribute('cx', x);
-                    glow.setAttribute('cy', y + mainLaneHeight / 2);
-                    glow.setAttribute('r', 5);
-                    glow.setAttribute('fill', color);
-                    glow.setAttribute('opacity', '0.3');
-                    svg.appendChild(glow);
-
-                    // Main circle
-                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    circle.setAttribute('cx', x);
-                    circle.setAttribute('cy', y + mainLaneHeight / 2);
-                    circle.setAttribute('r', 4);
-                    circle.setAttribute('fill', event.active ? color : 'rgba(30, 30, 46, 0.9)');
-                    circle.setAttribute('stroke', color);
-                    circle.setAttribute('stroke-width', event.active ? '2' : '2');
-                    svg.appendChild(circle);
-
-                    // Inner highlight
-                    if (event.active) {
-                        const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        highlight.setAttribute('cx', x - 1);
-                        highlight.setAttribute('cy', y + mainLaneHeight / 2 - 1);
-                        highlight.setAttribute('r', 1.5);
-                        highlight.setAttribute('fill', 'rgba(255,255,255,0.6)');
-                        svg.appendChild(highlight);
+            Object.entries(lanesByInstallation).forEach(([instId, lanesInInst]) => {
+                // Add installation header (Adresse + Ort)
+                const installation = installations[instId];
+                let instHeader = '📍 Installation ' + instId;
+                if (installation) {
+                    if (installation.description && installation.location) {
+                        instHeader = `📍 ${installation.description} - ${installation.location}`;
+                    } else if (installation.description) {
+                        instHeader = `📍 ${installation.description}`;
+                    } else if (installation.location) {
+                        instHeader = `📍 ${installation.location}`;
                     }
-                });
-
-                // Draw valve position spans (smaller, thin bars ABOVE main events in visual space)
-                // Rendered AFTER events so they appear on top in SVG but positioned above event lane
-                if (lane.hasValveSpans && valveLaneHeight > 0) {
-                    lane.valveSpans.forEach((span, spanIdx) => {
-                        // Apply timeline filter: only render spans that should be displayed
-                        if (globalFilters.timelineTypes[span.code] === false) {
-                            return; // Skip this span
-                        }
-
-                        // Check if this span type has a visual representation
-                        const eventInfo = eventTypes[span.code];
-                        if (!eventInfo) {
-                            return; // Skip spans without visual definition
-                        }
-
-                        const x1 = xScale(span.startTime);
-                        const x2 = xScale(span.endTime);
-                        const actualWidth = x2 - x1;
-                        const spanWidth = Math.max(actualWidth, 2); // Minimum 2px width
-
-                        const color = eventInfo?.color || '#6b7280';
-
-                        // Calculate bar dimensions for valve lane (smaller than main lane)
-                        const valveBarHeight = Math.max(valveLaneHeight - 8, 8); // Thinner bars for valve lane
-                        const valveBarY = yValve + (valveLaneHeight - valveBarHeight) / 2; // Center bar vertically in valve lane
-
-                        // Shadow/glow effect
-                        const shadow = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                        shadow.setAttribute('x', x1 - 1);
-                        shadow.setAttribute('y', valveBarY - 1);
-                        shadow.setAttribute('width', spanWidth + 2);
-                        shadow.setAttribute('height', valveBarHeight + 2);
-                        shadow.setAttribute('fill', color);
-                        shadow.setAttribute('opacity', '0.15');
-                        shadow.setAttribute('rx', '3');
-                        shadow.setAttribute('filter', 'blur(2px)');
-                        svg.appendChild(shadow);
-
-                        // Create gradient definition for valve bar
-                        const defs = svg.querySelector('defs') || document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                        if (!svg.querySelector('defs')) svg.appendChild(defs);
-
-                        const gradientId = `gradient-valve-${laneIdx}-${spanIdx}`;
-                        const gradDef = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-                        gradDef.setAttribute('id', gradientId);
-                        gradDef.setAttribute('x1', '0%');
-                        gradDef.setAttribute('y1', '0%');
-                        gradDef.setAttribute('x2', '0%');
-                        gradDef.setAttribute('y2', '100%');
-
-                        const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                        stop1.setAttribute('offset', '0%');
-                        stop1.setAttribute('stop-color', color);
-                        stop1.setAttribute('stop-opacity', '0.7');
-
-                        const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                        stop2.setAttribute('offset', '100%');
-                        stop2.setAttribute('stop-color', color);
-                        stop2.setAttribute('stop-opacity', '0.5');
-
-                        gradDef.appendChild(stop1);
-                        gradDef.appendChild(stop2);
-                        defs.appendChild(gradDef);
-
-                        // Main valve span bar
-                        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                        bar.setAttribute('x', x1);
-                        bar.setAttribute('y', valveBarY);
-                        bar.setAttribute('width', spanWidth);
-                        bar.setAttribute('height', valveBarHeight);
-                        bar.setAttribute('fill', `url(#${gradientId})`);
-                        bar.setAttribute('rx', '3');
-                        if (span.fallback) {
-                            bar.setAttribute('stroke', 'rgba(255,255,255,0.3)');
-                            bar.setAttribute('stroke-width', '0.5');
-                            bar.setAttribute('stroke-dasharray', '3,2');
-                            bar.setAttribute('opacity', '0.6');
-                        }
-                        bar.style.cursor = 'pointer';
-                        bar.style.transition = 'all 0.2s';
-
-                        // Hover effect
-                        bar.addEventListener('mouseenter', function() {
-                            this.setAttribute('opacity', '0.9');
-                            this.setAttribute('stroke', 'rgba(255,255,255,0.4)');
-                            this.setAttribute('stroke-width', '1');
-                        });
-                        bar.addEventListener('mouseleave', function() {
-                            this.removeAttribute('opacity');
-                            if (!span.fallback) {
-                                this.removeAttribute('stroke');
-                                this.removeAttribute('stroke-width');
-                            }
-                        });
-
-                        // Calculate duration
-                        const duration = (new Date(span.endTime) - new Date(span.startTime)) / 1000 / 60; // minutes
-                        const durationText = duration < 60
-                            ? `${Math.round(duration)}min`
-                            : `${(duration / 60).toFixed(1)}h`;
-
-                        // Tooltip
-                        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-                        const startTime = new Date(span.startTime).toLocaleString('de-DE');
-                        const endTime = span.ongoing ? 'Noch aktiv ⏳' : new Date(span.endTime).toLocaleString('de-DE');
-                        let tooltipText = `${eventInfo?.icon || ''} ${eventInfo?.label || span.code}`;
-                        if (span.fallback) {
-                            tooltipText += '\n⚠️ Geschätzte Dauer (Event ohne Start/Ende)';
-                        }
-                        tooltipText += `\n━━━━━━━━━━━━━━━━━━━━\nStart: ${startTime}\nEnde: ${endTime}\n━━━━━━━━━━━━━━━━━━━━\nDauer: ${durationText}`;
-                        title.textContent = tooltipText;
-                        bar.appendChild(title);
-
-                        svg.appendChild(bar);
-
-                        // Add icon if span is wide enough
-                        const labelY = valveBarY + valveBarHeight / 2;
-                        const minWidthForIcon = 25;
-
-                        if (spanWidth > minWidthForIcon) {
-                            const iconLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                            iconLabel.setAttribute('x', x1 + 2);
-                            iconLabel.setAttribute('y', labelY - 1);
-                            iconLabel.setAttribute('font-size', '10');
-                            iconLabel.textContent = eventInfo?.icon || '';
-                            svg.appendChild(iconLabel);
-                        }
-                    });
                 }
 
-                // Update offset for next device card
-                currentYOffset += cardTotalHeight + deviceCardMargin;
+                // Wrap long installation names
+                instHeader = wrapText(instHeader, 25);
+
+                categories.push(instHeader);
+                categoryIndex++; // Skip the header row (no data on this row)
+
+                // Add each device in this installation
+                lanesInInst.forEach(({ laneKey, lane }) => {
+                    // Add valve position FIRST (above the main device)
+                    let valveCategoryIndex = null;
+                    if (lane.hasValveSpans) {
+                        categories.push(`Ventilposition`);
+                        valveCategoryIndex = categoryIndex;
+                        categoryIndex++;
+                    }
+
+                    // Device name only (location is already in the installation header)
+                    categories.push(lane.name);
+                    const mainCategoryIndex = categoryIndex;
+                    categoryIndex++;
+
+                    // Add main spans
+                    lane.spans.forEach(span => {
+                        if (globalFilters.timelineTypes[span.code] === false) return;
+                        const startTime = new Date(span.startTime);
+                        const endTime = new Date(span.endTime);
+                        const duration = (endTime - startTime) / 1000 / 60;
+
+                        timelineData.push({
+                            name: eventTypes[span.code]?.label || span.code,
+                            value: [mainCategoryIndex, startTime.getTime(), endTime.getTime(), duration],
+                            itemStyle: {
+                                normal: {
+                                    color: eventTypes[span.code]?.color || '#64748b',
+                                    opacity: span.code === 'S.125-WARMWATER' ? 0.95 : 1
+                                }
+                            },
+                            code: span.code,
+                            description: eventTypes[span.code]?.description || span.code,
+                            icon: eventTypes[span.code]?.icon || '•',
+                            ongoing: span.ongoing,
+                            // S.125-WARMWATER should be rendered on top
+                            z: span.code === 'S.125-WARMWATER' ? 10 : 1
+                        });
+                    });
+
+                    // Add valve spans
+                    if (valveCategoryIndex !== null) {
+                        lane.valveSpans.forEach(span => {
+                            if (globalFilters.timelineTypes[span.code] === false) return;
+                            const startTime = new Date(span.startTime);
+                            const endTime = new Date(span.endTime);
+                            const duration = (endTime - startTime) / 1000 / 60;
+
+                            timelineData.push({
+                                name: eventTypes[span.code]?.label || span.code,
+                                value: [valveCategoryIndex, startTime.getTime(), endTime.getTime(), duration],
+                                itemStyle: { normal: { color: eventTypes[span.code]?.color || '#64748b' } },
+                                code: span.code,
+                                description: eventTypes[span.code]?.description || span.code,
+                                icon: eventTypes[span.code]?.icon || '•',
+                                ongoing: span.ongoing
+                            });
+                        });
+                    }
+                });
             });
 
-            // Set the final SVG height based on actual lane content
-            const finalHeight = currentYOffset + margin.bottom;
-            svg.setAttribute('height', finalHeight);
+            // Sort timelineData by z-index so items with higher z render last (on top)
+            timelineData.sort((a, b) => (a.z || 1) - (b.z || 1));
 
-            // Now draw the axis on top
-            drawAxisFn(finalHeight);
-            svg.appendChild(axisGroup);
-
-            // ===== ADJUST CONTAINER HEIGHT BASED ON SVG CONTENT =====
-            // Set container height to show all content with minimal scrolling
-            const timelineDiv = document.querySelector('#timeline');
-            const timelineContainer = document.querySelector('.timeline-container');
-
-            if (timelineDiv && timelineContainer) {
-                // Set the #timeline div height to match the SVG content
-                timelineDiv.style.height = finalHeight + 'px';
-
-                // Use the actual SVG height + some padding for the controls at the top
-                const controlsHeight = 80; // Space for title, buttons, filters
-                const containerPaddingTotal = 48; // padding: 24px top + 24px bottom
-                const totalNeededHeight = finalHeight + controlsHeight + containerPaddingTotal;
-
-                // Set a reasonable max-height, minimum 750px for readability
-                const minMaxHeight = 750;
-                const dynamicMaxHeight = Math.max(minMaxHeight, totalNeededHeight);
-
-                timelineContainer.style.maxHeight = dynamicMaxHeight + 'px';
-                console.log(`Timeline: ${laneArray.length} devices, SVG height ${finalHeight}px, #timeline height ${finalHeight}px, container height ${dynamicMaxHeight}px`);
-            }
+            return { data: timelineData, categories };
         }
 
         // ========================================
@@ -2494,6 +2038,7 @@ ${formatEventBody(event.body)}
             // Load saved timeline filters from localStorage BEFORE initializing UI
             loadTimelineFilters();
             initializeUI();
+
             await loadStatus();
             await loadEvents();
         };
