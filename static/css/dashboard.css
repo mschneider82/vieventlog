@@ -789,13 +789,15 @@
             .header-right {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 10px;
+                gap: 8px;
                 width: 100%;
             }
 
             .smartclimate-link {
-                font-size: 13px;
-                padding: 6px 12px;
+                font-size: 12px;
+                padding: 6px 10px;
+                width: 100%;
+                text-align: center;
             }
 
             h1 {
@@ -876,10 +878,26 @@
             .card-header {
                 margin-bottom: 15px;
                 padding-bottom: 8px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .card-header > div {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                width: 100%;
             }
 
             .card-header h2 {
                 font-size: 16px;
+            }
+
+            .card-header button {
+                margin-left: 0 !important;
+                font-size: 13px;
+                padding: 8px 12px !important;
             }
 
             .badge {
@@ -1108,6 +1126,11 @@
 
             .card-header h2 {
                 font-size: 15px;
+            }
+
+            .card-header button {
+                font-size: 12px;
+                padding: 6px 10px !important;
             }
 
             .temp-value {

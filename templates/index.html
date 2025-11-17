@@ -454,6 +454,11 @@
                 height: auto;
             }
 
+            /* Make timeline chart responsive on mobile */
+            .timeline-container {
+                overflow-x: auto;
+            }
+
             .events-container {
                 border-radius: 8px;
             }
@@ -1389,7 +1394,12 @@ ${formatEventBody(event.body)}
                         moveOnMouseMove: true
                     }
                 ],
-                grid: { left: 250, right: 50, top: 60, bottom: 80 },
+                grid: {
+                    left: window.innerWidth <= 768 ? 80 : 250,
+                    right: window.innerWidth <= 768 ? 20 : 50,
+                    top: 60,
+                    bottom: 80
+                },
                 xAxis: {
                     type: 'time',
                     axisLabel: {
@@ -1407,12 +1417,24 @@ ${formatEventBody(event.body)}
                     inverse: true, // First category at top
                     axisLabel: {
                         color: '#e0e0e0',
-                        fontSize: 11,
+                        fontSize: window.innerWidth <= 768 ? 9 : 11,
                         lineHeight: 16,
+                        width: window.innerWidth <= 768 ? 60 : 220,
+                        overflow: 'truncate',
                         formatter: function(value) {
                             // Apply rich text styling for installation headers
                             if (value && value.startsWith('📍')) {
+                                // Truncate long installation names on mobile
+                                if (window.innerWidth <= 768) {
+                                    const maxLen = 12;
+                                    const truncated = value.length > maxLen ? value.substring(0, maxLen) + '...' : value;
+                                    return `{header|${truncated}}`;
+                                }
                                 return `{header|${value}}`;
+                            }
+                            // Truncate device names on mobile
+                            if (window.innerWidth <= 768 && value.length > 10) {
+                                return value.substring(0, 10) + '...';
                             }
                             return value;
                         },
@@ -1420,7 +1442,7 @@ ${formatEventBody(event.body)}
                             header: {
                                 color: '#ffffff',
                                 fontWeight: 'bold',
-                                fontSize: 11,
+                                fontSize: window.innerWidth <= 768 ? 9 : 11,
                                 lineHeight: 16,
                                 backgroundColor: 'rgba(102, 126, 234, 0.3)',
                                 borderRadius: 4,
@@ -1480,6 +1502,21 @@ ${formatEventBody(event.body)}
 
         function handleTimelineResize() {
             if (timelineChart) {
+                // Update grid settings based on new window width
+                const isMobile = window.innerWidth <= 768;
+                const option = timelineChart.getOption();
+
+                if (option.grid && option.grid[0]) {
+                    option.grid[0].left = isMobile ? 80 : 250;
+                    option.grid[0].right = isMobile ? 20 : 50;
+                }
+
+                if (option.yAxis && option.yAxis[0] && option.yAxis[0].axisLabel) {
+                    option.yAxis[0].axisLabel.fontSize = isMobile ? 9 : 11;
+                    option.yAxis[0].axisLabel.width = isMobile ? 60 : 220;
+                }
+
+                timelineChart.setOption(option);
                 timelineChart.resize();
             }
         }
