@@ -34,12 +34,13 @@ type Credentials struct {
 }
 
 type DeviceSettings struct {
-	Name                         string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
-	CompressorRpmMin             int                       `json:"compressorRpmMin,omitempty"`
-	CompressorRpmMax             int                       `json:"compressorRpmMax,omitempty"`
-	HybridProControl             *HybridProControlSettings `json:"hybridProControl,omitempty"`
-	UseAirIntakeTemperatureLabel *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
-	HasHotWaterBuffer            *bool                     `json:"hasHotWaterBuffer,omitempty"`            // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
+	Name                            string                    `json:"name,omitempty"` // User-defined device name (e.g., "Wohnzimmer TRV", "Klimasensor Bad")
+	CompressorRpmMin                int                       `json:"compressorRpmMin,omitempty"`
+	CompressorRpmMax                int                       `json:"compressorRpmMax,omitempty"`
+	CompressorPowerCorrectionFactor float64                   `json:"compressorPowerCorrectionFactor,omitempty"` // Correction factor for compressor power (default: 1.00)
+	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
+	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
+	HasHotWaterBuffer               *bool                     `json:"hasHotWaterBuffer,omitempty"`            // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
 }
 
 type HybridProControlSettings struct {
