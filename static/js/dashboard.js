@@ -1254,7 +1254,14 @@
                     ${kf.compressorPower ? `
                         <div class="status-item">
                             <span class="status-label">Leistung</span>
-                            <span class="status-value">${isValidNumericValue(kf.compressorPower) ? formatValue(kf.compressorPower) : '--'}</span>
+                            <span class="status-value">${(() => {
+                                if (!isValidNumericValue(kf.compressorPower)) return '--';
+                                const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
+                                const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+                                const correctionFactor = deviceSetting?.powerCorrectionFactor || 1.0;
+                                const powerW = unwrapValue(kf.compressorPower.value) * correctionFactor;
+                                return formatNum(powerW) + ' W';
+                            })()}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
@@ -1268,7 +1275,7 @@
                         if (!kf.volumetricFlow || !kf.compressorPower) return '';
 
                         // Get device settings to determine which spreizung to use
-                        const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+                        const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
                         const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
                         let showSecondaryCircuitSpreizung = true; // default
                         if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
@@ -1317,18 +1324,21 @@
                         // Calculate thermal power: Q = ṁ × c × ΔT
                         const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
 
-                        // Calculate COP: COP = Q / P_el
-                        const electricalPowerW = unwrapValue(kf.compressorPower.value); // W
+                        // Apply power correction factor to electrical power (reuse deviceSetting from above)
+                        const correctionFactor = deviceSetting?.powerCorrectionFactor || 1.0;
+
+                        // Calculate COP: COP = Q / P_el (with correction factor)
+                        const electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
                         if (typeof electricalPowerW !== 'number' || electricalPowerW <= 0) return '';
                         const cop = thermalPowerW / electricalPowerW;
 
                         return `
                             <div class="status-item">
-                                <span class="status-label">Thermische Leistung</span>
+                                <span class="status-label">Thermische Leistung (berechnet)</span>
                                 <span class="status-value">${formatNum(thermalPowerW)} W</span>
                             </div>
                             <div class="status-item">
-                                <span class="status-label">COP (aktuell)</span>
+                                <span class="status-label">COP (aktuell, berechnet)</span>
                                 <span class="status-value">${formatNum(cop, 2)}</span>
                             </div>
                         `;
@@ -4342,6 +4352,7 @@
                     window.deviceSettingsCache[deviceKey] = {
                         min: data.compressorRpmMin || 0,
                         max: data.compressorRpmMax || 0,
+                        powerCorrectionFactor: data.compressorPowerCorrectionFactor || 1.0,
                         useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // null = auto-detect, true/false = override
                         hasHotWaterBuffer: data.hasHotWaterBuffer // null = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer
                     };
@@ -4368,14 +4379,14 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0, null, null);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, null, null);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
@@ -4415,6 +4426,15 @@
                         </label>
                         <input type="number" id="rpmMax" value="${currentMax}"
                                style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 8px; font-weight: 600;">
+                            Leistungskorrekturfaktor (Standard: 1.00)
+                        </label>
+                        <input type="number" id="powerCorrectionFactor" value="${correctionFactor.toFixed(2)}" step="0.01" min="0.01" max="10.00"
+                               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                        <p style="color: #a0a0b0; font-size: 12px; margin-top: 5px;">Korrigiert die Leistungsanzeige und COP-Berechnung (Leistung × Faktor)</p>
                     </div>
 
                     <div style="margin-bottom: 20px;">
@@ -4519,9 +4539,15 @@
 
             const rpmMin = parseInt(document.getElementById('rpmMin').value) || 0;
             const rpmMax = parseInt(document.getElementById('rpmMax').value) || 0;
+            const powerCorrectionFactor = parseFloat(document.getElementById('powerCorrectionFactor').value) || 1.0;
 
             if (rpmMin >= rpmMax && rpmMax !== 0) {
                 alert('Minimum muss kleiner als Maximum sein');
+                return;
+            }
+
+            if (powerCorrectionFactor <= 0 || powerCorrectionFactor > 10) {
+                alert('Korrekturfaktor muss zwischen 0.01 und 10.00 liegen');
                 return;
             }
 
@@ -4555,6 +4581,7 @@
                         deviceId: deviceId,
                         compressorRpmMin: rpmMin,
                         compressorRpmMax: rpmMax,
+                        compressorPowerCorrectionFactor: powerCorrectionFactor,
                         useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel,
                         hasHotWaterBuffer: hasHotWaterBuffer
                     })
@@ -4570,6 +4597,7 @@
                     }
                     window.deviceSettingsCache[deviceKey].min = rpmMin;
                     window.deviceSettingsCache[deviceKey].max = rpmMax;
+                    window.deviceSettingsCache[deviceKey].powerCorrectionFactor = powerCorrectionFactor;
                     window.deviceSettingsCache[deviceKey].useAirIntakeTemperatureLabel = useAirIntakeTemperatureLabel;
                     window.deviceSettingsCache[deviceKey].hasHotWaterBuffer = hasHotWaterBuffer;
 

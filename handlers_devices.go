@@ -44,13 +44,21 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set default correction factor if not set
+	correctionFactor := settings.CompressorPowerCorrectionFactor
+	if correctionFactor == 0 {
+		correctionFactor = 1.0
+	}
+	correctionFactorPtr := &correctionFactor
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
-		Success:                      true,
-		CompressorRpmMin:             settings.CompressorRpmMin,
-		CompressorRpmMax:             settings.CompressorRpmMax,
-		UseAirIntakeTemperatureLabel: settings.UseAirIntakeTemperatureLabel,
-		HasHotWaterBuffer:            settings.HasHotWaterBuffer,
+		Success:                         true,
+		CompressorRpmMin:                settings.CompressorRpmMin,
+		CompressorRpmMax:                settings.CompressorRpmMax,
+		CompressorPowerCorrectionFactor: correctionFactorPtr,
+		UseAirIntakeTemperatureLabel:    settings.UseAirIntakeTemperatureLabel,
+		HasHotWaterBuffer:               settings.HasHotWaterBuffer,
 	})
 }
 
@@ -90,6 +98,12 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	// Update fields from request
 	settings.CompressorRpmMin = req.CompressorRpmMin
 	settings.CompressorRpmMax = req.CompressorRpmMax
+	if req.CompressorPowerCorrectionFactor != nil {
+		settings.CompressorPowerCorrectionFactor = *req.CompressorPowerCorrectionFactor
+	} else {
+		// Default to 1.0 if not provided
+		settings.CompressorPowerCorrectionFactor = 1.0
+	}
 	if req.UseAirIntakeTemperatureLabel != nil {
 		settings.UseAirIntakeTemperatureLabel = req.UseAirIntakeTemperatureLabel
 	}
@@ -106,8 +120,8 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logMsg := fmt.Sprintf("Device settings saved for %s (account: %s): min=%d, max=%d",
-		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax)
+	logMsg := fmt.Sprintf("Device settings saved for %s (account: %s): min=%d, max=%d, powerCorrectionFactor=%.2f",
+		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax, settings.CompressorPowerCorrectionFactor)
 	if req.UseAirIntakeTemperatureLabel != nil {
 		logMsg += fmt.Sprintf(", useAirIntakeLabel=%v", *req.UseAirIntakeTemperatureLabel)
 	}
