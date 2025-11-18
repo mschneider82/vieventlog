@@ -30,7 +30,7 @@ func testCredentials(creds *Credentials) error {
 	}
 
 	// Try to fetch installations to verify the token works
-	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -147,7 +147,7 @@ func ensureAuthenticated() error {
 // fetchInstallationIDsForAccount fetches installation IDs for a specific account
 func fetchInstallationIDsForAccount(accessToken string) ([]string, map[string]*Installation, error) {
 	// Use includeGateways=true to get gateway and device info (like PyViCare does)
-	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations?includeGateways=true", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations?includeGateways=true", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -308,7 +308,7 @@ func fetchInstallationIDs() error {
 	tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 
 	// Get installations
-	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations", nil)
 	if err != nil {
 		return err
 	}

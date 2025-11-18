@@ -183,7 +183,7 @@ func fetchEventsLegacy(daysBack int) ([]Event, error) {
 // fetchFeaturesForDevice fetches features for a specific installation/gateway/device
 func fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
 	// Build API URL with includeDeviceFeatures parameter to get array-based statistics
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features?includeDeviceFeatures=true",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features?includeDeviceFeatures=true",
 		installationID, gatewayID, deviceID)
 
 	log.Printf("Fetching features from API: %s\n", url)
@@ -320,7 +320,7 @@ func getDeviceNameFromFeatures(installationID, gatewayID, deviceID, accessToken 
 // fetchGatewayIDForInstallation fetches the gateway ID for an installation
 func fetchGatewayIDForInstallation(installationID, accessToken string) (string, error) {
 	// Fetch all installations to get gateway info
-	req, err := http.NewRequest("GET", "https://api.viessmann.com/iot/v1/equipment/installations", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations", nil)
 	if err != nil {
 		return "", err
 	}
