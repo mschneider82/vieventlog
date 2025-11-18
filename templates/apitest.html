@@ -256,6 +256,28 @@
             border-color: #667eea;
             color: #667eea;
         }
+
+        /* Mobile Optimierung */
+        @media (max-width: 768px) {
+            .method-selector {
+                flex-wrap: wrap;
+            }
+
+            .method-btn {
+                flex: 1 1 calc(50% - 5px);
+                min-width: 0;
+                padding: 10px 8px;
+                font-size: 14px;
+            }
+
+            .content {
+                padding: 20px 15px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
     </style>
 </head>
 <body>
