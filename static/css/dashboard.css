@@ -227,6 +227,25 @@
         }
 
         /* Temperature Display */
+        .temp-group {
+            margin-bottom: 25px;
+        }
+
+        .temp-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .temp-group-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #a0a0b0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
         .temp-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
