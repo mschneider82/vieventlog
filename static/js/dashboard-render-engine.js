@@ -234,7 +234,7 @@
                 }
 
                 // Compressor/burner status card with all details
-                html += renderCompressorBurnerStatus(keyFeatures);
+                html += renderCompressorBurnerStatus(keyFeatures, deviceInfo);
 
                 // Render heating circuits
                 for (const circuitId of circuits) {

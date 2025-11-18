@@ -27,13 +27,23 @@
                 </button>
             ` : '';
 
-            // Build temperature grid
-            let temps = '';
+            // Build temperature grid - functionally sorted into groups
+            // Group 1: Außen & Systemkreise
+            // Group 2: Heizkreis Soll/Ist
+            // Group 3: Speicher & Warmwasser
+            // Group 4: Energiecockpit (Stromverbrauch, Thermische Leistung, COP)
+            let tempsGroup1 = '';
+            let tempsGroup2 = '';
+            let tempsGroup3 = '';
+            let tempsGroup4 = '';
+
+            // --- GROUP 1: Außen & Systemkreise ---
+            // Außentemperatur
             if (kf.outsideTemp) {
                 const formatted = formatValue(kf.outsideTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                temps += `
+                tempsGroup1 += `
                     <div class="temp-item">
                         <span class="temp-label">Außentemperatur</span>
                         <div>
@@ -43,11 +53,12 @@
                     </div>
                 `;
             }
+            // Außentemperatur gedämpft
             if (kf.calculatedOutsideTemp) {
                 const formatted = formatValue(kf.calculatedOutsideTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                temps += `
+                tempsGroup1 += `
                     <div class="temp-item">
                         <span class="temp-label">Außentemp. (ged.)</span>
                         <div>
@@ -57,188 +68,7 @@
                     </div>
                 `;
             }
-            if (kf.dhwTemp) {
-                const formatted = formatValue(kf.dhwTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Warmwasser</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.supplyTemp) {
-                const formatted = formatValue(kf.supplyTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Gemeinsame Vorlauftemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            // Calculate and show heating curve target temperature
-            if (kf.outsideTemp && kf.heatingCurveSlope && kf.heatingCurveShift) {
-                const outsideTemp = kf.outsideTemp.value;
-                const slope = kf.heatingCurveSlope.value;
-                const shift = kf.heatingCurveShift.value;
-
-                // Get room setpoint temperature (default: 20°C)
-                let roomSetpoint = 20;
-                if (window.heatingCurveData && window.heatingCurveData.roomTempSetpoint) {
-                    roomSetpoint = window.heatingCurveData.roomTempSetpoint;
-                }
-
-                // Calculate target supply temperature using official Viessmann formula:
-                // VT = RTSoll + Niveau - Neigung * DAR * (1.4347 + 0.021 * DAR + 247.9 * 10^-6 * DAR^2)
-                // with DAR = AT - RTSoll
-                const DAR = outsideTemp - roomSetpoint;
-                let targetTemp = roomSetpoint + shift - slope * DAR * (1.4347 + 0.021 * DAR + 247.9 * 1e-6 * DAR * DAR);
-
-                // Cap at max supply temperature if available
-                const maxSupply = window.heatingCurveData && window.heatingCurveData.maxSupply;
-                if (maxSupply !== null && maxSupply !== undefined && targetTemp > maxSupply) {
-                    targetTemp = maxSupply;
-                }
-
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Solltemperatur (Heizkurve)</span>
-                        <div>
-                            <span class="temp-value">${formatNum(targetTemp)}</span>
-                            <span class="temp-unit">°C</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.returnTemp) {
-                const formatted = formatValue(kf.returnTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Rücklauftemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            // Calculate and show Spreizung (supply - return temperature difference)
-            // Primärkreis Spreizung
-            if (kf.primarySupplyTemp && kf.primaryReturnTemp) {
-                const supplyValue = kf.primarySupplyTemp.value;
-                const returnValue = kf.primaryReturnTemp.value;
-                const spreizung = supplyValue - returnValue;
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Spreizung Primärkreis</span>
-                        <div>
-                            <span class="temp-value">${formatNum(spreizung)}</span>
-                            <span class="temp-unit">K</span>
-                        </div>
-                    </div>
-                `;
-            }
-            // Spreizung calculation - check device settings for override
-            const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-            const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-
-            // Determine which spreizung to show based on settings
-            let showSecondaryCircuitSpreizung = true; // default: show secondary circuit (mit HW-Puffer)
-            if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-                // Use explicit setting: true = mit HW-Puffer (secondary circuit), false = ohne HW-Puffer (heating circuit)
-                showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
-            }
-
-            if (showSecondaryCircuitSpreizung) {
-                // Sekundärkreis Spreizung (mit HW-Puffer)
-                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                    const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
-                    const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
-                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const spreizung = supplyValue - returnValue;
-                        temps += `
-                            <div class="temp-item">
-                                <span class="temp-label">Spreizung Sekundärkreis</span>
-                                <div>
-                                    <span class="temp-value">${formatNum(spreizung)}</span>
-                                    <span class="temp-unit">K</span>
-                                </div>
-                            </div>
-                        `;
-                    }
-                }
-            } else {
-                // Heizkreis Spreizung (ohne HW-Puffer: Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
-                if (kf.supplyTemp && kf.returnTemp) {
-                    const supplyValue = unwrapValue(kf.supplyTemp.value);
-                    const returnValue = unwrapValue(kf.returnTemp.value);
-                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const spreizung = supplyValue - returnValue;
-                        temps += `
-                            <div class="temp-item">
-                                <span class="temp-label">Spreizung Heizkreis</span>
-                                <div>
-                                    <span class="temp-value">${formatNum(spreizung)}</span>
-                                    <span class="temp-unit">K</span>
-                                </div>
-                            </div>
-                        `;
-                    }
-                }
-            }
-            if (kf.boilerTemp) {
-                const formatted = formatValue(kf.boilerTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Kesseltemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.bufferTemp) {
-                const formatted = formatValue(kf.bufferTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            if (kf.bufferTempTop) {
-                const formatted = formatValue(kf.bufferTempTop);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                temps += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur Oben</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+            // Primärkreis-Vorlauf
             if (kf.primarySupplyTemp) {
                 const formatted = formatValue(kf.primarySupplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
@@ -263,7 +93,7 @@
                     }
                 }
 
-                temps += `
+                tempsGroup1 += `
                     <div class="temp-item">
                         <span class="temp-label">${label}</span>
                         <div>
@@ -273,11 +103,12 @@
                     </div>
                 `;
             }
+            // Sekundärkreis-Vorlauf
             if (kf.secondarySupplyTemp) {
                 const formatted = formatValue(kf.secondarySupplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                temps += `
+                tempsGroup1 += `
                     <div class="temp-item">
                         <span class="temp-label">Sekundärkreis-Vorlauf</span>
                         <div>
@@ -286,6 +117,294 @@
                         </div>
                     </div>
                 `;
+            }
+
+            // --- GROUP 2: Heizkreis Soll/Ist & Leistung ---
+            // Solltemperatur (Heizkurve)
+            if (kf.outsideTemp && kf.heatingCurveSlope && kf.heatingCurveShift) {
+                const outsideTemp = kf.outsideTemp.value;
+                const slope = kf.heatingCurveSlope.value;
+                const shift = kf.heatingCurveShift.value;
+
+                // Get room setpoint temperature (default: 20°C)
+                let roomSetpoint = 20;
+                if (window.heatingCurveData && window.heatingCurveData.roomTempSetpoint) {
+                    roomSetpoint = window.heatingCurveData.roomTempSetpoint;
+                }
+
+                // Calculate target supply temperature using official Viessmann formula:
+                // VT = RTSoll + Niveau - Neigung * DAR * (1.4347 + 0.021 * DAR + 247.9 * 10^-6 * DAR^2)
+                // with DAR = AT - RTSoll
+                const DAR = outsideTemp - roomSetpoint;
+                let targetTemp = roomSetpoint + shift - slope * DAR * (1.4347 + 0.021 * DAR + 247.9 * 1e-6 * DAR * DAR);
+
+                // Cap at max supply temperature if available
+                const maxSupply = window.heatingCurveData && window.heatingCurveData.maxSupply;
+                if (maxSupply !== null && maxSupply !== undefined && targetTemp > maxSupply) {
+                    targetTemp = maxSupply;
+                }
+
+                tempsGroup2 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Solltemperatur (Heizkurve)</span>
+                        <div>
+                            <span class="temp-value">${formatNum(targetTemp)}</span>
+                            <span class="temp-unit">°C</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Gemeinsame Vorlauftemperatur
+            if (kf.supplyTemp) {
+                const formatted = formatValue(kf.supplyTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup2 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Gemeinsame Vorlauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Rücklauftemperatur
+            if (kf.returnTemp) {
+                const formatted = formatValue(kf.returnTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup2 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Rücklauftemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Spreizung Primärkreis
+            if (kf.primarySupplyTemp && kf.primaryReturnTemp) {
+                const supplyValue = kf.primarySupplyTemp.value;
+                const returnValue = kf.primaryReturnTemp.value;
+                const spreizung = supplyValue - returnValue;
+                tempsGroup2 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Spreizung Primärkreis</span>
+                        <div>
+                            <span class="temp-value">${formatNum(spreizung)}</span>
+                            <span class="temp-unit">K</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Spreizung Sekundärkreis/Heizkreis - check device settings for override
+            const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+            const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+
+            // Determine which spreizung to show based on settings
+            let showSecondaryCircuitSpreizung = true; // default: show secondary circuit (mit HW-Puffer)
+            if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+                // Use explicit setting: true = mit HW-Puffer (secondary circuit), false = ohne HW-Puffer (heating circuit)
+                showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+            }
+
+            if (showSecondaryCircuitSpreizung) {
+                // Sekundärkreis Spreizung (mit HW-Puffer)
+                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                    const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
+                    const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
+                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
+                        const spreizung = supplyValue - returnValue;
+                        tempsGroup2 += `
+                            <div class="temp-item">
+                                <span class="temp-label">Spreizung Sekundärkreis</span>
+                                <div>
+                                    <span class="temp-value">${formatNum(spreizung)}</span>
+                                    <span class="temp-unit">K</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            } else {
+                // Heizkreis Spreizung (ohne HW-Puffer: Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
+                if (kf.supplyTemp && kf.returnTemp) {
+                    const supplyValue = unwrapValue(kf.supplyTemp.value);
+                    const returnValue = unwrapValue(kf.returnTemp.value);
+                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
+                        const spreizung = supplyValue - returnValue;
+                        tempsGroup2 += `
+                            <div class="temp-item">
+                                <span class="temp-label">Spreizung Heizkreis</span>
+                                <div>
+                                    <span class="temp-value">${formatNum(spreizung)}</span>
+                                    <span class="temp-unit">K</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            }
+
+            // --- GROUP 3: Speicher & Warmwasser ---
+            // Warmwasser
+            if (kf.dhwTemp) {
+                const formatted = formatValue(kf.dhwTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup3 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Warmwasser</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Wärmeerzeuger-Vorlauf (boilerTemp)
+            if (kf.boilerTemp) {
+                const formatted = formatValue(kf.boilerTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup3 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Puffertemperatur
+            if (kf.bufferTemp) {
+                const formatted = formatValue(kf.bufferTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup3 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            // Puffertemperatur Oben
+            if (kf.bufferTempTop) {
+                const formatted = formatValue(kf.bufferTempTop);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup3 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Puffertemperatur Oben</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // --- GROUP 4: Energiecockpit ---
+            // Calculate thermal power and COP if all required values are available
+            if (kf.volumetricFlow && kf.compressorPower) {
+                // Get device settings to determine which spreizung to use
+                const deviceKey2 = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+                const deviceSetting2 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey2];
+                let showSecondaryCircuitSpreizung2 = true; // default
+                if (deviceSetting2 && deviceSetting2.hasHotWaterBuffer !== null && deviceSetting2.hasHotWaterBuffer !== undefined) {
+                    showSecondaryCircuitSpreizung2 = deviceSetting2.hasHotWaterBuffer;
+                }
+
+                // Calculate spreizung based on setting
+                let spreizung = null;
+                let supplyTemp = null;
+                if (showSecondaryCircuitSpreizung2) {
+                    // Mit HW-Puffer: Sekundärkreis Spreizung
+                    if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                        const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
+                        const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
+                        if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                            spreizung = supplyVal - returnVal;
+                            supplyTemp = supplyVal;
+                        }
+                    }
+                } else {
+                    // Ohne HW-Puffer: Heizkreis Spreizung
+                    if (kf.supplyTemp && kf.returnTemp) {
+                        const supplyVal = unwrapValue(kf.supplyTemp.value);
+                        const returnVal = unwrapValue(kf.returnTemp.value);
+                        if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                            spreizung = supplyVal - returnVal;
+                            supplyTemp = supplyVal;
+                        }
+                    }
+                }
+
+                if (spreizung !== null && spreizung > 0 && supplyTemp !== null) {
+                    // Calculate water density based on supply temperature
+                    const waterDensity = getWaterDensity(supplyTemp); // kg/m³
+                    const specificHeatCapacity = 4180; // J/(kg·K)
+
+                    // Convert volumetric flow from l/h to m³/s
+                    const volumetricFlowValue = unwrapValue(kf.volumetricFlow.value);
+                    if (typeof volumetricFlowValue === 'number') {
+                        const volumetricFlowM3s = volumetricFlowValue / 3600000; // l/h to m³/s
+
+                        // Calculate mass flow: ṁ = ρ × V̇
+                        const massFlow = waterDensity * volumetricFlowM3s; // kg/s
+
+                        // Calculate thermal power: Q = ṁ × c × ΔT
+                        const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
+
+                        // Apply power correction factor to electrical power
+                        const correctionFactor = deviceSetting2?.powerCorrectionFactor || 1.0;
+
+                        // Calculate COP: COP = Q / P_el (with correction factor)
+                        const electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
+                        if (typeof electricalPowerW === 'number' && electricalPowerW > 0) {
+                            const cop = thermalPowerW / electricalPowerW;
+
+                            // Add electrical power consumption tile (in kW)
+                            tempsGroup4 += `
+                                <div class="temp-item">
+                                    <span class="temp-label">Stromverbrauch</span>
+                                    <div>
+                                        <span class="temp-value">${formatNum(electricalPowerW / 1000, 2)}</span>
+                                        <span class="temp-unit">kW</span>
+                                    </div>
+                                </div>
+                            `;
+
+                            // Add thermal power tile (in kW)
+                            tempsGroup4 += `
+                                <div class="temp-item">
+                                    <span class="temp-label">Thermische Leistung</span>
+                                    <div>
+                                        <span class="temp-value">${formatNum(thermalPowerW / 1000, 1)}</span>
+                                        <span class="temp-unit">kW</span>
+                                    </div>
+                                </div>
+                            `;
+
+                            // Add COP tile
+                            tempsGroup4 += `
+                                <div class="temp-item">
+                                    <span class="temp-label">COP (aktuell)</span>
+                                    <div>
+                                        <span class="temp-value">${formatNum(cop, 2)}</span>
+                                        <span class="temp-unit"></span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                }
             }
 
             return `
@@ -298,7 +417,30 @@
                             ${hybridProControlButton}
                         </div>
                     </div>
-                    ${temps ? `<div class="temp-grid">${temps}</div>` : ''}
+                    ${tempsGroup1 ? `
+                        <div class="temp-group">
+                            <h3 class="temp-group-title">Außentemperaturen & Systemkreise</h3>
+                            <div class="temp-grid">${tempsGroup1}</div>
+                        </div>
+                    ` : ''}
+                    ${tempsGroup2 ? `
+                        <div class="temp-group">
+                            <h3 class="temp-group-title">Heizkreis</h3>
+                            <div class="temp-grid">${tempsGroup2}</div>
+                        </div>
+                    ` : ''}
+                    ${tempsGroup3 ? `
+                        <div class="temp-group">
+                            <h3 class="temp-group-title">Speicher & Warmwasser</h3>
+                            <div class="temp-grid">${tempsGroup3}</div>
+                        </div>
+                    ` : ''}
+                    ${tempsGroup4 ? `
+                        <div class="temp-group">
+                            <h3 class="temp-group-title">Energiecockpit</h3>
+                            <div class="temp-grid">${tempsGroup4}</div>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -308,7 +450,7 @@
             return '';
         }
 
-        function renderCompressorBurnerStatus(kf) {
+        function renderCompressorBurnerStatus(kf, deviceInfo) {
             // Combined status card with all details
             const hasCompressor = kf.compressorSpeed || kf.compressorPower ||
                                   kf.compressorCurrent || kf.compressorPressure ||
@@ -402,7 +544,7 @@
                         </div>
                     ` : ''}
                     ${(() => {
-                        // Calculate thermal power and COP if all required values are available
+                        // Calculate thermal power if all required values are available
                         if (!kf.volumetricFlow || !kf.compressorPower) return '';
 
                         // Get device settings to determine which spreizung to use
@@ -455,22 +597,10 @@
                         // Calculate thermal power: Q = ṁ × c × ΔT
                         const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
 
-                        // Apply power correction factor to electrical power (reuse deviceSetting from above)
-                        const correctionFactor = deviceSetting?.powerCorrectionFactor || 1.0;
-
-                        // Calculate COP: COP = Q / P_el (with correction factor)
-                        const electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
-                        if (typeof electricalPowerW !== 'number' || electricalPowerW <= 0) return '';
-                        const cop = thermalPowerW / electricalPowerW;
-
                         return `
                             <div class="status-item">
                                 <span class="status-label">Thermische Leistung (berechnet)</span>
-                                <span class="status-value">${formatNum(thermalPowerW)} W</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label">COP (aktuell, berechnet)</span>
-                                <span class="status-value">${formatNum(cop, 2)}</span>
+                                <span class="status-value">${formatNum(thermalPowerW, 1)} W</span>
                             </div>
                         `;
                     })()}
