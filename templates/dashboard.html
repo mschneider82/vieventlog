@@ -54,6 +54,9 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js"></script>
+    <!-- Dashboard scripts in load order: core -> render -> controls -->
+    <script src="/static/js/dashboard-core.js"></script>
+    <script src="/static/js/dashboard-render.js"></script>
+    <script src="/static/js/dashboard-controls.js"></script>
 </body>
 </html>
