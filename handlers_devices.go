@@ -343,7 +343,7 @@ func dhwModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.operating.modes.active/commands/setMode",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.operating.modes.active/commands/setMode",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -460,7 +460,7 @@ func dhwTemperatureSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.main/commands/setTargetTemperature",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.main/commands/setTargetTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -577,7 +577,7 @@ func dhwTemperature2SetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.temp2/commands/setTargetTemperature",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.temp2/commands/setTargetTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -710,7 +710,7 @@ func dhwHysteresisSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.hysteresis/commands/%s",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.temperature.hysteresis/commands/%s",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, command)
 
 	// Prepare request body
@@ -826,7 +826,7 @@ func dhwOneTimeChargeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.oneTimeCharge/commands/activate",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.dhw.oneTimeCharge/commands/activate",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare empty request body
@@ -945,7 +945,7 @@ func heatingCurveSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.heating.curve/commands/setCurve",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.heating.curve/commands/setCurve",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit)
 
 	// Prepare request body - shift as int, slope as float rounded to 1 decimal
@@ -1080,7 +1080,7 @@ func heatingModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.modes.active/commands/setMode",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.modes.active/commands/setMode",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit)
 
 	// Prepare request body
@@ -1198,7 +1198,7 @@ func supplyTempMaxSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL - NOTE: using v2 API!
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.temperature.levels/commands/setMax",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.temperature.levels/commands/setMax",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit)
 
 	// Prepare request body
@@ -1350,7 +1350,7 @@ func roomTempSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.programs.%s/commands/setTemperature",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.circuits.%d.operating.programs.%s/commands/setTemperature",
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Circuit, req.Program)
 
 	// Prepare request body
@@ -1484,7 +1484,7 @@ func noiseReductionModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.noise.reduction.operating.programs.active/commands/setMode",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.noise.reduction.operating.programs.active/commands/setMode",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
@@ -1601,7 +1601,7 @@ func fanRingToggleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build Viessmann API URL
-	url := fmt.Sprintf("https://api.viessmann.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.heater.fanRing/commands/setActive",
+	url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/features/installations/%s/gateways/%s/devices/%s/features/heating.heater.fanRing/commands/setActive",
 		req.InstallationID, req.GatewaySerial, req.DeviceID)
 
 	// Prepare request body
