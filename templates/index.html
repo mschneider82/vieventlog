@@ -1620,27 +1620,36 @@ ${formatEventBody(event.body)}
                 z: (params.data && params.data.z) || 1
             }];
 
-            // Add duration text if bar is wide enough
+            // Add duration text if bar is wide enough and text position is within visible area
             if (barWidth >= minWidthForText && duration !== undefined) {
-                const durationStr = formatDurationECharts(duration);
-                elements.push({
-                    type: 'text',
-                    style: {
-                        text: durationStr,
-                        x: start[0] + barWidth / 2,
-                        y: start[1],
-                        fill: 'white',
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                        textAlign: 'center',
-                        textVerticalAlign: 'middle',
-                        textShadowColor: 'rgba(0,0,0,0.8)',
-                        textShadowBlur: 3,
-                        textShadowOffsetX: 1,
-                        textShadowOffsetY: 1
-                    },
-                    z: ((params.data && params.data.z) || 1) + 1
-                });
+                const textX = start[0] + barWidth / 2;
+                const textMargin = 30; // Approximate half-width of text for better boundary check
+
+                // Only show text if it's within the visible coordinate system boundaries
+                const isTextVisible = (textX - textMargin) >= params.coordSys.x &&
+                                     (textX + textMargin) <= (params.coordSys.x + params.coordSys.width);
+
+                if (isTextVisible) {
+                    const durationStr = formatDurationECharts(duration);
+                    elements.push({
+                        type: 'text',
+                        style: {
+                            text: durationStr,
+                            x: textX,
+                            y: start[1],
+                            fill: 'white',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            textVerticalAlign: 'middle',
+                            textShadowColor: 'rgba(0,0,0,0.8)',
+                            textShadowBlur: 3,
+                            textShadowOffsetX: 1,
+                            textShadowOffsetY: 1
+                        },
+                        z: ((params.data && params.data.z) || 1) + 1
+                    });
+                }
             }
 
             return {
