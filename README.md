@@ -40,7 +40,7 @@ Jeder Benutzer muss einen eigenen Account im Viessmann Developer Portal erstelle
 Bevor Sie den Event Viewer nutzen können, müssen Sie einen API-Client im Viessmann Developer Portal erstellen:
 
 1. **Anmelden beim Developer Portal**
-   - Öffnen Sie https://app.developer.viessmann.com/
+   - Öffnen Sie https://app.developer.viessmann-climatesolutions.com
    - Melden Sie sich mit Ihren ViCare App Zugangsdaten an (die gleichen
      Credentials, die Sie in der ViCare App verwenden), Sofern schon eine
      HomeAssitant integration verwendet wird, kann auch die ClientID von
