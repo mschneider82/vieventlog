@@ -254,8 +254,11 @@
                 const formatted = formatValue(kf.dhwTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
+                // Check if DHW is currently active (4-way valve in domesticHotWater position)
+                const isDhwActive = kf.fourWayValve && kf.fourWayValve.value === 'domesticHotWater';
+                const dhwClass = isDhwActive ? 'with-bg-fire' : '';
                 tempsGroup3 += `
-                    <div class="temp-item">
+                    <div class="temp-item ${dhwClass}">
                         <span class="temp-label">Warmwasser</span>
                         <div>
                             <span class="temp-value">${value}</span>
@@ -269,8 +272,11 @@
                 const formatted = formatValue(kf.boilerTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
+                // Check if compressor is running
+                const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
+                const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
                 tempsGroup3 += `
-                    <div class="temp-item">
+                    <div class="temp-item ${compressorClass}">
                         <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
                         <div>
                             <span class="temp-value">${value}</span>
