@@ -6,6 +6,28 @@
     <title>Device Dashboard - ViEventLog</title>
     <link rel="stylesheet" href="/static/css/dashboard.css">
     <script src="/static/js/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .temp-range-btn {
+            padding: 4px 8px;
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.4);
+            color: #a3b9ff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        .temp-range-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: rgba(102, 126, 234, 0.6);
+        }
+        .temp-range-btn.active {
+            background: rgba(102, 126, 234, 0.5);
+            border-color: rgba(102, 126, 234, 0.8);
+            color: #fff;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -55,11 +77,12 @@
         </div>
     </div>
 
-    <!-- Dashboard scripts in load order: core -> render (engine, heating, zigbee) -> controls -->
+    <!-- Dashboard scripts in load order: core -> render (engine, heating, zigbee) -> temperature chart -> controls -->
     <script src="/static/js/dashboard-core.js"></script>
     <script src="/static/js/dashboard-render-engine.js"></script>
     <script src="/static/js/dashboard-render-heating.js"></script>
     <script src="/static/js/dashboard-render-zigbee.js"></script>
+    <script src="/static/js/dashboard-temperature-chart.js"></script>
     <script src="/static/js/dashboard-controls.js"></script>
 </body>
 </html>

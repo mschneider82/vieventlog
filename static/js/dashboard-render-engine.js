@@ -296,6 +296,13 @@
                     }
                 }, 300); // Increased timeout from 100ms to 300ms for better DOM layout with multiple circuits
             }
+
+            // Dispatch event for temperature chart integration
+            if (features.deviceInfo) {
+                window.dispatchEvent(new CustomEvent('dashboardDataLoaded', {
+                    detail: { deviceInfo: features.deviceInfo, keyFeatures: keyFeatures }
+                }));
+            }
         }
 
         function extractKeyFeatures(features) {
