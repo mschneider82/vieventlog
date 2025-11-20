@@ -580,7 +580,7 @@ func EnsureAuthenticated(account *Account) error {
 	token, exists := accountTokens[account.ID]
 
 	// Check if token exists and is still valid
-	if exists && token != nil && time.Now().Before(token.Expiry) {
+	if exists && token != nil && time.Now().Before(token.TokenExpiry) {
 		return nil
 	}
 
