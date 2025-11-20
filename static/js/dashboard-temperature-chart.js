@@ -4,12 +4,15 @@
 let tempChartInstance = null;
 let tempChartData = null;
 let currentTempTimeRange = 24; // hours
+let temperatureLoggingEnabled = false;
+let chartInitialized = false;
 
 async function checkTemperatureLoggingEnabled() {
     try {
         const response = await fetch('/api/temperature-log/settings');
         if (!response.ok) return false;
         const settings = await response.json();
+        temperatureLoggingEnabled = settings.enabled;
         return settings.enabled;
     } catch (error) {
         console.error('Error checking temperature log settings:', error);
@@ -19,8 +22,11 @@ async function checkTemperatureLoggingEnabled() {
 
 async function loadTemperatureChartData(installationId, hours = 24) {
     try {
-        const response = await fetch(`/api/temperature-log/data?installationId=${installationId}&hours=${hours}`);
-        if (!response.ok) return null;
+        const response = await fetch(`/api/temperature-log/data?installationId=${installationId}&hours=${hours}&limit=500`);
+        if (!response.ok) {
+            console.log('Temperature data not available (status:', response.status, ')');
+            return null;
+        }
         const result = await response.json();
         return result.data || [];
     } catch (error) {
@@ -31,10 +37,10 @@ async function loadTemperatureChartData(installationId, hours = 24) {
 
 function renderTemperatureChartCard(deviceInfo) {
     return `
-        <div class="card wide" id="temperatureChartCard" style="display: none;">
+        <div class="card wide" id="temperatureChartCard">
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>📊 Temperaturverläufe (letzte ${currentTempTimeRange}h)</span>
-                <div style="display: flex; gap: 5px;">
+                <div style="display: flex; gap: 5px; align-items: center;">
                     <button onclick="updateTempChartRange(6)" class="temp-range-btn" data-hours="6">6h</button>
                     <button onclick="updateTempChartRange(12)" class="temp-range-btn" data-hours="12">12h</button>
                     <button onclick="updateTempChartRange(24)" class="temp-range-btn active" data-hours="24">24h</button>
@@ -54,49 +60,73 @@ function renderTemperatureChartCard(deviceInfo) {
 }
 
 async function initializeTemperatureChart(deviceInfo) {
-    const isEnabled = await checkTemperatureLoggingEnabled();
-    if (!isEnabled) {
-        return; // Don't show chart if logging is disabled
+    if (chartInitialized) {
+        console.log('Temperature chart already initialized');
+        return;
     }
 
-    // Insert chart card after device header
-    const deviceHeader = document.querySelector('.card'); // First card is usually device header
-    if (deviceHeader && deviceHeader.nextSibling) {
+    console.log('Initializing temperature chart for device:', deviceInfo);
+
+    const isEnabled = await checkTemperatureLoggingEnabled();
+    if (!isEnabled) {
+        console.log('Temperature logging is not enabled');
+        return;
+    }
+
+    // Find the dashboard grid container
+    const dashboardGrid = document.querySelector('.dashboard-grid');
+    if (!dashboardGrid) {
+        console.warn('Dashboard grid not found, cannot insert temperature chart');
+        return;
+    }
+
+    // Insert chart card at the beginning (after any existing cards)
+    const firstCard = dashboardGrid.querySelector('.card');
+    if (firstCard) {
         const chartHTML = renderTemperatureChartCard(deviceInfo);
-        deviceHeader.insertAdjacentHTML('afterend', chartHTML);
+        firstCard.insertAdjacentHTML('afterend', chartHTML);
+    } else {
+        // No cards yet, insert at the beginning
+        const chartHTML = renderTemperatureChartCard(deviceInfo);
+        dashboardGrid.insertAdjacentHTML('afterbegin', chartHTML);
+    }
 
-        // Show the card
-        const chartCard = document.getElementById('temperatureChartCard');
-        if (chartCard) {
-            chartCard.style.display = 'block';
+    // Initialize ECharts
+    const chartContainer = document.getElementById('dashboardTempChart');
+    if (chartContainer && window.echarts) {
+        tempChartInstance = echarts.init(chartContainer);
+        chartInitialized = true;
 
-            // Initialize ECharts
-            const chartContainer = document.getElementById('dashboardTempChart');
-            if (chartContainer && window.echarts) {
-                tempChartInstance = echarts.init(chartContainer);
-
-                // Load and render data
-                await updateTemperatureChart(deviceInfo.installationId, currentTempTimeRange);
-            }
-        }
+        // Load and render data
+        await updateTemperatureChart(deviceInfo.installationId, currentTempTimeRange);
+    } else {
+        console.warn('Chart container or echarts not available');
     }
 }
 
 async function updateTemperatureChart(installationId, hours) {
-    if (!tempChartInstance) return;
+    if (!tempChartInstance) {
+        console.log('Chart instance not initialized yet');
+        return;
+    }
 
+    console.log(`Loading temperature data for installation ${installationId}, ${hours} hours`);
     tempChartData = await loadTemperatureChartData(installationId, hours);
+
     if (!tempChartData || tempChartData.length === 0) {
         tempChartInstance.setOption({
             title: {
-                text: 'Keine Daten verfügbar',
+                text: 'Keine Temperaturdaten verfügbar.\nTemperatur-Logging muss aktiviert sein und Daten müssen gesammelt worden sein.',
                 left: 'center',
                 top: 'center',
                 textStyle: { color: '#e0e0e0', fontSize: 14 }
             }
         });
+        console.log('No temperature data available');
         return;
     }
+
+    console.log(`Rendering chart with ${tempChartData.length} data points`);
 
     // Build series - show key temperatures only
     const series = [];
@@ -167,7 +197,8 @@ async function updateTemperatureChart(installationId, hours) {
     }
 
     // Compressor power on secondary Y-axis
-    if (tempChartData.some(d => d.compressor_power != null && d.compressor_power > 0)) {
+    const hasCompressorData = tempChartData.some(d => d.compressor_power != null && d.compressor_power > 0);
+    if (hasCompressorData) {
         series.push({
             name: 'Leistung (W)',
             type: 'line',
@@ -198,7 +229,7 @@ async function updateTemperatureChart(installationId, hours) {
         },
         grid: {
             left: '50px',
-            right: series.some(s => s.yAxisIndex === 1) ? '60px' : '20px',
+            right: hasCompressorData ? '60px' : '20px',
             bottom: '30px',
             top: 40
         },
@@ -270,12 +301,22 @@ function updateTempChartRange(hours) {
     }
 }
 
-// Hook into dashboard refresh
+// Hook into dashboard refresh - listen for the custom event
 window.addEventListener('dashboardDataLoaded', (event) => {
+    console.log('Dashboard data loaded event received:', event.detail);
     const deviceInfo = event.detail?.deviceInfo;
     if (deviceInfo && deviceInfo.installationId) {
         window.currentInstallationId = deviceInfo.installationId;
-        initializeTemperatureChart(deviceInfo);
+
+        // Initialize chart if not done yet
+        if (!chartInitialized) {
+            setTimeout(() => {
+                initializeTemperatureChart(deviceInfo);
+            }, 500); // Small delay to ensure DOM is ready
+        } else {
+            // Just update the data
+            updateTemperatureChart(deviceInfo.installationId, currentTempTimeRange);
+        }
     }
 });
 
@@ -285,3 +326,7 @@ window.addEventListener('resize', () => {
         tempChartInstance.resize();
     }
 });
+
+// Make functions globally available for onclick handlers
+window.updateTempChartRange = updateTempChartRange;
+
