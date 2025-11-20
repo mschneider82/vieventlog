@@ -356,7 +356,7 @@ func getDeviceNameFromFeatures(installationID, gatewayID, deviceID, accessToken 
 // fetchGatewayIDForInstallation fetches the gateway ID for an installation
 func fetchGatewayIDForInstallation(installationID, accessToken string) (string, error) {
 	// Fetch all installations to get gateway info
-	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v1/equipment/installations", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
 	if err != nil {
 		return "", err
 	}
