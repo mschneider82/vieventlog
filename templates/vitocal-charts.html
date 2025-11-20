@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vitocal Charts - ViEventLog</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 500px;
+            margin-bottom: 30px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .chart {
+            width: 100%;
+            height: 100%;
+        }
+        .controls-panel {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .time-range-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .time-range-buttons button {
+            padding: 8px 16px;
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.4);
+            color: #a3b9ff;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .time-range-buttons button:hover {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: rgba(102, 126, 234, 0.6);
+        }
+        .time-range-buttons button.active {
+            background: rgba(102, 126, 234, 0.5);
+            border-color: rgba(102, 126, 234, 0.8);
+            color: #fff;
+        }
+        .series-toggles {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .series-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .series-toggle:hover {
+            background: rgba(255,255,255,0.08);
+        }
+        .series-toggle input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .series-toggle label {
+            cursor: pointer;
+            user-select: none;
+            flex: 1;
+            color: #e0e0e0;
+        }
+        .custom-date-range {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            align-items: center;
+        }
+        .custom-date-range input {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: #e0e0e0;
+        }
+        .stats-panel {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #a0a0b0;
+            margin-bottom: 4px;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>📊 Vitocal Temperatur-Verläufe</h1>
+                    <div class="breadcrumb">
+                        <a href="/">← Events</a>
+                        <span>/</span>
+                        <a href="/dashboard">Dashboard</a>
+                        <span>/</span>
+                        <span>Charts</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <a href="/dashboard" class="smartclimate-link">🌡️ Dashboard</a>
+                    <a href="/accounts" class="smartclimate-link">⚙️ Einstellungen</a>
+                    <div class="last-update">
+                        Letzte Aktualisierung: <span id="lastUpdate">-</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls-panel">
+            <div class="install-select">
+                <label>Installation:</label>
+                <select id="installationSelect">
+                    <option>Lade...</option>
+                </select>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <label style="color: #e0e0e0; font-weight: 500;">Zeitraum:</label>
+                <div class="time-range-buttons">
+                    <button onclick="setTimeRange(1)" data-hours="1">1 Stunde</button>
+                    <button onclick="setTimeRange(6)" data-hours="6">6 Stunden</button>
+                    <button onclick="setTimeRange(12)" data-hours="12">12 Stunden</button>
+                    <button onclick="setTimeRange(24)" data-hours="24" class="active">24 Stunden</button>
+                    <button onclick="setTimeRange(48)" data-hours="48">2 Tage</button>
+                    <button onclick="setTimeRange(72)" data-hours="72">3 Tage</button>
+                    <button onclick="setTimeRange(168)" data-hours="168">7 Tage</button>
+                    <button onclick="setTimeRange(720)" data-hours="720">30 Tage</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <label style="color: #e0e0e0; font-weight: 500;">Oder benutzerdefiniert:</label>
+                <div class="custom-date-range">
+                    <input type="datetime-local" id="startDateTime">
+                    <span style="color: #e0e0e0;">bis</span>
+                    <input type="datetime-local" id="endDateTime">
+                    <button onclick="loadCustomRange()">Laden</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-panel" id="statsPanel" style="display: none;">
+            <h3 style="color: #e0e0e0; margin-bottom: 10px;">Statistiken</h3>
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+
+        <div class="controls-panel">
+            <h3 style="color: #e0e0e0; margin-bottom: 10px;">📈 Angezeigte Verläufe</h3>
+            <div class="series-toggles">
+                <!-- Temperatures -->
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_dhw_temp" checked onchange="updateChart()">
+                    <label for="series_dhw_temp">💧 Warmwasser</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_buffer_temp" checked onchange="updateChart()">
+                    <label for="series_buffer_temp">🔥 Puffer</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_buffer_temp_top" onchange="updateChart()">
+                    <label for="series_buffer_temp_top">🔥 Puffer (Oben)</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_supply_temp" checked onchange="updateChart()">
+                    <label for="series_supply_temp">➡️ Vorlauf</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_return_temp" checked onchange="updateChart()">
+                    <label for="series_return_temp">⬅️ Rücklauf</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_outside_temp" onchange="updateChart()">
+                    <label for="series_outside_temp">🌡️ Außentemperatur</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_target_supply_temp" onchange="updateChart()">
+                    <label for="series_target_supply_temp">🎯 Solltemperatur</label>
+                </div>
+
+                <!-- Compressor -->
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_compressor_power" onchange="updateChart()">
+                    <label for="series_compressor_power">⚡ Kompressor Leistung</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_compressor_speed" onchange="updateChart()">
+                    <label for="series_compressor_speed">⚙️ Kompressor Drehzahl</label>
+                </div>
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_cop" onchange="updateChart()">
+                    <label for="series_cop">📊 COP (Effizienz)</label>
+                </div>
+
+                <!-- Secondary heating -->
+                <div class="series-toggle">
+                    <input type="checkbox" id="series_burner_modulation" onchange="updateChart()">
+                    <label for="series_burner_modulation">🔥 Zusatzheizung Modulation</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div id="temperatureChart" class="chart"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="powerChart" class="chart"></div>
+        </div>
+    </div>
+
+    <script>
+        let chartData = [];
+        let currentInstallationId = null;
+        let currentTimeRangeHours = 24;
+        let temperatureChart = null;
+        let powerChart = null;
+
+        // Initialize charts
+        window.addEventListener('load', () => {
+            temperatureChart = echarts.init(document.getElementById('temperatureChart'));
+            powerChart = echarts.init(document.getElementById('powerChart'));
+
+            window.addEventListener('resize', () => {
+                temperatureChart.resize();
+                powerChart.resize();
+            });
+
+            loadInstallations();
+        });
+
+        async function loadInstallations() {
+            try {
+                const response = await fetch('/api/equipment');
+                if (!response.ok) throw new Error('Fehler beim Laden der Installationen');
+
+                const data = await response.json();
+                const select = document.getElementById('installationSelect');
+                select.innerHTML = '';
+
+                if (data.installations && data.installations.length > 0) {
+                    data.installations.forEach(inst => {
+                        const option = document.createElement('option');
+                        option.value = inst.id;
+                        option.textContent = `Installation ${inst.id}`;
+                        select.appendChild(option);
+                    });
+
+                    currentInstallationId = data.installations[0].id;
+                    loadChartData();
+                }
+
+                select.addEventListener('change', (e) => {
+                    currentInstallationId = e.target.value;
+                    loadChartData();
+                });
+            } catch (error) {
+                console.error('Error loading installations:', error);
+            }
+        }
+
+        async function loadChartData(startTime, endTime) {
+            if (!currentInstallationId) return;
+
+            try {
+                let url = `/api/temperature-log/data?installationId=${currentInstallationId}`;
+
+                if (startTime && endTime) {
+                    url += `&startTime=${startTime}&endTime=${endTime}`;
+                } else {
+                    url += `&hours=${currentTimeRangeHours}`;
+                }
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Fehler beim Laden der Daten');
+
+                const result = await response.json();
+                chartData = result.data || [];
+
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('de-DE');
+
+                updateChart();
+                updateStats();
+            } catch (error) {
+                console.error('Error loading chart data:', error);
+                showError('Fehler beim Laden der Temperaturdaten. Möglicherweise ist das Temperature Logging noch nicht aktiviert oder es sind noch keine Daten vorhanden.');
+            }
+        }
+
+        function setTimeRange(hours) {
+            currentTimeRangeHours = hours;
+
+            // Update button states
+            document.querySelectorAll('.time-range-buttons button').forEach(btn => {
+                if (btn.dataset.hours == hours) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            loadChartData();
+        }
+
+        function loadCustomRange() {
+            const startInput = document.getElementById('startDateTime');
+            const endInput = document.getElementById('endDateTime');
+
+            if (!startInput.value || !endInput.value) {
+                alert('Bitte wählen Sie Start- und Endzeitpunkt');
+                return;
+            }
+
+            const startTime = new Date(startInput.value).toISOString();
+            const endTime = new Date(endInput.value).toISOString();
+
+            // Clear active time range button
+            document.querySelectorAll('.time-range-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            loadChartData(startTime, endTime);
+        }
+
+        function isSeriesEnabled(seriesName) {
+            const checkbox = document.getElementById(`series_${seriesName}`);
+            return checkbox && checkbox.checked;
+        }
+
+        function updateChart() {
+            if (!chartData || chartData.length === 0) {
+                temperatureChart.setOption({
+                    title: { text: 'Keine Daten verfügbar', left: 'center', top: 'center', textStyle: { color: '#e0e0e0' } }
+                });
+                powerChart.setOption({
+                    title: { text: 'Keine Daten verfügbar', left: 'center', top: 'center', textStyle: { color: '#e0e0e0' } }
+                });
+                return;
+            }
+
+            // Extract time series
+            const timestamps = chartData.map(d => new Date(d.timestamp));
+
+            // Build temperature series
+            const tempSeries = [];
+
+            if (isSeriesEnabled('dhw_temp')) {
+                tempSeries.push({
+                    name: 'Warmwasser',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.dhw_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#ff6b6b'
+                });
+            }
+
+            if (isSeriesEnabled('buffer_temp')) {
+                tempSeries.push({
+                    name: 'Puffer',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.buffer_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#ffa500'
+                });
+            }
+
+            if (isSeriesEnabled('buffer_temp_top')) {
+                tempSeries.push({
+                    name: 'Puffer (Oben)',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.buffer_temp_top]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#ffcc00'
+                });
+            }
+
+            if (isSeriesEnabled('supply_temp')) {
+                tempSeries.push({
+                    name: 'Vorlauf',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.supply_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#4ecdc4'
+                });
+            }
+
+            if (isSeriesEnabled('return_temp')) {
+                tempSeries.push({
+                    name: 'Rücklauf',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.return_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#45b7d1'
+                });
+            }
+
+            if (isSeriesEnabled('outside_temp')) {
+                tempSeries.push({
+                    name: 'Außentemperatur',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.outside_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#95e1d3'
+                });
+            }
+
+            if (isSeriesEnabled('target_supply_temp')) {
+                tempSeries.push({
+                    name: 'Solltemperatur',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.target_supply_temp]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2, type: 'dashed' },
+                    color: '#a3b9ff'
+                });
+            }
+
+            // Temperature chart options
+            const tempOptions = {
+                title: {
+                    text: 'Temperaturverläufe',
+                    textStyle: { color: '#e0e0e0' }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    textStyle: { color: '#e0e0e0' }
+                },
+                legend: {
+                    data: tempSeries.map(s => s.name),
+                    textStyle: { color: '#e0e0e0' },
+                    top: 35
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: 80,
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'time',
+                    boundaryGap: false,
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Temperatur (°C)',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+                },
+                series: tempSeries
+            };
+
+            temperatureChart.setOption(tempOptions, true);
+
+            // Build power series
+            const powerSeries = [];
+            const yAxes = [];
+            let axisIndex = 0;
+
+            if (isSeriesEnabled('compressor_power')) {
+                powerSeries.push({
+                    name: 'Kompressor Leistung (W)',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.compressor_power]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#667eea',
+                    yAxisIndex: 0
+                });
+                yAxes.push({
+                    type: 'value',
+                    name: 'Leistung (W)',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    position: 'left',
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+                });
+                axisIndex++;
+            }
+
+            if (isSeriesEnabled('compressor_speed')) {
+                powerSeries.push({
+                    name: 'Kompressor Drehzahl (RPM)',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.compressor_speed]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#fbc531',
+                    yAxisIndex: yAxes.length
+                });
+                yAxes.push({
+                    type: 'value',
+                    name: 'Drehzahl (RPM)',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    position: axisIndex === 0 ? 'left' : 'right',
+                    offset: axisIndex > 1 ? 60 * (axisIndex - 1) : 0,
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { show: false }
+                });
+                axisIndex++;
+            }
+
+            if (isSeriesEnabled('cop')) {
+                powerSeries.push({
+                    name: 'COP',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.cop]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#4cd137',
+                    yAxisIndex: yAxes.length
+                });
+                yAxes.push({
+                    type: 'value',
+                    name: 'COP',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    position: axisIndex === 0 ? 'left' : 'right',
+                    offset: axisIndex > 1 ? 60 * (axisIndex - 1) : 0,
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { show: false },
+                    min: 0,
+                    max: 10
+                });
+                axisIndex++;
+            }
+
+            if (isSeriesEnabled('burner_modulation')) {
+                powerSeries.push({
+                    name: 'Zusatzheizung Modulation (%)',
+                    type: 'line',
+                    data: chartData.map(d => [new Date(d.timestamp), d.burner_modulation]),
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { width: 2 },
+                    color: '#e74c3c',
+                    yAxisIndex: yAxes.length
+                });
+                yAxes.push({
+                    type: 'value',
+                    name: 'Modulation (%)',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    position: axisIndex === 0 ? 'left' : 'right',
+                    offset: axisIndex > 1 ? 60 * (axisIndex - 1) : 0,
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { show: false },
+                    min: 0,
+                    max: 100
+                });
+                axisIndex++;
+            }
+
+            // Default Y axis if no power series selected
+            if (yAxes.length === 0) {
+                yAxes.push({
+                    type: 'value',
+                    name: 'Wert',
+                    nameTextStyle: { color: '#e0e0e0' },
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+                });
+            }
+
+            // Power chart options
+            const powerOptions = {
+                title: {
+                    text: 'Leistung & Effizienz',
+                    textStyle: { color: '#e0e0e0' }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    textStyle: { color: '#e0e0e0' }
+                },
+                legend: {
+                    data: powerSeries.map(s => s.name),
+                    textStyle: { color: '#e0e0e0' },
+                    top: 35
+                },
+                grid: {
+                    left: '3%',
+                    right: axisIndex > 1 ? `${10 + (axisIndex - 1) * 8}%` : '10%',
+                    bottom: '3%',
+                    top: 80,
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'time',
+                    boundaryGap: false,
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+                    axisLabel: { color: '#e0e0e0' }
+                },
+                yAxis: yAxes,
+                series: powerSeries
+            };
+
+            powerChart.setOption(powerOptions, true);
+        }
+
+        function updateStats() {
+            if (!chartData || chartData.length === 0) {
+                document.getElementById('statsPanel').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('statsPanel').style.display = 'block';
+
+            const statsHtml = `
+                <div class="stat-item">
+                    <div class="stat-label">Datenpunkte</div>
+                    <div class="stat-value">${chartData.length}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Durchschnitt Warmwasser</div>
+                    <div class="stat-value">${calculateAverage('dhw_temp')} °C</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Durchschnitt Vorlauf</div>
+                    <div class="stat-value">${calculateAverage('supply_temp')} °C</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Durchschnitt COP</div>
+                    <div class="stat-value">${calculateAverage('cop')}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Max Kompressor Leistung</div>
+                    <div class="stat-value">${calculateMax('compressor_power')} W</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Zusatzheizung Laufzeit</div>
+                    <div class="stat-value">${calculateBurnerRuntime()} %</div>
+                </div>
+            `;
+
+            document.getElementById('statsGrid').innerHTML = statsHtml;
+        }
+
+        function calculateAverage(field) {
+            const values = chartData.map(d => d[field]).filter(v => v != null && v !== undefined);
+            if (values.length === 0) return '-';
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            return avg.toFixed(1);
+        }
+
+        function calculateMax(field) {
+            const values = chartData.map(d => d[field]).filter(v => v != null && v !== undefined);
+            if (values.length === 0) return '-';
+            return Math.max(...values).toFixed(0);
+        }
+
+        function calculateBurnerRuntime() {
+            const values = chartData.map(d => d.burner_modulation).filter(v => v != null && v !== undefined && v > 0);
+            if (chartData.length === 0) return '-';
+            return ((values.length / chartData.length) * 100).toFixed(1);
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'padding: 15px; margin: 20px 0; background: rgba(231, 76, 60, 0.2); border: 1px solid rgba(231, 76, 60, 0.5); border-radius: 6px; color: #e0e0e0;';
+            errorDiv.textContent = '⚠️ ' + message;
+            document.querySelector('.container').insertBefore(errorDiv, document.querySelector('.controls-panel'));
+        }
+    </script>
+</body>
+</html>
