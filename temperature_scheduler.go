@@ -222,13 +222,13 @@ func collectTemperatureSnapshots(settings *TemperatureLogSettings) {
 		}
 
 		// Get installations for this account
-		installations, err := getInstallationsForAccount(account)
+		devices, err := getInstallationsForAccount(account)
 		if err != nil {
 			log.Printf("Error getting installations for account %s: %v", account.Name, err)
 			continue
 		}
 
-		for _, installation := range installations {
+		for _, device := range devices {
 			// Check rate limit before each installation
 			if !apiCallCounter.CanMakeAPICall() {
 				calls10m, calls24h := apiCallCounter.GetCurrentUsage()
@@ -240,14 +240,14 @@ func collectTemperatureSnapshots(settings *TemperatureLogSettings) {
 			apiCallCounter.RecordAPICall()
 
 			// Fetch features for this installation
-			features, err := FetchAllFeaturesForInstallation(installation.ID, account)
+			features, err := FetchAllFeaturesForInstallation(device.ID, account)
 			if err != nil {
-				log.Printf("Error fetching features for installation %s: %v", installation.ID, err)
+				log.Printf("Error fetching features for installation %s: %v", device.ID, err)
 				continue
 			}
 
 			// Convert features to snapshot
-			snapshot := convertFeaturesToSnapshot(features, installation, account)
+			snapshot := convertFeaturesToSnapshot(features, device, account)
 			if snapshot != nil {
 				if err := SaveTemperatureSnapshot(snapshot); err != nil {
 					log.Printf("Error saving temperature snapshot: %v", err)
@@ -268,22 +268,22 @@ func collectTemperatureSnapshots(settings *TemperatureLogSettings) {
 		snapshotCount, calls10m, calls24h)
 }
 
-// Installation represents a Viessmann installation
-type Installation struct {
+// DeviceInfo represents a simplified device reference for temperature logging
+type DeviceInfo struct {
 	ID        string
 	GatewayID string
 	DeviceID  string
 }
 
 // getInstallationsForAccount retrieves all installations for an account
-func getInstallationsForAccount(account *Account) ([]Installation, error) {
+func getInstallationsForAccount(account *Account) ([]DeviceInfo, error) {
 	// Get equipment/installations from API
 	equipment, err := FetchEquipment(account)
 	if err != nil {
 		return nil, err
 	}
 
-	var installations []Installation
+	var devices []DeviceInfo
 
 	// Parse the equipment response to extract installation, gateway, and device IDs
 	if data, ok := equipment["data"].([]interface{}); ok {
@@ -306,8 +306,8 @@ func getInstallationsForAccount(account *Account) ([]Installation, error) {
 							}
 
 							// Get devices
-							if devices, ok := gateway["devices"].([]interface{}); ok {
-								for _, dev := range devices {
+							if devicesArray, ok := gateway["devices"].([]interface{}); ok {
+								for _, dev := range devicesArray {
 									if device, ok := dev.(map[string]interface{}); ok {
 										deviceID := ""
 										if id, ok := device["id"].(string); ok {
@@ -315,7 +315,7 @@ func getInstallationsForAccount(account *Account) ([]Installation, error) {
 										}
 
 										if installationID != "" && gatewaySerial != "" && deviceID != "" {
-											installations = append(installations, Installation{
+											devices = append(devices, DeviceInfo{
 												ID:        installationID,
 												GatewayID: gatewaySerial,
 												DeviceID:  deviceID,
@@ -331,16 +331,16 @@ func getInstallationsForAccount(account *Account) ([]Installation, error) {
 		}
 	}
 
-	return installations, nil
+	return devices, nil
 }
 
 // convertFeaturesToSnapshot converts API features to a TemperatureSnapshot
-func convertFeaturesToSnapshot(features map[string]Feature, installation Installation, account *Account) *TemperatureSnapshot {
+func convertFeaturesToSnapshot(features map[string]Feature, device DeviceInfo, account *Account) *TemperatureSnapshot {
 	snapshot := &TemperatureSnapshot{
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
-		InstallationID: installation.ID,
-		GatewayID:      installation.GatewayID,
-		DeviceID:       installation.DeviceID,
+		InstallationID: device.ID,
+		GatewayID:      device.GatewayID,
+		DeviceID:       device.DeviceID,
 		AccountID:      account.ID,
 		AccountName:    account.Name,
 	}
