@@ -439,6 +439,99 @@ func accountToggleHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(AccountActionResponse{Success: true})
 }
 
+func accountFullSyncHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Days int `json:"days"` // Number of days to sync (default: 365)
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Default to 365 days if not specified
+	if req.Days <= 0 {
+		req.Days = 365
+	}
+
+	// Check if archiving is enabled
+	archiveSettings, err := GetEventArchiveSettings()
+	if err != nil || archiveSettings == nil || !archiveSettings.Enabled {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Event archiving is not enabled",
+		})
+		return
+	}
+
+	// Run full sync in background
+	go func() {
+		log.Printf("Starting full sync for last %d days...\n", req.Days)
+
+		// Get active accounts
+		activeAccounts, err := GetActiveAccounts()
+		if err != nil {
+			log.Printf("Full sync failed: %v\n", err)
+			return
+		}
+
+		totalEvents := 0
+		for _, account := range activeAccounts {
+			log.Printf("Full sync for account: %s (%s)\n", account.Name, account.Email)
+
+			// Authenticate
+			token, err := ensureAccountAuthenticated(account)
+			if err != nil {
+				log.Printf("Failed to authenticate account %s: %v\n", account.Email, err)
+				continue
+			}
+
+			// Fetch and sync all installations
+			for _, installationID := range token.InstallationIDs {
+				events, err := fetchEventsForInstallationFullSync(installationID, token.AccessToken, account, req.Days)
+				if err != nil {
+					log.Printf("Full sync error for installation %s: %v\n", installationID, err)
+					continue
+				}
+
+				// Save to database
+				if len(events) > 0 {
+					err := SaveEventsToDB(events)
+					if err != nil {
+						log.Printf("Failed to save events to DB: %v\n", err)
+					} else {
+						totalEvents += len(events)
+						log.Printf("Full sync: saved %d events from installation %s\n", len(events), installationID)
+					}
+				}
+			}
+		}
+
+		// Clear cache after full sync
+		fetchMutex.Lock()
+		eventsCache = nil
+		lastFetchTime = time.Time{}
+		fetchMutex.Unlock()
+
+		log.Printf("Full sync completed: %d total events processed\n", totalEvents)
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Full sync started in background",
+	})
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================

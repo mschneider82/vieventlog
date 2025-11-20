@@ -122,6 +122,7 @@ func main() {
 	http.HandleFunc("/api/accounts/update", accountUpdateHandler)
 	http.HandleFunc("/api/accounts/delete", accountDeleteHandler)
 	http.HandleFunc("/api/accounts/toggle", accountToggleHandler)
+	http.HandleFunc("/api/accounts/fullsync", accountFullSyncHandler)
 
 	// Device settings endpoints
 	http.HandleFunc("/api/device-settings/get", deviceSettingsGetHandler)
