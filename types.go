@@ -62,7 +62,10 @@ type Event struct {
 }
 
 type EventsResponse struct {
-	Data []map[string]interface{} `json:"data"`
+	Data   []map[string]interface{} `json:"data"`
+	Cursor *struct {
+		Next string `json:"next"`
+	} `json:"cursor,omitempty"`
 }
 
 type Device struct {

@@ -18,7 +18,7 @@ var (
 	featuresCacheMutex sync.RWMutex
 )
 
-// fetchEvents fetches events from all active accounts
+// fetchEvents fetches events from all active accounts with cursor-based pagination
 func fetchEvents(daysBack int) ([]Event, error) {
 	fetchMutex.Lock()
 	defer fetchMutex.Unlock()
@@ -42,12 +42,6 @@ func fetchEvents(daysBack int) ([]Event, error) {
 		return nil, fmt.Errorf("no active accounts found")
 	}
 
-	// Calculate date range
-	endDate := time.Now()
-	startDate := endDate.AddDate(0, 0, -daysBack)
-	startStr := startDate.Format("2006-01-02T15:04:05.000Z")
-	endStr := endDate.Format("2006-01-02T15:04:05.000Z")
-
 	// Fetch events from all active accounts
 	allEvents := make([]Event, 0)
 
@@ -63,51 +57,15 @@ func fetchEvents(daysBack int) ([]Event, error) {
 
 		// Fetch events from all installations for this account
 		for _, installationID := range token.InstallationIDs {
-			url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/events-history/installations/%s/events", installationID)
-			req, err := http.NewRequest("GET", url, nil)
-			if err != nil {
-				log.Printf("Error creating request for installation %s: %v\n", installationID, err)
-				continue
-			}
-
-			q := req.URL.Query()
-			q.Add("start", startStr)
-			q.Add("end", endStr)
-			q.Add("limit", "500")
-			req.URL.RawQuery = q.Encode()
-
-			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-			resp, err := http.DefaultClient.Do(req)
+			accountEvents, err := fetchEventsForInstallation(installationID, token.AccessToken, account, daysBack)
 			if err != nil {
 				log.Printf("Error fetching events for installation %s: %v\n", installationID, err)
 				continue
 			}
 
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("API returned status %d for installation %s\n", resp.StatusCode, installationID)
-				resp.Body.Close()
-				continue
-			}
-
-			var eventsResp EventsResponse
-			if err := json.NewDecoder(resp.Body).Decode(&eventsResp); err != nil {
-				log.Printf("Error decoding events for installation %s: %v\n", installationID, err)
-				resp.Body.Close()
-				continue
-			}
-			resp.Body.Close()
-
-			// Process events and tag with installation ID and account info
-			for _, rawEvent := range eventsResp.Data {
-				event := processEvent(rawEvent)
-				event.InstallationID = installationID
-				event.AccountID = account.ID
-				event.AccountName = account.Name
-				allEvents = append(allEvents, event)
-			}
-
+			allEvents = append(allEvents, accountEvents...)
 			log.Printf("Fetched %d events from installation %s (account: %s)\n",
-				len(eventsResp.Data), installationID, account.Name)
+				len(accountEvents), installationID, account.Name)
 		}
 	}
 
@@ -118,61 +76,139 @@ func fetchEvents(daysBack int) ([]Event, error) {
 	return allEvents, nil
 }
 
+// fetchEventsForInstallation fetches events for a single installation with cursor pagination
+// Stops early if events already exist in SQLite database
+func fetchEventsForInstallation(installationID, accessToken string, account *Account, daysBack int) ([]Event, error) {
+	return fetchEventsForInstallationInternal(installationID, accessToken, account, daysBack, true)
+}
+
+// fetchEventsForInstallationFullSync fetches ALL events without early-stop logic
+func fetchEventsForInstallationFullSync(installationID, accessToken string, account *Account, daysBack int) ([]Event, error) {
+	return fetchEventsForInstallationInternal(installationID, accessToken, account, daysBack, false)
+}
+
+// fetchEventsForInstallationInternal is the internal implementation with optional early-stop
+func fetchEventsForInstallationInternal(installationID, accessToken string, account *Account, daysBack int, enableEarlyStop bool) ([]Event, error) {
+	var allEvents []Event
+	var cursor string
+	pageCount := 0
+	maxPages := 100 // Safety limit to prevent infinite loops
+
+	for pageCount < maxPages {
+		pageCount++
+
+		// Build URL with cursor or lastNDays parameter
+		baseURL := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/events-history/installations/%s/events", installationID)
+		req, err := http.NewRequest("GET", baseURL, nil)
+		if err != nil {
+			return allEvents, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		q := req.URL.Query()
+		if cursor == "" {
+			// First page: use lastNDays parameter
+			q.Add("lastNDays", fmt.Sprintf("%d", daysBack))
+		} else {
+			// Subsequent pages: use cursor
+			q.Add("cursor", cursor)
+		}
+		q.Add("limit", "1000") // Max allowed by API
+		req.URL.RawQuery = q.Encode()
+
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return allEvents, fmt.Errorf("request failed: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return allEvents, fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		var eventsResp EventsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&eventsResp); err != nil {
+			resp.Body.Close()
+			return allEvents, fmt.Errorf("failed to decode response: %w", err)
+		}
+		resp.Body.Close()
+
+		if len(eventsResp.Data) == 0 {
+			// No more events
+			break
+		}
+
+		// Process events and check if they already exist in DB
+		foundExistingEvent := false
+		for _, rawEvent := range eventsResp.Data {
+			event := processEvent(rawEvent)
+			event.InstallationID = installationID
+			event.AccountID = account.ID
+			event.AccountName = account.Name
+
+			// Check if this event already exists in SQLite (only if early-stop is enabled)
+			if enableEarlyStop && dbInitialized && eventDB != nil {
+				hash := ComputeEventHash(&event)
+				var exists bool
+				err := eventDB.QueryRow("SELECT EXISTS(SELECT 1 FROM events WHERE hash = ?)", hash).Scan(&exists)
+				if err == nil && exists {
+					foundExistingEvent = true
+					log.Printf("Found existing event in DB (hash: %s), stopping pagination for installation %s", hash[:8], installationID)
+					break
+				}
+			}
+
+			allEvents = append(allEvents, event)
+		}
+
+		log.Printf("Page %d: fetched %d events for installation %s", pageCount, len(eventsResp.Data), installationID)
+
+		// Stop if we found an existing event (we've reached events we already have)
+		if enableEarlyStop && foundExistingEvent {
+			break
+		}
+
+		// Check if there's a next page
+		if eventsResp.Cursor == nil || eventsResp.Cursor.Next == "" {
+			// No more pages
+			break
+		}
+
+		// Continue with next cursor
+		cursor = eventsResp.Cursor.Next
+	}
+
+	if pageCount >= maxPages {
+		log.Printf("Warning: reached maximum page limit (%d) for installation %s", maxPages, installationID)
+	}
+
+	return allEvents, nil
+}
+
 // fetchEventsLegacy fetches events from legacy single credential (backward compatibility)
 func fetchEventsLegacy(daysBack int) ([]Event, error) {
 	if err := ensureAuthenticated(); err != nil {
 		return eventsCache, err
 	}
 
-	endDate := time.Now()
-	startDate := endDate.AddDate(0, 0, -daysBack)
-	startStr := startDate.Format("2006-01-02T15:04:05.000Z")
-	endStr := endDate.Format("2006-01-02T15:04:05.000Z")
-
 	allEvents := make([]Event, 0)
 
 	for _, installationID := range installationIDs {
-		url := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/events-history/installations/%s/events", installationID)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Printf("Error creating request for installation %s: %v\n", installationID, err)
-			continue
+		// Create a dummy account for legacy mode
+		legacyAccount := &Account{
+			ID:   currentCreds.Email,
+			Name: "Legacy Account",
 		}
 
-		q := req.URL.Query()
-		q.Add("start", startStr)
-		q.Add("end", endStr)
-		q.Add("limit", "500")
-		req.URL.RawQuery = q.Encode()
-
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-		resp, err := http.DefaultClient.Do(req)
+		accountEvents, err := fetchEventsForInstallation(installationID, accessToken, legacyAccount, daysBack)
 		if err != nil {
 			log.Printf("Error fetching events for installation %s: %v\n", installationID, err)
 			continue
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("API returned status %d for installation %s\n", resp.StatusCode, installationID)
-			resp.Body.Close()
-			continue
-		}
-
-		var eventsResp EventsResponse
-		if err := json.NewDecoder(resp.Body).Decode(&eventsResp); err != nil {
-			log.Printf("Error decoding events for installation %s: %v\n", installationID, err)
-			resp.Body.Close()
-			continue
-		}
-		resp.Body.Close()
-
-		for _, rawEvent := range eventsResp.Data {
-			event := processEvent(rawEvent)
-			event.InstallationID = installationID
-			allEvents = append(allEvents, event)
-		}
-
-		log.Printf("Fetched %d events from installation %s\n", len(eventsResp.Data), installationID)
+		allEvents = append(allEvents, accountEvents...)
+		log.Printf("Fetched %d events from installation %s\n", len(accountEvents), installationID)
 	}
 
 	eventsCache = allEvents
