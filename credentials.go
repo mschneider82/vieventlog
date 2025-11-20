@@ -83,9 +83,17 @@ type EventArchiveSettings struct {
 	DatabasePath    string `json:"databasePath"`    // Path to SQLite database file
 }
 
+type TemperatureLogSettings struct {
+	Enabled         bool   `json:"enabled"`         // Whether temperature logging is enabled
+	RetentionDays   int    `json:"retentionDays"`   // How many days to keep temperature data (e.g., 30, 365)
+	SampleInterval  int    `json:"sampleInterval"`  // Sample interval in minutes (e.g., 5, 10, 15)
+	DatabasePath    string `json:"databasePath"`    // Path to SQLite database file (can be same as events DB)
+}
+
 type AccountStore struct {
-	Accounts             map[string]*Account   `json:"accounts"`             // Key is account ID
-	EventArchiveSettings *EventArchiveSettings `json:"eventArchiveSettings"` // Global event archive settings
+	Accounts                map[string]*Account     `json:"accounts"`                // Key is account ID
+	EventArchiveSettings    *EventArchiveSettings   `json:"eventArchiveSettings"`    // Global event archive settings
+	TemperatureLogSettings  *TemperatureLogSettings `json:"temperatureLogSettings"`  // Global temperature logging settings
 }
 
 // SaveCredentials stores credentials using the configured storage backend
@@ -302,5 +310,38 @@ func SetEventArchiveSettings(settings *EventArchiveSettings) error {
 	}
 
 	store.EventArchiveSettings = settings
+	return SaveAccounts(store)
+}
+
+// --- Temperature Log Settings Functions ---
+
+// GetTemperatureLogSettings retrieves the global temperature logging settings
+func GetTemperatureLogSettings() (*TemperatureLogSettings, error) {
+	store, err := LoadAccounts()
+	if err != nil {
+		return nil, err
+	}
+
+	if store.TemperatureLogSettings == nil {
+		// Return default settings if not configured
+		return &TemperatureLogSettings{
+			Enabled:        false,
+			RetentionDays:  365,
+			SampleInterval: 5,
+			DatabasePath:   "./viessmann_events.db",
+		}, nil
+	}
+
+	return store.TemperatureLogSettings, nil
+}
+
+// SetTemperatureLogSettings updates the global temperature logging settings
+func SetTemperatureLogSettings(settings *TemperatureLogSettings) error {
+	store, err := LoadAccounts()
+	if err != nil {
+		return err
+	}
+
+	store.TemperatureLogSettings = settings
 	return SaveAccounts(store)
 }

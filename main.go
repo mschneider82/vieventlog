@@ -103,6 +103,7 @@ func main() {
 	http.HandleFunc("/login", loginPageHandler)
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
+	http.HandleFunc("/vitocal-charts", vitocalChartsPageHandler)
 	http.HandleFunc("/smartclimate", smartClimatePageHandler)
 	http.HandleFunc("/vitovent", vitoventPageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)
@@ -190,6 +191,12 @@ func main() {
 	http.HandleFunc("/api/event-archive/settings/set", eventArchiveSettingsSetHandler)
 	http.HandleFunc("/api/event-archive/stats", eventArchiveStatsHandler)
 
+	// Temperature logging endpoints
+	http.HandleFunc("/api/temperature-log/settings", temperatureLogSettingsGetHandler)
+	http.HandleFunc("/api/temperature-log/settings/set", temperatureLogSettingsSetHandler)
+	http.HandleFunc("/api/temperature-log/stats", temperatureLogStatsHandler)
+	http.HandleFunc("/api/temperature-log/data", temperatureLogDataHandler)
+
 	// Start event archive scheduler if enabled
 	go func() {
 		// Small delay to ensure everything is initialized
@@ -198,6 +205,11 @@ func main() {
 		err := StartEventArchiveScheduler()
 		if err != nil {
 			log.Printf("Event archive scheduler initialization: %v", err)
+		}
+
+		err = StartTemperatureScheduler()
+		if err != nil {
+			log.Printf("Temperature scheduler initialization: %v", err)
 		}
 	}()
 

@@ -456,3 +456,135 @@ func executeAPIRequest(method, url, accessToken string, requestBody map[string]i
 
 	return resp.StatusCode, parsedBody, nil
 }
+
+// FetchEquipment fetches all equipment/installations for an account
+func FetchEquipment(account *Account) (map[string]interface{}, error) {
+	// Ensure authentication
+	if err := EnsureAuthenticated(account); err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	token, exists := accountTokens[account.ID]
+	if !exists || token == nil {
+		return nil, fmt.Errorf("no token found for account %s", account.ID)
+	}
+
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// FetchAllFeaturesForInstallation fetches all features for all devices in an installation
+// Returns a map with feature names as keys
+func FetchAllFeaturesForInstallation(installationID string, account *Account) (map[string]Feature, error) {
+	// Ensure authentication
+	if err := EnsureAuthenticated(account); err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	token, exists := accountTokens[account.ID]
+	if !exists || token == nil {
+		return nil, fmt.Errorf("no token found for account %s", account.ID)
+	}
+
+	// Get equipment to find gateway and device IDs
+	equipment, err := FetchEquipment(account)
+	if err != nil {
+		return nil, err
+	}
+
+	allFeatures := make(map[string]Feature)
+
+	// Parse equipment to find devices
+	if data, ok := equipment["data"].([]interface{}); ok {
+		for _, item := range data {
+			if inst, ok := item.(map[string]interface{}); ok {
+				// Check if this is the installation we're looking for
+				instID := ""
+				if id, ok := inst["id"].(float64); ok {
+					instID = fmt.Sprintf("%.0f", id)
+				} else if id, ok := inst["id"].(string); ok {
+					instID = id
+				}
+
+				if instID != installationID {
+					continue
+				}
+
+				// Get gateways and devices
+				if gateways, ok := inst["gateways"].([]interface{}); ok {
+					for _, gw := range gateways {
+						if gateway, ok := gw.(map[string]interface{}); ok {
+							gatewaySerial := ""
+							if serial, ok := gateway["serial"].(string); ok {
+								gatewaySerial = serial
+							}
+
+							// Get devices
+							if devices, ok := gateway["devices"].([]interface{}); ok {
+								for _, dev := range devices {
+									if device, ok := dev.(map[string]interface{}); ok {
+										deviceID := ""
+										if id, ok := device["id"].(string); ok {
+											deviceID = id
+										}
+
+										if gatewaySerial != "" && deviceID != "" {
+											// Fetch features for this device
+											deviceFeatures, err := fetchFeaturesWithCache(installationID, gatewaySerial, deviceID, token.AccessToken)
+											if err != nil {
+												log.Printf("Error fetching features for device %s: %v", deviceID, err)
+												continue
+											}
+
+											// Merge all features into the map
+											for _, feature := range deviceFeatures.RawFeatures {
+												allFeatures[feature.Feature] = feature
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return allFeatures, nil
+}
+
+// EnsureAuthenticated ensures the account has a valid token
+func EnsureAuthenticated(account *Account) error {
+	token, exists := accountTokens[account.ID]
+
+	// Check if token exists and is still valid
+	if exists && token != nil && time.Now().Before(token.Expiry) {
+		return nil
+	}
+
+	// Need to authenticate
+	_, err := ensureAccountAuthenticated(account)
+	return err
+}
