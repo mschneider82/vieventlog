@@ -409,7 +409,7 @@
 
                 // DHW
                 dhwTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage', 'heating.dhw.sensors.temperature.dhwCylinder']),
-                dhwCylinderMiddleTemp: findNested('heating.dhw.sensors.temperature.dhwCylinder', 'middle'),
+                dhwCylinderMiddleTemp: find(['heating.dhw.sensors.temperature.hotWaterStorage.middle', 'heating.dhw.sensors.temperature.dhwCylinder.middle']),
                 dhwTarget: find(['heating.dhw.temperature.main']),
                 dhwTarget2: find(['heating.dhw.temperature.temp2']),
                 dhwStatus: find(['heating.dhw.operating.modes.active']),
