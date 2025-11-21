@@ -209,6 +209,11 @@
                 renderDashboard(features);
                 updateLastUpdate();
 
+                // Initialize temperature chart if function exists
+                if (typeof initTemperatureChart === 'function') {
+                    initTemperatureChart();
+                }
+
             } catch (error) {
                 showError('Fehler beim Laden der Features: ' + error.message);
                 contentDiv.innerHTML = '<div class="error">Fehler beim Laden der Daten: ' + error.message + '</div>';

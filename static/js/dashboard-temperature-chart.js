@@ -521,6 +521,19 @@ chartStyles.textContent = `
     padding: 25px;
     margin-bottom: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    /* Make chart wider by using negative margins */
+    margin-left: -50px;
+    margin-right: -50px;
+    max-width: none;
+    width: calc(100% + 100px);
+}
+
+@media (max-width: 1600px) {
+    .temperature-chart-container {
+        margin-left: 0;
+        margin-right: 0;
+        width: 100%;
+    }
 }
 
 .chart-header {
