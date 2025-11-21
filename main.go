@@ -190,6 +190,12 @@ func main() {
 	http.HandleFunc("/api/event-archive/settings/set", eventArchiveSettingsSetHandler)
 	http.HandleFunc("/api/event-archive/stats", eventArchiveStatsHandler)
 
+	// Temperature log endpoints
+	http.HandleFunc("/api/temperature-log/settings", handleTemperatureLogSettings)
+	http.HandleFunc("/api/temperature-log/settings/set", handleSetTemperatureLogSettings)
+	http.HandleFunc("/api/temperature-log/stats", handleTemperatureLogStats)
+	http.HandleFunc("/api/temperature-log/data", handleTemperatureLogData)
+
 	// Start event archive scheduler if enabled
 	go func() {
 		// Small delay to ensure everything is initialized
@@ -198,6 +204,12 @@ func main() {
 		err := StartEventArchiveScheduler()
 		if err != nil {
 			log.Printf("Event archive scheduler initialization: %v", err)
+		}
+
+		// Start temperature scheduler if enabled
+		err = StartTemperatureScheduler()
+		if err != nil {
+			log.Printf("Temperature scheduler initialization: %v", err)
 		}
 	}()
 

@@ -20,6 +20,12 @@
             await loadDevices();
             if (currentInstallationId) {
                 await loadDashboard();
+
+                // Initialize temperature chart if function exists
+                if (typeof initTemperatureChart === 'function') {
+                    initTemperatureChart();
+                }
+
                 startAutoRefresh();
             }
         }

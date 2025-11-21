@@ -251,3 +251,76 @@ type HybridProControlResponse struct {
 	Error    string                    `json:"error,omitempty"`
 	Settings *HybridProControlSettings `json:"settings,omitempty"`
 }
+
+// TemperatureSnapshot represents a single snapshot of all temperature and sensor data
+type TemperatureSnapshot struct {
+	Timestamp      time.Time `json:"timestamp"`
+	InstallationID string    `json:"installation_id"`
+	GatewayID      string    `json:"gateway_id"`
+	DeviceID       string    `json:"device_id"`
+	AccountID      string    `json:"account_id"`
+	AccountName    string    `json:"account_name"`
+
+	// Temperature sensors
+	OutsideTemp             *float64 `json:"outside_temp,omitempty"`
+	ReturnTemp              *float64 `json:"return_temp,omitempty"`
+	SupplyTemp              *float64 `json:"supply_temp,omitempty"`
+	PrimarySupplyTemp       *float64 `json:"primary_supply_temp,omitempty"`
+	SecondarySupplyTemp     *float64 `json:"secondary_supply_temp,omitempty"`
+	PrimaryReturnTemp       *float64 `json:"primary_return_temp,omitempty"`
+	SecondaryReturnTemp     *float64 `json:"secondary_return_temp,omitempty"`
+	DHWTemp                 *float64 `json:"dhw_temp,omitempty"`
+	BoilerTemp              *float64 `json:"boiler_temp,omitempty"`
+	BufferTemp              *float64 `json:"buffer_temp,omitempty"`
+	BufferTempTop           *float64 `json:"buffer_temp_top,omitempty"`
+	CalculatedOutsideTemp   *float64 `json:"calculated_outside_temp,omitempty"`
+
+	// Compressor data
+	CompressorActive     *bool    `json:"compressor_active,omitempty"`
+	CompressorSpeed      *float64 `json:"compressor_speed,omitempty"`
+	CompressorCurrent    *float64 `json:"compressor_current,omitempty"`
+	CompressorPressure   *float64 `json:"compressor_pressure,omitempty"`
+	CompressorOilTemp    *float64 `json:"compressor_oil_temp,omitempty"`
+	CompressorMotorTemp  *float64 `json:"compressor_motor_temp,omitempty"`
+	CompressorInletTemp  *float64 `json:"compressor_inlet_temp,omitempty"`
+	CompressorOutletTemp *float64 `json:"compressor_outlet_temp,omitempty"`
+	CompressorHours      *float64 `json:"compressor_hours,omitempty"`
+	CompressorPower      *float64 `json:"compressor_power,omitempty"`
+
+	// Pump status
+	CirculationPumpActive *bool `json:"circulation_pump_active,omitempty"`
+	DHWPumpActive         *bool `json:"dhw_pump_active,omitempty"`
+	InternalPumpActive    *bool `json:"internal_pump_active,omitempty"`
+
+	// Flow/Energy
+	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`
+	ThermalPower   *float64 `json:"thermal_power,omitempty"`
+	COP            *float64 `json:"cop,omitempty"`
+
+	// Operating state
+	FourWayValve               *string  `json:"four_way_valve,omitempty"`
+	BurnerModulation           *float64 `json:"burner_modulation,omitempty"`
+	SecondaryHeatGeneratorStatus *string `json:"secondary_heat_generator_status,omitempty"`
+}
+
+// TemperatureLogSettings holds configuration for temperature logging
+type TemperatureLogSettings struct {
+	Enabled         bool   `json:"enabled"`
+	SampleInterval  int    `json:"sample_interval"`  // Minutes between samples
+	RetentionDays   int    `json:"retention_days"`   // How long to keep data
+	DatabasePath    string `json:"database_path"`    // SQLite database path
+}
+
+// TemperatureLogStatsResponse provides statistics about temperature logging
+type TemperatureLogStatsResponse struct {
+	Enabled         bool   `json:"enabled"`
+	SchedulerRunning bool  `json:"scheduler_running"`
+	TotalSnapshots  int64  `json:"total_snapshots"`
+	SampleInterval  int    `json:"sample_interval"`
+	RetentionDays   int    `json:"retention_days"`
+	DatabasePath    string `json:"database_path"`
+	APIUsage10Min   int    `json:"api_usage_10min"`
+	APIUsage24Hr    int    `json:"api_usage_24hr"`
+	APILimit10Min   int    `json:"api_limit_10min"`
+	APILimit24Hr    int    `json:"api_limit_24hr"`
+}
