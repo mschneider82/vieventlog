@@ -62,16 +62,11 @@ async function initTemperatureChart() {
             <div class="chart-filters" id="temperature-chart-filters">
                 <div class="filters-loading">Lade verfügbare Sensoren...</div>
             </div>
-            <div id="temperature-chart" style="width: 100%; height: 500px; margin-top: 20px;"></div>
+            <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
 
-        // Insert at the top of dashboard content, but after any existing content
-        const firstChild = dashboardContent.firstChild;
-        if (firstChild) {
-            dashboardContent.insertBefore(chartSection, firstChild);
-        } else {
-            dashboardContent.appendChild(chartSection);
-        }
+        // Insert at the end of dashboard content (after temperature tiles)
+        dashboardContent.appendChild(chartSection);
 
         // Add event listeners for time range buttons
         const timeButtons = chartSection.querySelectorAll('.time-btn');
@@ -285,8 +280,17 @@ function toggleField(field) {
 function renderTemperatureChart(data) {
     if (!temperatureChart || data.length === 0) return;
 
-    // Prepare series data
-    const timestamps = data.map(d => new Date(d.timestamp));
+    // Prepare series data - ensure timestamps are properly parsed
+    const timestamps = data.map(d => {
+        // Handle both ISO string and timestamp formats
+        const date = new Date(d.timestamp);
+        // Validate the date
+        if (isNaN(date.getTime())) {
+            console.error('Invalid timestamp:', d.timestamp);
+            return new Date();
+        }
+        return date.getTime(); // Convert to milliseconds for ECharts
+    });
     const series = [];
     const legend = [];
 
