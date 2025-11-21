@@ -282,12 +282,19 @@ function renderTemperatureChart(data) {
 
     // Prepare series data - ensure timestamps are properly parsed
     const timestamps = data.map(d => {
+        let timestamp = d.timestamp;
+
+        // If timestamp is a number and appears to be in seconds (< year 2000 in milliseconds)
+        if (typeof timestamp === 'number' && timestamp < 10000000000) {
+            timestamp = timestamp * 1000; // Convert seconds to milliseconds
+        }
+
         // Handle both ISO string and timestamp formats
-        const date = new Date(d.timestamp);
+        const date = new Date(timestamp);
         // Validate the date
         if (isNaN(date.getTime())) {
             console.error('Invalid timestamp:', d.timestamp);
-            return new Date();
+            return new Date().getTime();
         }
         return date.getTime(); // Convert to milliseconds for ECharts
     });
@@ -521,18 +528,23 @@ chartStyles.textContent = `
     padding: 25px;
     margin-bottom: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    /* Make chart wider by using negative margins */
-    margin-left: -50px;
-    margin-right: -50px;
-    max-width: none;
-    width: calc(100% + 100px);
+    /* Make chart much wider - break out of container */
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    width: 100vw;
+    max-width: 100vw;
 }
 
-@media (max-width: 1600px) {
+@media (max-width: 768px) {
     .temperature-chart-container {
-        margin-left: 0;
-        margin-right: 0;
-        width: 100%;
+        left: 0;
+        right: 0;
+        margin-left: -20px;
+        margin-right: -20px;
+        width: calc(100% + 40px);
     }
 }
 
