@@ -8,8 +8,31 @@ let availableDataFields = new Set();
 let selectedFields = new Set();
 
 // Initialize temperature chart section
-function initTemperatureChart() {
-    // Add temperature chart section to dashboard if not already present
+async function initTemperatureChart() {
+    // First check if temperature logging is enabled
+    try {
+        const response = await fetch('/api/temperature-log/settings');
+        if (!response.ok) {
+            console.log('Temperature logging settings not available');
+            return;
+        }
+
+        const settings = await response.json();
+        if (!settings.enabled) {
+            console.log('Temperature logging is disabled');
+            // Remove chart section if it exists
+            const existingSection = document.getElementById('temperature-chart-section');
+            if (existingSection) {
+                existingSection.remove();
+            }
+            return;
+        }
+    } catch (error) {
+        console.error('Error checking temperature log settings:', error);
+        return;
+    }
+
+    // Temperature logging is enabled, proceed with initialization
     const dashboardContent = document.getElementById('dashboardContent');
     if (!dashboardContent) return;
 
@@ -488,11 +511,12 @@ window.addEventListener('beforeunload', () => {
 const chartStyles = document.createElement('style');
 chartStyles.textContent = `
 .temperature-chart-container {
-    background: white;
-    border-radius: 8px;
-    padding: 20px;
+    background: linear-gradient(135deg, #1e1e2e 0%, #262637 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 25px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .chart-header {
@@ -506,6 +530,7 @@ chartStyles.textContent = `
 .chart-header h2 {
     margin: 0;
     font-size: 1.5rem;
+    color: #fff;
 }
 
 .time-range-selector {
@@ -516,8 +541,9 @@ chartStyles.textContent = `
 
 .time-btn {
     padding: 6px 12px;
-    border: 1px solid #ddd;
-    background: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
+    color: #e0e0e0;
     cursor: pointer;
     border-radius: 4px;
     font-size: 0.9rem;
@@ -525,20 +551,23 @@ chartStyles.textContent = `
 }
 
 .time-btn:hover {
-    background: #f5f5f5;
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.3);
 }
 
 .time-btn.active {
-    background: #4285f4;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    border-color: #4285f4;
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .chart-filters {
     margin-top: 15px;
     padding: 15px;
-    background: #f8f9fa;
-    border-radius: 4px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
 }
 
 .filter-categories {
@@ -550,7 +579,8 @@ chartStyles.textContent = `
 .filter-category h4 {
     margin: 0 0 10px 0;
     font-size: 0.95rem;
-    color: #333;
+    color: #e0e0e0;
+    font-weight: 600;
 }
 
 .filter-checkboxes {
@@ -564,6 +594,7 @@ chartStyles.textContent = `
     align-items: center;
     cursor: pointer;
     font-size: 0.9rem;
+    color: #c0c0d0;
 }
 
 .filter-checkbox input {
@@ -573,7 +604,7 @@ chartStyles.textContent = `
 
 .filters-loading {
     text-align: center;
-    color: #666;
+    color: #a0a0b0;
     padding: 10px;
 }
 
