@@ -171,7 +171,7 @@ func temperatureLogDataHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		endTime = time.Now()
+		endTime = time.Now().UTC()
 		startTime = endTime.Add(-time.Duration(hours) * time.Hour)
 	}
 

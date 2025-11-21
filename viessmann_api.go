@@ -469,7 +469,7 @@ func FetchEquipment(account *Account) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("no token found for account %s", account.ID)
 	}
 
-	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
+	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations?includeGateways=true", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -558,8 +558,20 @@ func FetchAllFeaturesForInstallation(installationID string, account *Account) (m
 											}
 
 											// Merge all features into the map
+											// Prefer features with non-empty Properties to avoid overwriting good data with empty data
 											for _, feature := range deviceFeatures.RawFeatures {
-												allFeatures[feature.Feature] = feature
+												// Check if feature already exists
+												if _, exists := allFeatures[feature.Feature]; exists {
+													// Only overwrite if new feature has non-empty Properties
+													// This prevents features with empty Properties from overwriting features with actual data
+													if len(feature.Properties) > 0 {
+														allFeatures[feature.Feature] = feature
+													}
+													// If new feature has empty Properties, keep the existing one (don't overwrite)
+												} else {
+													// Feature doesn't exist yet, add it
+													allFeatures[feature.Feature] = feature
+												}
 											}
 										}
 									}

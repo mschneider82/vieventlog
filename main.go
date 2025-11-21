@@ -103,7 +103,7 @@ func main() {
 	http.HandleFunc("/login", loginPageHandler)
 	http.HandleFunc("/accounts", accountsPageHandler)
 	http.HandleFunc("/dashboard", dashboardPageHandler)
-	http.HandleFunc("/vitocal-charts", vitocalChartsPageHandler)
+	// Removed: /vitocal-charts - functionality integrated into dashboard
 	http.HandleFunc("/smartclimate", smartClimatePageHandler)
 	http.HandleFunc("/vitovent", vitoventPageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)

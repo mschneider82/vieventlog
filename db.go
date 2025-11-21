@@ -106,6 +106,11 @@ func InitEventDatabase(dbPath string) error {
 		compressor_outlet_temp REAL,
 		compressor_hours REAL,
 
+		-- Pump status
+		circulation_pump_active INTEGER,
+		dhw_pump_active INTEGER,
+		internal_pump_active INTEGER,
+
 		-- Flow and energy
 		volumetric_flow REAL,
 		thermal_power REAL,
@@ -419,53 +424,58 @@ func GetOldestEventTimestamp() (string, error) {
 
 // TemperatureSnapshot represents a single temperature/state snapshot
 type TemperatureSnapshot struct {
-	Timestamp      string
-	InstallationID string
-	GatewayID      string
-	DeviceID       string
-	AccountID      string
-	AccountName    string
+	Timestamp      string `json:"timestamp"`
+	InstallationID string `json:"installation_id"`
+	GatewayID      string `json:"gateway_id"`
+	DeviceID       string `json:"device_id"`
+	AccountID      string `json:"account_id"`
+	AccountName    string `json:"account_name"`
 
 	// Temperature values
-	OutsideTemp           *float64
-	CalculatedOutsideTemp *float64
-	SupplyTemp            *float64
-	ReturnTemp            *float64
-	DHWTemp               *float64
-	BoilerTemp            *float64
-	BufferTemp            *float64
-	BufferTempTop         *float64
-	PrimarySupplyTemp     *float64
-	SecondarySupplyTemp   *float64
-	PrimaryReturnTemp     *float64
-	SecondaryReturnTemp   *float64
+	OutsideTemp           *float64 `json:"outside_temp"`
+	CalculatedOutsideTemp *float64 `json:"calculated_outside_temp"`
+	SupplyTemp            *float64 `json:"supply_temp"`
+	ReturnTemp            *float64 `json:"return_temp"`
+	DHWTemp               *float64 `json:"dhw_temp"`
+	BoilerTemp            *float64 `json:"boiler_temp"`
+	BufferTemp            *float64 `json:"buffer_temp"`
+	BufferTempTop         *float64 `json:"buffer_temp_top"`
+	PrimarySupplyTemp     *float64 `json:"primary_supply_temp"`
+	SecondarySupplyTemp   *float64 `json:"secondary_supply_temp"`
+	PrimaryReturnTemp     *float64 `json:"primary_return_temp"`
+	SecondaryReturnTemp   *float64 `json:"secondary_return_temp"`
 
 	// Compressor data
-	CompressorActive    *bool
-	CompressorSpeed     *float64
-	CompressorPower     *float64
-	CompressorCurrent   *float64
-	CompressorPressure  *float64
-	CompressorOilTemp   *float64
-	CompressorMotorTemp *float64
-	CompressorInletTemp *float64
-	CompressorOutletTemp *float64
-	CompressorHours     *float64
+	CompressorActive     *bool    `json:"compressor_active"`
+	CompressorSpeed      *float64 `json:"compressor_speed"`
+	CompressorPower      *float64 `json:"compressor_power"`
+	CompressorCurrent    *float64 `json:"compressor_current"`
+	CompressorPressure   *float64 `json:"compressor_pressure"`
+	CompressorOilTemp    *float64 `json:"compressor_oil_temp"`
+	CompressorMotorTemp  *float64 `json:"compressor_motor_temp"`
+	CompressorInletTemp  *float64 `json:"compressor_inlet_temp"`
+	CompressorOutletTemp *float64 `json:"compressor_outlet_temp"`
+	CompressorHours      *float64 `json:"compressor_hours"`
+
+	// Pump status
+	CirculationPumpActive *bool `json:"circulation_pump_active"`
+	DHWPumpActive         *bool `json:"dhw_pump_active"`
+	InternalPumpActive    *bool `json:"internal_pump_active"`
 
 	// Flow and energy
-	VolumetricFlow *float64
-	ThermalPower   *float64
-	COP            *float64
+	VolumetricFlow *float64 `json:"volumetric_flow"`
+	ThermalPower   *float64 `json:"thermal_power"`
+	COP            *float64 `json:"cop"`
 
 	// Operating state
-	FourWayValve                 *string
-	BurnerModulation             *float64
-	SecondaryHeatGeneratorStatus *string
+	FourWayValve                 *string  `json:"four_way_valve"`
+	BurnerModulation             *float64 `json:"burner_modulation"`
+	SecondaryHeatGeneratorStatus *string  `json:"secondary_heat_generator_status"`
 
 	// Heating curve
-	HeatingCurveSlope *float64
-	HeatingCurveShift *float64
-	TargetSupplyTemp  *float64
+	HeatingCurveSlope *float64 `json:"heating_curve_slope"`
+	HeatingCurveShift *float64 `json:"heating_curve_shift"`
+	TargetSupplyTemp  *float64 `json:"target_supply_temp"`
 }
 
 // SaveTemperatureSnapshot inserts a temperature snapshot into the database
@@ -487,6 +497,30 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		compressorActiveInt = &val
 	}
 
+	// Convert pump bool pointers to nullable int
+	var circulationPumpInt, dhwPumpInt, internalPumpInt *int
+	if snapshot.CirculationPumpActive != nil {
+		val := 0
+		if *snapshot.CirculationPumpActive {
+			val = 1
+		}
+		circulationPumpInt = &val
+	}
+	if snapshot.DHWPumpActive != nil {
+		val := 0
+		if *snapshot.DHWPumpActive {
+			val = 1
+		}
+		dhwPumpInt = &val
+	}
+	if snapshot.InternalPumpActive != nil {
+		val := 0
+		if *snapshot.InternalPumpActive {
+			val = 1
+		}
+		internalPumpInt = &val
+	}
+
 	insertSQL := `
 		INSERT INTO temperature_snapshots (
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
@@ -496,10 +530,11 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			compressor_active, compressor_speed, compressor_power, compressor_current,
 			compressor_pressure, compressor_oil_temp, compressor_motor_temp,
 			compressor_inlet_temp, compressor_outlet_temp, compressor_hours,
+			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			four_way_valve, burner_modulation, secondary_heat_generator_status,
 			heating_curve_slope, heating_curve_shift, target_supply_temp
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -531,6 +566,9 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.CompressorInletTemp,
 		snapshot.CompressorOutletTemp,
 		snapshot.CompressorHours,
+		circulationPumpInt,
+		dhwPumpInt,
+		internalPumpInt,
 		snapshot.VolumetricFlow,
 		snapshot.ThermalPower,
 		snapshot.COP,
@@ -567,11 +605,12 @@ func GetTemperatureSnapshots(installationID string, startTime, endTime time.Time
 			compressor_active, compressor_speed, compressor_power, compressor_current,
 			compressor_pressure, compressor_oil_temp, compressor_motor_temp,
 			compressor_inlet_temp, compressor_outlet_temp, compressor_hours,
+			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			four_way_valve, burner_modulation, secondary_heat_generator_status,
 			heating_curve_slope, heating_curve_shift, target_supply_temp
 		FROM temperature_snapshots
-		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ?
+		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ? AND device_id = '0'
 		ORDER BY timestamp ASC
 	`
 
@@ -588,7 +627,7 @@ func GetTemperatureSnapshots(installationID string, startTime, endTime time.Time
 	var snapshots []TemperatureSnapshot
 	for rows.Next() {
 		var snapshot TemperatureSnapshot
-		var compressorActiveInt *int
+		var compressorActiveInt, circulationPumpInt, dhwPumpInt, internalPumpInt *int
 
 		err := rows.Scan(
 			&snapshot.Timestamp,
@@ -619,6 +658,9 @@ func GetTemperatureSnapshots(installationID string, startTime, endTime time.Time
 			&snapshot.CompressorInletTemp,
 			&snapshot.CompressorOutletTemp,
 			&snapshot.CompressorHours,
+			&circulationPumpInt,
+			&dhwPumpInt,
+			&internalPumpInt,
 			&snapshot.VolumetricFlow,
 			&snapshot.ThermalPower,
 			&snapshot.COP,
@@ -635,10 +677,22 @@ func GetTemperatureSnapshots(installationID string, startTime, endTime time.Time
 			continue
 		}
 
-		// Convert active int back to bool pointer
+		// Convert active ints back to bool pointers
 		if compressorActiveInt != nil {
 			val := *compressorActiveInt == 1
 			snapshot.CompressorActive = &val
+		}
+		if circulationPumpInt != nil {
+			val := *circulationPumpInt == 1
+			snapshot.CirculationPumpActive = &val
+		}
+		if dhwPumpInt != nil {
+			val := *dhwPumpInt == 1
+			snapshot.DHWPumpActive = &val
+		}
+		if internalPumpInt != nil {
+			val := *internalPumpInt == 1
+			snapshot.InternalPumpActive = &val
 		}
 
 		snapshots = append(snapshots, snapshot)

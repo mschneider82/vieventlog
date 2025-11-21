@@ -314,7 +314,9 @@ func getInstallationsForAccount(account *Account) ([]DeviceInfo, error) {
 											deviceID = id
 										}
 
-										if installationID != "" && gatewaySerial != "" && deviceID != "" {
+										// Only include device ID "0" (main heating device)
+										// Skip "gateway", "RoomControl-1", etc. to avoid duplicate data
+										if deviceID == "0" && installationID != "" && gatewaySerial != "" {
 											devices = append(devices, DeviceInfo{
 												ID:        installationID,
 												GatewayID: gatewaySerial,
@@ -395,6 +397,21 @@ func convertFeaturesToSnapshot(features map[string]Feature, device DeviceInfo, a
 		return nil
 	}
 
+	// Helper to extract pump status (status: "on"/"off" -> bool)
+	getPumpStatus := func(featureName string) *bool {
+		if feature, ok := features[featureName]; ok {
+			if props, ok := feature.Properties["status"]; ok {
+				if val, ok := props.(map[string]interface{}); ok {
+					if v, ok := val["value"].(string); ok {
+						isOn := v == "on"
+						return &isOn
+					}
+				}
+			}
+		}
+		return nil
+	}
+
 	// Extract temperature values
 	snapshot.OutsideTemp = getFloat("heating.sensors.temperature.outside")
 	snapshot.CalculatedOutsideTemp = getFloat("heating.sensors.temperature.outside.calculated")
@@ -411,15 +428,20 @@ func convertFeaturesToSnapshot(features map[string]Feature, device DeviceInfo, a
 
 	// Extract compressor data
 	snapshot.CompressorActive = getBool("heating.compressors.0")
-	snapshot.CompressorSpeed = getFloat("heating.compressors.0.statistics.speed")
-	snapshot.CompressorPower = getFloat("heating.power.consumption")
+	snapshot.CompressorSpeed = getFloat("heating.compressors.0.speed.current")
+	// Note: heating.power.consumption does not exist as real-time value - only summary stats available
 	snapshot.CompressorCurrent = getFloat("heating.compressors.0.statistics.current")
-	snapshot.CompressorPressure = getFloat("heating.compressors.0.refrigerant.pressure")
-	snapshot.CompressorOilTemp = getFloat("heating.compressors.0.refrigerant.temperature.oil")
-	snapshot.CompressorMotorTemp = getFloat("heating.compressors.0.statistics.temperature.motor")
-	snapshot.CompressorInletTemp = getFloat("heating.compressors.0.refrigerant.temperature.inlet")
-	snapshot.CompressorOutletTemp = getFloat("heating.compressors.0.refrigerant.temperature.outlet")
+	snapshot.CompressorPressure = getFloat("heating.compressors.0.sensors.pressure.inlet")
+	snapshot.CompressorOilTemp = getFloat("heating.compressors.0.sensors.temperature.oil")
+	snapshot.CompressorMotorTemp = getFloat("heating.compressors.0.sensors.temperature.motorChamber")
+	snapshot.CompressorInletTemp = getFloat("heating.compressors.0.sensors.temperature.inlet")
+	snapshot.CompressorOutletTemp = getFloat("heating.compressors.0.sensors.temperature.outlet")
 	snapshot.CompressorHours = getFloat("heating.compressors.0.statistics.hours")
+
+	// Extract pump status
+	snapshot.CirculationPumpActive = getPumpStatus("heating.circuits.0.circulation.pump")
+	snapshot.DHWPumpActive = getPumpStatus("heating.dhw.pumps.circulation")
+	snapshot.InternalPumpActive = getPumpStatus("heating.boiler.pumps.internal")
 
 	// Extract flow and energy
 	snapshot.VolumetricFlow = getFloat("heating.sensors.volumetricFlow.allengra")
@@ -447,9 +469,19 @@ func convertFeaturesToSnapshot(features map[string]Feature, device DeviceInfo, a
 	snapshot.BurnerModulation = getFloat("heating.burners.0.modulation")
 	snapshot.SecondaryHeatGeneratorStatus = getString("heating.secondaryHeatGenerator.status")
 
-	// Extract heating curve parameters
-	snapshot.HeatingCurveSlope = getFloat("heating.circuits.0.heating.curve.slope")
-	snapshot.HeatingCurveShift = getFloat("heating.circuits.0.heating.curve.shift")
+	// Extract heating curve parameters (special structure: properties.slope.value, not properties.value.value)
+	if feature, ok := features["heating.circuits.0.heating.curve"]; ok {
+		if slope, ok := feature.Properties["slope"].(map[string]interface{}); ok {
+			if v, ok := slope["value"].(float64); ok {
+				snapshot.HeatingCurveSlope = &v
+			}
+		}
+		if shift, ok := feature.Properties["shift"].(map[string]interface{}); ok {
+			if v, ok := shift["value"].(float64); ok {
+				snapshot.HeatingCurveShift = &v
+			}
+		}
+	}
 
 	// Calculate target supply temperature based on heating curve
 	if snapshot.HeatingCurveSlope != nil && snapshot.HeatingCurveShift != nil && snapshot.OutsideTemp != nil {
