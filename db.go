@@ -23,7 +23,13 @@ func InitEventDatabase(dbPath string) error {
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
 
-	// Close existing connection if any
+	// If already initialized with the same path, reuse the connection
+	if dbInitialized && eventDB != nil {
+		log.Printf("Database already initialized, reusing connection")
+		return nil
+	}
+
+	// Close existing connection if any (only if reinitializing with different path)
 	if eventDB != nil {
 		eventDB.Close()
 	}
