@@ -54,11 +54,13 @@
         </div>
     </div>
 
-    <!-- Dashboard scripts in load order: core -> render (engine, heating, zigbee) -> controls -->
+    <!-- Dashboard scripts in load order: core -> render (engine, heating, zigbee) -> temperature-chart -> controls -->
+    <script src="/static/js/echarts.min.js"></script>
     <script src="/static/js/dashboard-core.js"></script>
     <script src="/static/js/dashboard-render-engine.js"></script>
     <script src="/static/js/dashboard-render-heating.js"></script>
     <script src="/static/js/dashboard-render-zigbee.js"></script>
+    <script src="/static/js/dashboard-temperature-chart.js"></script>
     <script src="/static/js/dashboard-controls.js"></script>
 </body>
 </html>
