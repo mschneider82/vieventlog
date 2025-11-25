@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -283,11 +285,23 @@ func GetEventArchiveSettings() (*EventArchiveSettings, error) {
 
 	if store.EventArchiveSettings == nil {
 		// Return default settings if not configured
+		// Use VICARE_CONFIG_DIR or /config for database path (Docker-friendly)
+		configDir := os.Getenv("VICARE_CONFIG_DIR")
+		if configDir == "" {
+			// Check if /config exists (Docker), otherwise use current directory
+			if _, err := os.Stat("/config"); err == nil {
+				configDir = "/config"
+			} else {
+				configDir = "."
+			}
+		}
+		dbPath := filepath.Join(configDir, "viessmann_events.db")
+
 		return &EventArchiveSettings{
 			Enabled:         false,
 			RetentionDays:   30,
 			RefreshInterval: 60,
-			DatabasePath:    "./viessmann_events.db",
+			DatabasePath:    dbPath,
 		}, nil
 	}
 
