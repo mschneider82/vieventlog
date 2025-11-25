@@ -20,6 +20,12 @@
             await loadDevices();
             if (currentInstallationId) {
                 await loadDashboard();
+
+                // Initialize temperature chart if function exists
+                if (typeof initTemperatureChart === 'function') {
+                    initTemperatureChart();
+                }
+
                 startAutoRefresh();
             }
         }
@@ -202,6 +208,11 @@
 
                 renderDashboard(features);
                 updateLastUpdate();
+
+                // Initialize temperature chart if function exists
+                if (typeof initTemperatureChart === 'function') {
+                    initTemperatureChart();
+                }
 
             } catch (error) {
                 showError('Fehler beim Laden der Features: ' + error.message);

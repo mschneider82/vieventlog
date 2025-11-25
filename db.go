@@ -76,6 +76,79 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to create events table: %v", err)
 	}
 
+	// Create temperature_snapshots table
+	createTempTableSQL := `
+	CREATE TABLE IF NOT EXISTS temperature_snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp TEXT NOT NULL,
+		installation_id TEXT NOT NULL,
+		gateway_id TEXT,
+		device_id TEXT,
+		account_id TEXT,
+		account_name TEXT,
+		outside_temp REAL,
+		return_temp REAL,
+		supply_temp REAL,
+		primary_supply_temp REAL,
+		secondary_supply_temp REAL,
+		primary_return_temp REAL,
+		secondary_return_temp REAL,
+		dhw_temp REAL,
+		boiler_temp REAL,
+		buffer_temp REAL,
+		buffer_temp_top REAL,
+		calculated_outside_temp REAL,
+		compressor_active INTEGER,
+		compressor_speed REAL,
+		compressor_current REAL,
+		compressor_pressure REAL,
+		compressor_oil_temp REAL,
+		compressor_motor_temp REAL,
+		compressor_inlet_temp REAL,
+		compressor_outlet_temp REAL,
+		compressor_hours REAL,
+		compressor_power REAL,
+		circulation_pump_active INTEGER,
+		dhw_pump_active INTEGER,
+		internal_pump_active INTEGER,
+		volumetric_flow REAL,
+		thermal_power REAL,
+		cop REAL,
+		four_way_valve TEXT,
+		burner_modulation REAL,
+		secondary_heat_generator_status TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_temp_timestamp ON temperature_snapshots(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_temp_installation_id ON temperature_snapshots(installation_id);
+	CREATE INDEX IF NOT EXISTS idx_temp_account_id ON temperature_snapshots(account_id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_temp_unique ON temperature_snapshots(timestamp, installation_id, gateway_id, device_id);
+	`
+
+	_, err = eventDB.Exec(createTempTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create temperature_snapshots table: %v", err)
+	}
+
+	// Create temperature_log_settings table
+	createSettingsTableSQL := `
+	CREATE TABLE IF NOT EXISTS temperature_log_settings (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		enabled INTEGER NOT NULL DEFAULT 0,
+		sample_interval INTEGER NOT NULL DEFAULT 5,
+		retention_days INTEGER NOT NULL DEFAULT 90,
+		database_path TEXT NOT NULL
+	);
+
+	INSERT OR IGNORE INTO temperature_log_settings (id, enabled, sample_interval, retention_days, database_path)
+	VALUES (1, 0, 5, 90, '');
+	`
+
+	_, err = eventDB.Exec(createSettingsTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create temperature_log_settings table: %v", err)
+	}
+
 	dbInitialized = true
 	log.Printf("Event database initialized at: %s", dbPath)
 	return nil
@@ -353,4 +426,339 @@ func GetOldestEventTimestamp() (string, error) {
 	}
 
 	return timestamp, nil
+}
+
+// SaveTemperatureSnapshot inserts a temperature snapshot into the database
+func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
+	if !dbInitialized || eventDB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	// Convert bool pointers to nullable ints
+	var compressorActiveInt, circulationPumpActiveInt, dhwPumpActiveInt, internalPumpActiveInt *int
+	if snapshot.CompressorActive != nil {
+		val := 0
+		if *snapshot.CompressorActive {
+			val = 1
+		}
+		compressorActiveInt = &val
+	}
+	if snapshot.CirculationPumpActive != nil {
+		val := 0
+		if *snapshot.CirculationPumpActive {
+			val = 1
+		}
+		circulationPumpActiveInt = &val
+	}
+	if snapshot.DHWPumpActive != nil {
+		val := 0
+		if *snapshot.DHWPumpActive {
+			val = 1
+		}
+		dhwPumpActiveInt = &val
+	}
+	if snapshot.InternalPumpActive != nil {
+		val := 0
+		if *snapshot.InternalPumpActive {
+			val = 1
+		}
+		internalPumpActiveInt = &val
+	}
+
+	// Use INSERT OR REPLACE to avoid duplicates based on timestamp, installation, gateway, device
+	insertSQL := `
+		INSERT OR REPLACE INTO temperature_snapshots (
+			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
+			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
+			primary_return_temp, secondary_return_temp, dhw_temp, boiler_temp, buffer_temp,
+			buffer_temp_top, calculated_outside_temp,
+			compressor_active, compressor_speed, compressor_current, compressor_pressure,
+			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
+			compressor_hours, compressor_power,
+			circulation_pump_active, dhw_pump_active, internal_pump_active,
+			volumetric_flow, thermal_power, cop,
+			four_way_valve, burner_modulation, secondary_heat_generator_status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	_, err := eventDB.Exec(insertSQL,
+		snapshot.Timestamp.UTC().Format(time.RFC3339),
+		snapshot.InstallationID,
+		snapshot.GatewayID,
+		snapshot.DeviceID,
+		snapshot.AccountID,
+		snapshot.AccountName,
+		snapshot.OutsideTemp,
+		snapshot.ReturnTemp,
+		snapshot.SupplyTemp,
+		snapshot.PrimarySupplyTemp,
+		snapshot.SecondarySupplyTemp,
+		snapshot.PrimaryReturnTemp,
+		snapshot.SecondaryReturnTemp,
+		snapshot.DHWTemp,
+		snapshot.BoilerTemp,
+		snapshot.BufferTemp,
+		snapshot.BufferTempTop,
+		snapshot.CalculatedOutsideTemp,
+		compressorActiveInt,
+		snapshot.CompressorSpeed,
+		snapshot.CompressorCurrent,
+		snapshot.CompressorPressure,
+		snapshot.CompressorOilTemp,
+		snapshot.CompressorMotorTemp,
+		snapshot.CompressorInletTemp,
+		snapshot.CompressorOutletTemp,
+		snapshot.CompressorHours,
+		snapshot.CompressorPower,
+		circulationPumpActiveInt,
+		dhwPumpActiveInt,
+		internalPumpActiveInt,
+		snapshot.VolumetricFlow,
+		snapshot.ThermalPower,
+		snapshot.COP,
+		snapshot.FourWayValve,
+		snapshot.BurnerModulation,
+		snapshot.SecondaryHeatGeneratorStatus,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to insert temperature snapshot: %v", err)
+	}
+
+	return nil
+}
+
+// GetTemperatureSnapshots retrieves temperature snapshots from the database with optional filters
+func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTime, endTime time.Time, limit int) ([]TemperatureSnapshot, error) {
+	if !dbInitialized || eventDB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	// Build query with optional filters
+	query := `
+		SELECT
+			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
+			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
+			primary_return_temp, secondary_return_temp, dhw_temp, boiler_temp, buffer_temp,
+			buffer_temp_top, calculated_outside_temp,
+			compressor_active, compressor_speed, compressor_current, compressor_pressure,
+			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
+			compressor_hours, compressor_power,
+			circulation_pump_active, dhw_pump_active, internal_pump_active,
+			volumetric_flow, thermal_power, cop,
+			four_way_valve, burner_modulation, secondary_heat_generator_status
+		FROM temperature_snapshots
+		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ?
+	`
+
+	args := []interface{}{installationID, startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339)}
+
+	// Add optional gateway filter
+	if gatewayID != "" {
+		query += " AND gateway_id = ?"
+		args = append(args, gatewayID)
+	}
+
+	// Add optional device filter
+	if deviceID != "" {
+		query += " AND device_id = ?"
+		args = append(args, deviceID)
+	}
+
+	query += " ORDER BY timestamp ASC"
+
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+
+	rows, err := eventDB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query temperature snapshots: %v", err)
+	}
+	defer rows.Close()
+
+	var snapshots []TemperatureSnapshot
+	for rows.Next() {
+		var snapshot TemperatureSnapshot
+		var timestampStr string
+		var compressorActiveInt, circulationPumpActiveInt, dhwPumpActiveInt, internalPumpActiveInt *int
+
+		err := rows.Scan(
+			&timestampStr,
+			&snapshot.InstallationID,
+			&snapshot.GatewayID,
+			&snapshot.DeviceID,
+			&snapshot.AccountID,
+			&snapshot.AccountName,
+			&snapshot.OutsideTemp,
+			&snapshot.ReturnTemp,
+			&snapshot.SupplyTemp,
+			&snapshot.PrimarySupplyTemp,
+			&snapshot.SecondarySupplyTemp,
+			&snapshot.PrimaryReturnTemp,
+			&snapshot.SecondaryReturnTemp,
+			&snapshot.DHWTemp,
+			&snapshot.BoilerTemp,
+			&snapshot.BufferTemp,
+			&snapshot.BufferTempTop,
+			&snapshot.CalculatedOutsideTemp,
+			&compressorActiveInt,
+			&snapshot.CompressorSpeed,
+			&snapshot.CompressorCurrent,
+			&snapshot.CompressorPressure,
+			&snapshot.CompressorOilTemp,
+			&snapshot.CompressorMotorTemp,
+			&snapshot.CompressorInletTemp,
+			&snapshot.CompressorOutletTemp,
+			&snapshot.CompressorHours,
+			&snapshot.CompressorPower,
+			&circulationPumpActiveInt,
+			&dhwPumpActiveInt,
+			&internalPumpActiveInt,
+			&snapshot.VolumetricFlow,
+			&snapshot.ThermalPower,
+			&snapshot.COP,
+			&snapshot.FourWayValve,
+			&snapshot.BurnerModulation,
+			&snapshot.SecondaryHeatGeneratorStatus,
+		)
+
+		if err != nil {
+			log.Printf("Warning: failed to scan temperature snapshot row: %v", err)
+			continue
+		}
+
+		// Parse timestamp
+		ts, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			log.Printf("Warning: failed to parse timestamp: %v", err)
+			continue
+		}
+		snapshot.Timestamp = ts
+
+		// Convert ints back to bool pointers
+		if compressorActiveInt != nil {
+			val := *compressorActiveInt == 1
+			snapshot.CompressorActive = &val
+		}
+		if circulationPumpActiveInt != nil {
+			val := *circulationPumpActiveInt == 1
+			snapshot.CirculationPumpActive = &val
+		}
+		if dhwPumpActiveInt != nil {
+			val := *dhwPumpActiveInt == 1
+			snapshot.DHWPumpActive = &val
+		}
+		if internalPumpActiveInt != nil {
+			val := *internalPumpActiveInt == 1
+			snapshot.InternalPumpActive = &val
+		}
+
+		snapshots = append(snapshots, snapshot)
+	}
+
+	return snapshots, nil
+}
+
+// GetTemperatureSnapshotCount returns the total number of temperature snapshots in the database
+func GetTemperatureSnapshotCount() (int64, error) {
+	if !dbInitialized || eventDB == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	var count int64
+	err := eventDB.QueryRow("SELECT COUNT(*) FROM temperature_snapshots").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count temperature snapshots: %v", err)
+	}
+
+	return count, nil
+}
+
+// CleanupOldTemperatureSnapshots removes temperature snapshots older than the retention period
+func CleanupOldTemperatureSnapshots(retentionDays int) error {
+	if !dbInitialized || eventDB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	cutoffTime := time.Now().UTC().AddDate(0, 0, -retentionDays)
+
+	result, err := eventDB.Exec("DELETE FROM temperature_snapshots WHERE timestamp < ?", cutoffTime.Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("failed to cleanup old temperature snapshots: %v", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Cleaned up %d old temperature snapshots (retention: %d days)", rowsAffected, retentionDays)
+	}
+
+	return nil
+}
+
+// GetTemperatureLogSettings retrieves the temperature logging settings
+func GetTemperatureLogSettings() (*TemperatureLogSettings, error) {
+	if !dbInitialized || eventDB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	var settings TemperatureLogSettings
+	var enabledInt int
+
+	err := eventDB.QueryRow(`
+		SELECT enabled, sample_interval, retention_days, database_path
+		FROM temperature_log_settings
+		WHERE id = 1
+	`).Scan(&enabledInt, &settings.SampleInterval, &settings.RetentionDays, &settings.DatabasePath)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+
+	settings.Enabled = enabledInt == 1
+	return &settings, nil
+}
+
+// SetTemperatureLogSettings updates the temperature logging settings
+func SetTemperatureLogSettings(settings *TemperatureLogSettings) error {
+	if !dbInitialized || eventDB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	enabledInt := 0
+	if settings.Enabled {
+		enabledInt = 1
+	}
+
+	_, err := eventDB.Exec(`
+		UPDATE temperature_log_settings
+		SET enabled = ?, sample_interval = ?, retention_days = ?, database_path = ?
+		WHERE id = 1
+	`, enabledInt, settings.SampleInterval, settings.RetentionDays, settings.DatabasePath)
+
+	if err != nil {
+		return fmt.Errorf("failed to update temperature log settings: %v", err)
+	}
+
+	log.Printf("Temperature log settings updated: enabled=%v, interval=%dm, retention=%dd",
+		settings.Enabled, settings.SampleInterval, settings.RetentionDays)
+	return nil
 }

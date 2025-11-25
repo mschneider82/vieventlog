@@ -410,6 +410,81 @@
         </div>
 
         <div class="section">
+            <h2>📊 Temperatur-Logging & Visualisierung</h2>
+            <form id="tempLogSettingsForm">
+                <div class="form-group" style="margin-bottom: 30px;">
+                    <label style="display: flex; align-items: flex-start; cursor: pointer; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; gap: 20px; width: 100%;">
+                        <div class="toggle-switch" style="flex-shrink: 0;">
+                            <input type="checkbox" id="tempLogEnabled">
+                            <span class="toggle-slider"></span>
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <span style="color: #e0e0e0; font-size: 15px; font-weight: 500; display: block; margin-bottom: 6px;">Temperatur-Logging aktivieren</span>
+                            <small style="color: #a0a0b0; display: block; font-size: 13px; line-height: 1.5;">
+                                Erfasst regelmäßig alle Temperatursensoren, Kompressor-Daten und Betriebszustände für historische Analyse und Visualisierung im Dashboard
+                            </small>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="tempLogSettings" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Sample-Interval (Minuten)</label>
+                            <input type="number" id="tempSampleInterval" min="1" max="1440" value="5" placeholder="5" onchange="updateTempApiCallEstimation()">
+                            <small style="color: #a0a0b0;">Wie oft Temperaturdaten erfasst werden (Standard: 5 Min.)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Aufbewahrungsdauer (Tage)</label>
+                            <input type="number" id="tempRetentionDays" min="1" max="3650" value="90" placeholder="90">
+                            <small style="color: #a0a0b0;">Wie lange Temperaturdaten gespeichert werden (z.B. 90, 365)</small>
+                        </div>
+                    </div>
+
+                    <!-- API Call Estimation for Temperature Logging -->
+                    <div id="tempApiCallEstimation" style="margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px;">
+                        <div style="color: #e0e0e0; font-size: 13px;">
+                            <div style="font-weight: 500; margin-bottom: 8px; color: #fca5a5;">⚠️ API-Nutzung & Rate Limits</div>
+                            <div style="color: #c0c0d0;">
+                                Bei aktuellen Einstellungen (<span id="tempEstSampleInterval">5</span> Min. Interval):
+                            </div>
+                            <div style="margin-top: 8px; font-size: 14px;">
+                                <strong style="color: #fff;">~<span id="tempEstMonthlyCalls">8,640</span> API-Calls</strong> pro Monat
+                                <span style="color: #a0a0b0; font-size: 12px;">(<span id="tempEstDailyCalls">288</span> pro Tag, <span id="tempEst10MinCalls">12</span> pro 10 Min.)</span>
+                            </div>
+                            <div style="margin-top: 12px; padding: 10px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 4px; font-size: 12px; color: #fbbf24;">
+                                💡 Viessmann API Limits: <strong>120 Calls/10min</strong>, <strong>1450 Calls/24h</strong><br>
+                                Rate Limiting ist aktiv: Max. <strong>110/10min</strong>, <strong>1400/24h</strong> (mit Sicherheitspuffer)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="saveTempLogButton">Einstellungen speichern</button>
+            </form>
+
+            <div id="tempLogStats" style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 6px; display: none;">
+                <div style="color: #e0e0e0; font-size: 14px;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>Scheduler-Status:</strong> <span id="tempStatsSchedulerStatus">-</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>Gespeicherte Snapshots:</strong> <span id="tempStatsTotalSnapshots">-</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>API-Nutzung (10 Min):</strong> <span id="tempStatsApiUsage10Min">-</span> / <span id="tempStatsApiLimit10Min">110</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <strong>API-Nutzung (24 Std):</strong> <span id="tempStatsApiUsage24Hr">-</span> / <span id="tempStatsApiLimit24Hr">1400</span>
+                    </div>
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; color: #10b981; font-size: 13px;">
+                        ℹ️ Temperaturdaten werden automatisch alle <span id="tempSampleIntervalInfo">5</span> Minuten erfasst und im Dashboard visualisiert
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
             <h2>Gespeicherte Accounts</h2>
             <div id="accountsList">
                 <div class="no-accounts">Lade Accounts...</div>
@@ -706,14 +781,149 @@
             document.getElementById('estMonthlyCalls').textContent = callsPerMonth;
         }
 
+        // Temperature Logging Settings
+        async function loadTempLogSettings() {
+            try {
+                const response = await fetch('/api/temperature-log/settings');
+                if (!response.ok) throw new Error('Fehler beim Laden der Einstellungen');
+
+                const settings = await response.json();
+                document.getElementById('tempLogEnabled').checked = settings.enabled || false;
+                document.getElementById('tempSampleInterval').value = settings.sample_interval || 5;
+                document.getElementById('tempRetentionDays').value = settings.retention_days || 90;
+
+                // Update sample interval in info message
+                const tempSampleIntervalInfo = document.getElementById('tempSampleIntervalInfo');
+                if (tempSampleIntervalInfo) {
+                    tempSampleIntervalInfo.textContent = settings.sample_interval || 5;
+                }
+
+                // Update API call estimation
+                updateTempApiCallEstimation();
+
+                // Toggle settings visibility
+                toggleTempLogSettings(settings.enabled);
+
+                // Load stats if enabled
+                if (settings.enabled) {
+                    loadTempLogStats();
+                }
+            } catch (error) {
+                console.error('Error loading temperature log settings:', error);
+            }
+        }
+
+        function toggleTempLogSettings(enabled) {
+            const settingsDiv = document.getElementById('tempLogSettings');
+            const statsDiv = document.getElementById('tempLogStats');
+            settingsDiv.style.display = enabled ? 'block' : 'none';
+            statsDiv.style.display = enabled ? 'block' : 'none';
+        }
+
+        document.getElementById('tempLogEnabled').addEventListener('change', (e) => {
+            toggleTempLogSettings(e.target.checked);
+        });
+
+        document.getElementById('tempLogSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const button = document.getElementById('saveTempLogButton');
+            button.disabled = true;
+            button.textContent = 'Speichere...';
+
+            const settings = {
+                enabled: document.getElementById('tempLogEnabled').checked,
+                sample_interval: parseInt(document.getElementById('tempSampleInterval').value),
+                retention_days: parseInt(document.getElementById('tempRetentionDays').value),
+                database_path: './viessmann_events.db'
+            };
+
+            try {
+                const response = await fetch('/api/temperature-log/settings/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Fehler beim Speichern');
+
+                showMessage('Temperatur-Logging-Einstellungen wurden gespeichert!', 'success');
+
+                // Update sample interval in info message
+                const tempSampleIntervalInfo = document.getElementById('tempSampleIntervalInfo');
+                if (tempSampleIntervalInfo) {
+                    tempSampleIntervalInfo.textContent = settings.sample_interval;
+                }
+
+                // Update API call estimation
+                updateTempApiCallEstimation();
+
+                // Reload stats
+                if (settings.enabled) {
+                    setTimeout(() => loadTempLogStats(), 1000);
+                }
+            } catch (error) {
+                console.error('Error saving temperature log settings:', error);
+                showMessage('Fehler beim Speichern: ' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Einstellungen speichern';
+            }
+        });
+
+        async function loadTempLogStats() {
+            try {
+                const response = await fetch('/api/temperature-log/stats');
+                if (!response.ok) throw new Error('Fehler beim Laden der Statistiken');
+
+                const stats = await response.json();
+                document.getElementById('tempStatsSchedulerStatus').textContent =
+                    stats.scheduler_running ? '✓ Läuft' : '✗ Gestoppt';
+                document.getElementById('tempStatsTotalSnapshots').textContent =
+                    stats.total_snapshots || 0;
+                document.getElementById('tempStatsApiUsage10Min').textContent =
+                    stats.api_usage_10min || 0;
+                document.getElementById('tempStatsApiUsage24Hr').textContent =
+                    stats.api_usage_24hr || 0;
+                document.getElementById('tempStatsApiLimit10Min').textContent =
+                    stats.api_limit_10min || 110;
+                document.getElementById('tempStatsApiLimit24Hr').textContent =
+                    stats.api_limit_24hr || 1400;
+            } catch (error) {
+                console.error('Error loading temperature log stats:', error);
+            }
+        }
+
+        // Update temperature logging API call estimation
+        function updateTempApiCallEstimation() {
+            const sampleInterval = parseInt(document.getElementById('tempSampleInterval').value) || 5;
+
+            // Calculate calls per day and per month
+            // Assumes 1 API call per installation per sample
+            const callsPerDay = Math.round((24 * 60) / sampleInterval);
+            const callsPerMonth = Math.round(callsPerDay * 30);
+            const callsPer10Min = Math.round(10 / sampleInterval);
+
+            // Update UI
+            document.getElementById('tempEstSampleInterval').textContent = sampleInterval;
+            document.getElementById('tempEstDailyCalls').textContent = callsPerDay;
+            document.getElementById('tempEstMonthlyCalls').textContent = callsPerMonth.toLocaleString('de-DE');
+            document.getElementById('tempEst10MinCalls').textContent = callsPer10Min;
+        }
+
         // Initial load
         loadAccounts();
         loadArchiveSettings();
+        loadTempLogSettings();
 
         // Refresh stats every 30 seconds if enabled
         setInterval(() => {
             if (document.getElementById('archiveEnabled').checked) {
                 loadArchiveStats();
+            }
+            if (document.getElementById('tempLogEnabled').checked) {
+                loadTempLogStats();
             }
         }, 30000);
     </script>
