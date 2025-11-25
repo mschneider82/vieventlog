@@ -34,6 +34,18 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to open database: %v", err)
 	}
 
+	// Enable WAL mode for better concurrency (allows simultaneous reads and writes)
+	_, err = eventDB.Exec("PRAGMA journal_mode=WAL")
+	if err != nil {
+		return fmt.Errorf("failed to enable WAL mode: %v", err)
+	}
+
+	// Set busy timeout to 5 seconds to handle lock contention gracefully
+	_, err = eventDB.Exec("PRAGMA busy_timeout=5000")
+	if err != nil {
+		return fmt.Errorf("failed to set busy timeout: %v", err)
+	}
+
 	// Create events table with all fields from Event struct
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS events (
@@ -185,84 +197,11 @@ func ComputeEventHash(event *Event) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// SaveEventToDB inserts an event into the database (with deduplication)
+// SaveEventToDB inserts a single event into the database (with deduplication)
+// DEPRECATED: Use SaveEventsToDB for batch operations instead
 func SaveEventToDB(event *Event) error {
-	if !dbInitialized || eventDB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-
-	// Compute hash for deduplication
-	hash := ComputeEventHash(event)
-
-	// Check if event already exists
-	var exists bool
-	err := eventDB.QueryRow("SELECT EXISTS(SELECT 1 FROM events WHERE hash = ?)", hash).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check event existence: %v", err)
-	}
-
-	if exists {
-		// Event already exists, skip insert
-		return nil
-	}
-
-	// Convert body map to JSON string
-	bodyJSON, err := json.Marshal(event.Body)
-	if err != nil {
-		bodyJSON = []byte("{}")
-	}
-
-	// Convert Active bool pointer to nullable int
-	var activeInt *int
-	if event.Active != nil {
-		val := 0
-		if *event.Active {
-			val = 1
-		}
-		activeInt = &val
-	}
-
-	insertSQL := `
-		INSERT INTO events (
-			hash, event_timestamp, created_at, formatted_time, event_type,
-			feature_name, feature_value, device_id, model_id, gateway_serial,
-			error_code, error_description, human_readable, code_category, severity,
-			active, body, raw, installation_id, account_id, account_name
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	_, err = eventDB.Exec(insertSQL,
-		hash,
-		event.EventTimestamp,
-		event.CreatedAt,
-		event.FormattedTime,
-		event.EventType,
-		event.FeatureName,
-		event.FeatureValue,
-		event.DeviceID,
-		event.ModelID,
-		event.GatewaySerial,
-		event.ErrorCode,
-		event.ErrorDescription,
-		event.HumanReadable,
-		event.CodeCategory,
-		event.Severity,
-		activeInt,
-		string(bodyJSON),
-		event.Raw,
-		event.InstallationID,
-		event.AccountID,
-		event.AccountName,
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to insert event: %v", err)
-	}
-
-	return nil
+	// Just wrap in a slice and use batch function
+	return SaveEventsToDB([]Event{*event})
 }
 
 // SaveEventsToDB batch inserts events into the database
@@ -271,11 +210,83 @@ func SaveEventsToDB(events []Event) error {
 		return fmt.Errorf("database not initialized")
 	}
 
+	// Use a single lock and transaction for better performance
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	tx, err := eventDB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback() // Will be no-op if committed
+
+	insertSQL := `
+		INSERT INTO events (
+			hash, event_timestamp, created_at, formatted_time, event_type,
+			feature_name, feature_value, device_id, model_id, gateway_serial,
+			error_code, error_description, human_readable, code_category, severity,
+			active, body, raw, installation_id, account_id, account_name
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(hash) DO NOTHING
+	`
+
+	stmt, err := tx.Prepare(insertSQL)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
 	for i := range events {
-		err := SaveEventToDB(&events[i])
+		event := &events[i]
+		hash := ComputeEventHash(event)
+
+		// Convert body map to JSON string
+		bodyJSON, err := json.Marshal(event.Body)
 		if err != nil {
-			log.Printf("Warning: failed to save event to DB: %v", err)
+			bodyJSON = []byte("{}")
 		}
+
+		// Convert Active bool pointer to nullable int
+		var activeInt *int
+		if event.Active != nil {
+			val := 0
+			if *event.Active {
+				val = 1
+			}
+			activeInt = &val
+		}
+
+		_, err = stmt.Exec(
+			hash,
+			event.EventTimestamp,
+			event.CreatedAt,
+			event.FormattedTime,
+			event.EventType,
+			event.FeatureName,
+			event.FeatureValue,
+			event.DeviceID,
+			event.ModelID,
+			event.GatewaySerial,
+			event.ErrorCode,
+			event.ErrorDescription,
+			event.HumanReadable,
+			event.CodeCategory,
+			event.Severity,
+			activeInt,
+			string(bodyJSON),
+			event.Raw,
+			event.InstallationID,
+			event.AccountID,
+			event.AccountName,
+		)
+
+		if err != nil {
+			log.Printf("Warning: failed to insert event: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return nil
