@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -36,7 +38,17 @@ func StartEventArchiveScheduler() error {
 
 	// Initialize database
 	if settings.DatabasePath == "" {
-		settings.DatabasePath = "./viessmann_events.db"
+		// Use VICARE_CONFIG_DIR or /config for database path (Docker-friendly)
+		configDir := os.Getenv("VICARE_CONFIG_DIR")
+		if configDir == "" {
+			// Check if /config exists (Docker), otherwise use current directory
+			if _, err := os.Stat("/config"); err == nil {
+				configDir = "/config"
+			} else {
+				configDir = "."
+			}
+		}
+		settings.DatabasePath = filepath.Join(configDir, "viessmann_events.db")
 	}
 
 	err = InitEventDatabase(settings.DatabasePath)
