@@ -835,7 +835,7 @@
                 enabled: document.getElementById('tempLogEnabled').checked,
                 sample_interval: parseInt(document.getElementById('tempSampleInterval').value),
                 retention_days: parseInt(document.getElementById('tempRetentionDays').value),
-                database_path: './viessmann_events.db'
+                database_path: document.getElementById('databasePath').value || './viessmann_events.db'
             };
 
             try {
