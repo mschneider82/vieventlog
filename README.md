@@ -10,13 +10,28 @@ Mit der [Abschaltung von ViGuide](https://community.viessmann.de/t5/Konnektivita
 
 **Tipp:** Wenn Sie sich für Verbraucherschutz-Tools interessieren, schauen Sie sich auch mein Projekt [RauchmelderApp.de](https://www.RauchmelderApp.de) an – eine kostenfreie Alternative zu teuren Ablesefirmen für die jährliche Rauchmelderwartung.
 
-![ViEventLog Screenshot](screenshot1.png)
+## Screenshots
 
-![ViEventLog Dashboard](screenshot_dashboard_top.png)
+### Event-Ansicht mit Timeline und Filterung
+![ViEventLog Events](screenshot_events.png)
 
-![ViEventLog Heizkurve](screenshot_dashboard_heizkurve.png)
+### Umfassendes Dashboard mit Live-Daten
+![ViEventLog Dashboard](screenshot_dashboard.jpg)
 
-![ViEventLog SmartClimate](screenshot_smartclimate.png)
+### Multi-Account-Verwaltung mit Event-Archivierung und Temperatur-Logging
+![ViEventLog Accounts](screenshot_accounts.png)
+
+### Vitocharge VX3 - PV und Batteriespeicher
+![ViEventLog Vitocharge](screenshot_vitocharge.png)
+
+### SmartClimate - Raumsteuerung
+![ViEventLog SmartClimate Räume](screenshot_smartclimate1.png)
+
+### SmartClimate - Thermostate
+![ViEventLog SmartClimate Thermostate](screenshot_smartclimate2.png)
+
+### Vitovent Lüftung
+![ViEventLog Lüftung](screenshot_lueftung.png)
 
 
 ## Lizenz
@@ -406,6 +421,98 @@ Der Event Viewer unterstützt mehrere Viessmann-Accounts gleichzeitig. Dies ist 
 - Accounts bearbeiten oder löschen
 - Events von allen aktiven Accounts werden kombiniert angezeigt
 - Jedes Event zeigt den zugehörigen Account und Standort
+
+### Event-Archivierung in SQLite
+
+ViEventLog kann Events dauerhaft in einer SQLite-Datenbank speichern, um eine langfristige Historie zu bewahren:
+
+**Funktionen:**
+- Automatische Speicherung aller Events in SQLite-Datenbank
+- Konfigurierbare Aufbewahrungsdauer (z.B. 90, 180, 365 Tage)
+- Intervall-basierte Synchronisation (z.B. alle 60 Minuten)
+- Automatische Bereinigung alter Events nach Ablauf der Aufbewahrungsfrist
+- Export-Funktion für archivierte Events
+- Vollständige API-Nutzung für Archivierung (keine Viessmann-API-Limits)
+
+**Aktivierung:**
+- In der Account-Verwaltung kann die Event-Archivierung pro Account aktiviert werden
+- Konfiguration: Datenbankpfad, Aufbewahrungsdauer und Synchronisationsintervall
+
+### Temperatur-Logging und Visualisierung
+
+Das Temperatur-Logging erfasst regelmäßig wichtige Sensordaten für historische Analysen:
+
+**Erfasste Daten:**
+- Alle Temperatursensoren (Außen, Vorlauf, Rücklauf, Puffer, etc.)
+- Kompressor-Daten (Drehzahl, Leistung, Ein-/Auslasstemperatur)
+- Effizienz-Kennzahlen (SCOP/SPF)
+- Weitere Sensoren (Volumenstrom, Druck, etc.)
+
+**Funktionen:**
+- Konfigurierbare Abtastrate (z.B. alle 5 Minuten)
+- SQLite-basierte Speicherung für minimalen Speicherplatzverbrauch
+- Grafische Visualisierung im Dashboard als Zeitreihen-Diagramme
+- Export-Funktion für historische Daten
+- Automatische Bereinigung alter Daten nach konfigurierbarer Zeit
+
+**Aktivierung:**
+- In der Account-Verwaltung kann das Temperatur-Logging aktiviert werden
+- Anpassbare Sample-Intervalle und Aufbewahrungsdauer
+
+### Vitocharge VX3 - PV und Batteriespeicher
+
+Vollständige Integration von Viessmann Vitocharge VX3 PV- und Batteriespeichersystemen:
+
+**Funktionen:**
+- Live-Anzeige des Energieflusses (PV-Produktion, Netzeinspeisung/-bezug, Batterie-Ladung/-Entladung)
+- Energiebilanz mit Visualisierung der Stromflüsse
+- Batterie-Status (Ladestand, Leistung)
+- Wechselrichter-Informationen
+- PV-Produktionsstatistiken
+- Eigenverbrauchsoptimierung
+
+**Zugriff:**
+- Über das Dashboard oder direkten Button in der Hauptansicht
+- Automatische Erkennung bei vorhandenem Vitocharge-System
+
+### SmartClimate - Raumsteuerung
+
+Integration der Viessmann SmartClimate Raumsteuerung mit Thermostaten:
+
+**Funktionen:**
+- Übersicht aller verbundenen Räume
+- Ist-Temperatur und Luftfeuchtigkeit pro Raum
+- Soll-Temperatur für Heizen und Kühlen
+- Steuerung der Raumtemperaturen über Thermostate
+- Visualisierung von Fußboden-Thermostaten
+- Anzeige der Verbindungsqualität (HKI - HomeKit Integration)
+- Raumsteuerung und weitere SmartClimate-Geräte
+
+**Zugriff:**
+- Über den SmartClimate-Button im Dashboard
+- Automatische Erkennung bei vorhandenen SmartClimate-Geräten
+
+### Vitovent Lüftung
+
+Dashboard für Viessmann Vitovent Lüftungsanlagen:
+
+**Anzeige:**
+- Betriebsmodus (Auto-Sensor, Konstant, Programm, Sensor+Programm)
+- Schnellwahl-Modi (Intensivlüftung, Geräuschreduziert, Temperatur-Abschaltung)
+- Temperaturen (Zuluft, Abluft, Fortluft, Außentemperatur, Wärmerückgewinnung)
+- Luftfeuchte (Zuluft, Abluft, Fortluft, Außenluft)
+- Luftmenge (Zu- und Abluft in m³/h, aktuelles Level)
+- Ventilatoren (Zuluft-/Fortluft-Ventilator mit Drehzahl und Laufzeit)
+- Filter-Status (Verschmutzungsgrad, verbleibende/Betriebszeit)
+- Bypass-Information (Betriebsstunden, Arbeitsweise, Position, Temperaturen)
+
+**Steuerung:**
+- Betriebsmodus ändern
+- Schnellwahl-Modi aktivieren/deaktivieren
+
+**Zugriff:**
+- Über den Vitovent-Button im Dashboard
+- Automatische Erkennung bei vorhandener Vitovent-Anlage
 
 ### Dashboard-Ansicht
 
