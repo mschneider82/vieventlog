@@ -781,8 +781,25 @@
                 'S.176': true,  // Wärmepumpenregelung: Abtauen angefordert
                 'S.187': true,  // Passiver Frostschutz Wärmepumpe
                 'S.427': true,  // Leistungsbegrenzung durch Netzbetreiber
+                'S.131': true,  // Heizwasser-Durchlauferhitzer: Stufe 1 aktiv
+                'S.132': true,  // Heizwasser-Durchlauferhitzer: Stufe 2 aktiv
+                'S.133': true,  // Heizwasser-Durchlauferhitzer: Stufe 3 aktiv
                 'other': true
             },
+
+            // Blacklist: Events that should never be shown in timeline
+            timelineBlacklist: [
+                'S.217',  // Heizwasser-Durchlauferhitzer: Stufe 1 inaktiv
+                'S.218',  // Heizwasser-Durchlauferhitzer: Stufe 2 inaktiv
+                'S.219'   // Heizwasser-Durchlauferhitzer: Stufe 3 inaktiv
+                // Weitere "inaktiv" Events (bei Bedarf aktivieren):
+                // 'S.139',  // Heizbetrieb inaktiv
+                // 'S.142',  // Trinkwassererwaermung inaktiv
+                // 'S.145',  // Kuehlbetrieb inaktiv
+                // 'S.149',  // Abtauen ueber Waermepumpe inaktiv
+                // 'S.152',  // Abtauen ueber Heiz-/Kuehlkreis inaktiv
+                // 'S.163'   // Waermepumpe: Systemstatus inaktiv
+            ]
 
             // Timeline zoom range filter (set by ECharts dataZoom)
             timeRange: null  // { start: timestamp, end: timestamp } or null for all
@@ -1283,7 +1300,10 @@ ${formatEventBody(event.body)}
                 'I.135': { label: 'Abtauen', description: 'Abtauen aktiv im Regelbetrieb', color: '#0ea5e9', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', icon: '❄️' },
                 'S.176': { label: 'Abtauen Anfr.', description: 'Wärmepumpenregelung: Abtauen angefordert', color: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', icon: '❄️' },
                 'S.187': { label: 'Frostschutz', description: 'Passiver Frostschutz Wärmepumpe eingeschaltet', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '🧊' },
-                'S.427': { label: '§14a EnWG', description: 'Leistungsbegrenzung durch Netzbetreiber nach §14a EnWG', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⚡' }
+                'S.427': { label: '§14a EnWG', description: 'Leistungsbegrenzung durch Netzbetreiber nach §14a EnWG', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⚡' },
+                'S.131': { label: 'Zusatz Stufe 1', description: 'Heizwasser-Durchlauferhitzer: Stufe 1 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '🔥' },
+                'S.132': { label: 'Zusatz Stufe 2', description: 'Heizwasser-Durchlauferhitzer: Stufe 2 aktiv', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔥' },
+                'S.133': { label: 'Zusatz Stufe 3', description: 'Heizwasser-Durchlauferhitzer: Stufe 3 aktiv', color: '#ea580c', gradient: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)', icon: '🔥' }
             };
 
             // Setup filter buttons (same as original)
@@ -1886,6 +1906,9 @@ ${formatEventBody(event.body)}
 
                     // Add main spans
                     lane.spans.forEach(span => {
+                        // Skip blacklisted events
+                        if (globalFilters.timelineBlacklist && globalFilters.timelineBlacklist.includes(span.code)) return;
+                        // Skip filtered events
                         if (globalFilters.timelineTypes[span.code] === false) return;
                         const startTime = new Date(span.startTime);
                         const endTime = new Date(span.endTime);
@@ -1912,6 +1935,9 @@ ${formatEventBody(event.body)}
                     // Add valve spans
                     if (valveCategoryIndex !== null) {
                         lane.valveSpans.forEach(span => {
+                            // Skip blacklisted events
+                            if (globalFilters.timelineBlacklist && globalFilters.timelineBlacklist.includes(span.code)) return;
+                            // Skip filtered events
                             if (globalFilters.timelineTypes[span.code] === false) return;
                             const startTime = new Date(span.startTime);
                             const endTime = new Date(span.endTime);
