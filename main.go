@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -92,6 +95,10 @@ func canBind(host string, port int) bool {
 }
 
 func main() {
+	// Create application-wide context for graceful shutdown coordination
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Initialize account management
 	accountTokens = make(map[string]*AccountToken)
 
@@ -223,11 +230,63 @@ func main() {
 	// Try to bind to the address, with fallback for port conflicts (e.g., macOS AirPlay)
 	finalBindAddress, userURL := tryBindAddress(bindAddress)
 
-	log.Printf("Starting Event Viewer")
-	log.Printf("Open your browser at: %s", userURL)
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	// Wrap with Basic Auth middleware if configured
 	handler := BasicAuthMiddleware(http.DefaultServeMux)
 
-	log.Fatal(http.ListenAndServe(finalBindAddress, handler))
+	// Create HTTP server with explicit configuration
+	server := &http.Server{
+		Addr:    finalBindAddress,
+		Handler: handler,
+	}
+
+	// Run server in goroutine
+	go func() {
+		log.Printf("Starting Event Viewer")
+		log.Printf("Open your browser at: %s", userURL)
+		log.Printf("Press Ctrl+C to stop gracefully")
+
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-sigChan
+	log.Println("\nReceived shutdown signal, shutting down gracefully...")
+
+	// Cancel application context to signal all components
+	cancel()
+
+	// Stop all schedulers gracefully
+	log.Println("Stopping event archive scheduler...")
+	StopEventArchiveScheduler()
+
+	log.Println("Stopping temperature scheduler...")
+	StopTemperatureScheduler()
+
+	// Give schedulers time to finish current operations
+	time.Sleep(500 * time.Millisecond)
+
+	// Close database if initialized
+	log.Println("Closing database...")
+	if err := CloseEventDatabase(); err != nil {
+		log.Printf("Error closing database: %v", err)
+	} else {
+		log.Println("Database closed successfully (WAL committed)")
+	}
+
+	// Graceful shutdown with timeout for HTTP server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	log.Println("Shutting down HTTP server...")
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	log.Println("Shutdown complete")
 }
