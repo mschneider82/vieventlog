@@ -303,6 +303,7 @@
                         min: data.compressorRpmMin || 0,
                         max: data.compressorRpmMax || 0,
                         powerCorrectionFactor: data.compressorPowerCorrectionFactor || 1.0,
+                        electricityPrice: data.electricityPrice || 0.30,
                         useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // null = auto-detect, true/false = override
                         hasHotWaterBuffer: data.hasHotWaterBuffer // null = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer
                     };
@@ -329,14 +330,14 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.electricityPrice || 0.30, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, null, null);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
@@ -385,6 +386,15 @@
                         <input type="number" id="powerCorrectionFactor" value="${correctionFactor.toFixed(2)}" step="0.01" min="0.01" max="10.00"
                                style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
                         <p style="color: #a0a0b0; font-size: 12px; margin-top: 5px;">Korrigiert die Leistungsanzeige und COP-Berechnung (Leistung × Faktor)</p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 8px; font-weight: 600;">
+                            ⚡ Strompreis (Standard: 0.30 €/kWh)
+                        </label>
+                        <input type="number" id="electricityPrice" value="${electricityPrice.toFixed(2)}" step="0.01" min="0.01" max="1.00"
+                               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 14px;">
+                        <p style="color: #a0a0b0; font-size: 12px; margin-top: 5px;">Preis pro kWh für Verbrauchskosten-Berechnung in den Statistiken</p>
                     </div>
 
                     <div style="margin-bottom: 20px;">
@@ -490,6 +500,7 @@
             const rpmMin = parseInt(document.getElementById('rpmMin').value) || 0;
             const rpmMax = parseInt(document.getElementById('rpmMax').value) || 0;
             const powerCorrectionFactor = parseFloat(document.getElementById('powerCorrectionFactor').value) || 1.0;
+            const electricityPrice = parseFloat(document.getElementById('electricityPrice').value) || 0.30;
 
             if (rpmMin >= rpmMax && rpmMax !== 0) {
                 alert('Minimum muss kleiner als Maximum sein');
@@ -498,6 +509,11 @@
 
             if (powerCorrectionFactor <= 0 || powerCorrectionFactor > 10) {
                 alert('Korrekturfaktor muss zwischen 0.01 und 10.00 liegen');
+                return;
+            }
+
+            if (electricityPrice <= 0 || electricityPrice > 1) {
+                alert('Strompreis muss zwischen 0.01 und 1.00 €/kWh liegen');
                 return;
             }
 
@@ -532,6 +548,7 @@
                         compressorRpmMin: rpmMin,
                         compressorRpmMax: rpmMax,
                         compressorPowerCorrectionFactor: powerCorrectionFactor,
+                        electricityPrice: electricityPrice,
                         useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel,
                         hasHotWaterBuffer: hasHotWaterBuffer
                     })
@@ -548,6 +565,7 @@
                     window.deviceSettingsCache[deviceKey].min = rpmMin;
                     window.deviceSettingsCache[deviceKey].max = rpmMax;
                     window.deviceSettingsCache[deviceKey].powerCorrectionFactor = powerCorrectionFactor;
+                    window.deviceSettingsCache[deviceKey].electricityPrice = electricityPrice;
                     window.deviceSettingsCache[deviceKey].useAirIntakeTemperatureLabel = useAirIntakeTemperatureLabel;
                     window.deviceSettingsCache[deviceKey].hasHotWaterBuffer = hasHotWaterBuffer;
 

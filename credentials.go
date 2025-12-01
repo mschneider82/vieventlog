@@ -40,6 +40,7 @@ type DeviceSettings struct {
 	CompressorRpmMin                int                       `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax                int                       `json:"compressorRpmMax,omitempty"`
 	CompressorPowerCorrectionFactor float64                   `json:"compressorPowerCorrectionFactor,omitempty"` // Correction factor for compressor power (default: 1.00)
+	ElectricityPrice                float64                   `json:"electricityPrice,omitempty"`                // Electricity price in EUR/kWh for consumption cost calculations (default: 0.30)
 	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
 	HasHotWaterBuffer               *bool                     `json:"hasHotWaterBuffer,omitempty"`            // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)

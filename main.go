@@ -203,6 +203,9 @@ func main() {
 	http.HandleFunc("/api/temperature-log/stats", handleTemperatureLogStats)
 	http.HandleFunc("/api/temperature-log/data", handleTemperatureLogData)
 
+	// Consumption statistics endpoint
+	http.HandleFunc("/api/consumption/stats", HandleConsumptionStats)
+
 	// Start event archive scheduler if enabled
 	go func() {
 		// Small delay to ensure everything is initialized

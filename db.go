@@ -779,3 +779,275 @@ func SetTemperatureLogSettings(settings *TemperatureLogSettings) error {
 		settings.Enabled, settings.SampleInterval, settings.RetentionDays)
 	return nil
 }
+
+// GetConsumptionStats calculates aggregated consumption statistics for a given time period
+func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, endTime time.Time, sampleInterval int) (*ConsumptionStats, error) {
+	if !dbInitialized || eventDB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	// Query to get snapshots in time range
+	query := `
+		SELECT
+			timestamp,
+			compressor_power,
+			thermal_power,
+			cop,
+			compressor_active
+		FROM temperature_snapshots
+		WHERE installation_id = ?
+			AND gateway_id = ?
+			AND device_id = ?
+			AND timestamp >= ?
+			AND timestamp <= ?
+		ORDER BY timestamp ASC
+	`
+
+	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query consumption data: %v", err)
+	}
+	defer rows.Close()
+
+	var totalElectricityWh float64
+	var totalThermalWh float64
+	var copSum float64
+	var copCount int
+	var runtimeMinutes float64
+	var samples int
+
+	intervalMinutes := float64(sampleInterval)
+
+	for rows.Next() {
+		var timestampStr string
+		var compressorPower, thermalPower, cop *float64
+		var compressorActiveInt *int
+
+		err := rows.Scan(&timestampStr, &compressorPower, &thermalPower, &cop, &compressorActiveInt)
+		if err != nil {
+			log.Printf("Warning: failed to scan consumption row: %v", err)
+			continue
+		}
+
+		samples++
+
+		// Calculate energy using trapezoidal integration (power * time)
+		// compressor_power is in Watts, thermal_power is in kW
+		if compressorPower != nil {
+			electricityWh := (*compressorPower) * (intervalMinutes / 60.0) // Wh
+			totalElectricityWh += electricityWh
+		}
+
+		if thermalPower != nil {
+			thermalWh := (*thermalPower) * 1000.0 * (intervalMinutes / 60.0) // kW -> Wh
+			totalThermalWh += thermalWh
+		}
+
+		if cop != nil && *cop > 0 {
+			copSum += *cop
+			copCount++
+		}
+
+		// Count runtime if compressor was active
+		if compressorActiveInt != nil && *compressorActiveInt == 1 {
+			runtimeMinutes += intervalMinutes
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating consumption rows: %v", err)
+	}
+
+	avgCOP := 0.0
+	if copCount > 0 {
+		avgCOP = copSum / float64(copCount)
+	}
+
+	stats := &ConsumptionStats{
+		StartTime:      startTime,
+		EndTime:        endTime,
+		ElectricityKWh: totalElectricityWh / 1000.0, // Wh -> kWh
+		ThermalKWh:     totalThermalWh / 1000.0,     // Wh -> kWh
+		AvgCOP:         avgCOP,
+		RuntimeHours:   runtimeMinutes / 60.0,
+		Samples:        samples,
+	}
+
+	return stats, nil
+}
+
+// GetHourlyConsumptionBreakdown returns hourly consumption data for a given day
+func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, date time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+	if !dbInitialized || eventDB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	// Start of day (00:00:00) to end of day (23:59:59)
+	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	endTime := startTime.Add(24 * time.Hour)
+
+	query := `
+		SELECT
+			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
+			AVG(compressor_power) as avg_power,
+			AVG(thermal_power) as avg_thermal,
+			AVG(cop) as avg_cop,
+			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			COUNT(*) as total_samples
+		FROM temperature_snapshots
+		WHERE installation_id = ?
+			AND gateway_id = ?
+			AND device_id = ?
+			AND timestamp >= ?
+			AND timestamp < ?
+		GROUP BY hour
+		ORDER BY hour ASC
+	`
+
+	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
+	}
+	defer rows.Close()
+
+	var dataPoints []ConsumptionDataPoint
+	intervalMinutes := float64(sampleInterval)
+
+	for rows.Next() {
+		var hourStr string
+		var avgPower, avgThermal, avgCOP *float64
+		var activeSamples, totalSamples int
+
+		err := rows.Scan(&hourStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		if err != nil {
+			log.Printf("Warning: failed to scan hourly breakdown row: %v", err)
+			continue
+		}
+
+		hourTime, err := time.Parse("2006-01-02 15:04:05", hourStr)
+		if err != nil {
+			log.Printf("Warning: failed to parse hour timestamp: %v", err)
+			continue
+		}
+
+		// Calculate energy for this hour
+		electricityKWh := 0.0
+		thermalKWh := 0.0
+		if avgPower != nil {
+			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0 // W -> kWh
+		}
+		if avgThermal != nil {
+			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0) // already in kW
+		}
+
+		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
+
+		dataPoint := ConsumptionDataPoint{
+			Timestamp:      hourTime,
+			ElectricityKWh: electricityKWh,
+			ThermalKWh:     thermalKWh,
+			AvgCOP:         0.0,
+			RuntimeHours:   runtimeHours,
+			Samples:        totalSamples,
+		}
+		if avgCOP != nil {
+			dataPoint.AvgCOP = *avgCOP
+		}
+
+		dataPoints = append(dataPoints, dataPoint)
+	}
+
+	return dataPoints, nil
+}
+
+// GetDailyConsumptionBreakdown returns daily consumption data for a given period
+func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, startDate, endDate time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+	if !dbInitialized || eventDB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+
+	query := `
+		SELECT
+			DATE(timestamp) as day,
+			AVG(compressor_power) as avg_power,
+			AVG(thermal_power) as avg_thermal,
+			AVG(cop) as avg_cop,
+			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			COUNT(*) as total_samples
+		FROM temperature_snapshots
+		WHERE installation_id = ?
+			AND gateway_id = ?
+			AND device_id = ?
+			AND DATE(timestamp) >= DATE(?)
+			AND DATE(timestamp) <= DATE(?)
+		GROUP BY day
+		ORDER BY day ASC
+	`
+
+	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+		startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
+	}
+	defer rows.Close()
+
+	var dataPoints []ConsumptionDataPoint
+	intervalMinutes := float64(sampleInterval)
+
+	for rows.Next() {
+		var dayStr string
+		var avgPower, avgThermal, avgCOP *float64
+		var activeSamples, totalSamples int
+
+		err := rows.Scan(&dayStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		if err != nil {
+			log.Printf("Warning: failed to scan daily breakdown row: %v", err)
+			continue
+		}
+
+		dayTime, err := time.Parse("2006-01-02", dayStr)
+		if err != nil {
+			log.Printf("Warning: failed to parse day timestamp: %v", err)
+			continue
+		}
+
+		// Calculate energy for this day
+		electricityKWh := 0.0
+		thermalKWh := 0.0
+		if avgPower != nil {
+			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0
+		}
+		if avgThermal != nil {
+			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0)
+		}
+
+		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
+
+		dataPoint := ConsumptionDataPoint{
+			Timestamp:      dayTime,
+			ElectricityKWh: electricityKWh,
+			ThermalKWh:     thermalKWh,
+			AvgCOP:         0.0,
+			RuntimeHours:   runtimeHours,
+			Samples:        totalSamples,
+		}
+		if avgCOP != nil {
+			dataPoint.AvgCOP = *avgCOP
+		}
+
+		dataPoints = append(dataPoints, dataPoint)
+	}
+
+	return dataPoints, nil
+}

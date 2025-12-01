@@ -970,3 +970,153 @@ func testRequestHandler(w http.ResponseWriter, r *http.Request) {
 		Response:   responseBody,
 	})
 }
+
+// HandleConsumptionStats returns consumption statistics for a device
+func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get query parameters
+	installationID := r.URL.Query().Get("installationId")
+	gatewaySerial := r.URL.Query().Get("gatewaySerial")
+	deviceID := r.URL.Query().Get("deviceId")
+	period := r.URL.Query().Get("period") // "today", "week", "month", "year"
+	dateStr := r.URL.Query().Get("date")  // Optional: specific date (YYYY-MM-DD)
+
+	// Validate required parameters
+	if installationID == "" || gatewaySerial == "" || deviceID == "" {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Missing required parameters: installationId, gatewaySerial, deviceId",
+		})
+		return
+	}
+
+	// Default period to "today" if not specified
+	if period == "" {
+		period = "today"
+	}
+
+	// Get temperature log settings to determine sample interval
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to get temperature log settings: " + err.Error(),
+		})
+		return
+	}
+
+	sampleInterval := settings.SampleInterval
+
+	// Parse date or use current date
+	var referenceDate time.Time
+	if dateStr != "" {
+		referenceDate, err = time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Invalid date format. Use YYYY-MM-DD",
+			})
+			return
+		}
+	} else {
+		referenceDate = time.Now()
+	}
+
+	var stats *ConsumptionStats
+	var hourlyBreakdown []ConsumptionDataPoint
+	var dailyBreakdown []ConsumptionDataPoint
+
+	// Calculate time range based on period
+	switch period {
+	case "today":
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location())
+		endTime := startTime.Add(24 * time.Hour)
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "today"
+			// Get hourly breakdown for today
+			hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, referenceDate, sampleInterval)
+			stats.HourlyBreakdown = hourlyBreakdown
+		}
+
+	case "yesterday":
+		yesterday := referenceDate.AddDate(0, 0, -1)
+		startTime := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, yesterday.Location())
+		endTime := startTime.Add(24 * time.Hour)
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "yesterday"
+			hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, yesterday, sampleInterval)
+			stats.HourlyBreakdown = hourlyBreakdown
+		}
+
+	case "week":
+		// Last 7 days
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location()).AddDate(0, 0, -6)
+		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, referenceDate.Location())
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "week"
+			// Get daily breakdown for the week
+			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+			stats.DailyBreakdown = dailyBreakdown
+		}
+
+	case "month":
+		// Current month
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), 1, 0, 0, 0, 0, referenceDate.Location())
+		endTime := startTime.AddDate(0, 1, 0).Add(-1 * time.Second) // Last second of the month
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "month"
+			// Get daily breakdown for the month
+			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+			stats.DailyBreakdown = dailyBreakdown
+		}
+
+	case "year":
+		// Current year
+		startTime := time.Date(referenceDate.Year(), 1, 1, 0, 0, 0, 0, referenceDate.Location())
+		endTime := startTime.AddDate(1, 0, 0).Add(-1 * time.Second) // Last second of the year
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "year"
+			// Get daily breakdown for the year (might be a lot of data)
+			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+			stats.DailyBreakdown = dailyBreakdown
+		}
+
+	case "last30days":
+		// Last 30 days
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location()).AddDate(0, 0, -29)
+		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, referenceDate.Location())
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+		if err == nil {
+			stats.Period = "last30days"
+			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime, sampleInterval)
+			stats.DailyBreakdown = dailyBreakdown
+		}
+
+	default:
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid period. Use: today, yesterday, week, month, year, last30days",
+		})
+		return
+	}
+
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to get consumption stats: " + err.Error(),
+		})
+		return
+	}
+
+	// Return the stats
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"stats":   stats,
+	})
+}
