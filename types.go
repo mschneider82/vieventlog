@@ -181,6 +181,7 @@ type DeviceSettingsRequest struct {
 	CompressorRpmMin                int      `json:"compressorRpmMin"`
 	CompressorRpmMax                int      `json:"compressorRpmMax"`
 	CompressorPowerCorrectionFactor *float64 `json:"compressorPowerCorrectionFactor,omitempty"`
+	ElectricityPrice                *float64 `json:"electricityPrice,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool    `json:"useAirIntakeTemperatureLabel,omitempty"`
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
 }
@@ -191,6 +192,7 @@ type DeviceSettingsResponse struct {
 	CompressorRpmMin                int      `json:"compressorRpmMin,omitempty"`
 	CompressorRpmMax                int      `json:"compressorRpmMax,omitempty"`
 	CompressorPowerCorrectionFactor *float64 `json:"compressorPowerCorrectionFactor,omitempty"`
+	ElectricityPrice                *float64 `json:"electricityPrice,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool    `json:"useAirIntakeTemperatureLabel,omitempty"`
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
 }
@@ -262,18 +264,18 @@ type TemperatureSnapshot struct {
 	AccountName    string    `json:"account_name"`
 
 	// Temperature sensors
-	OutsideTemp             *float64 `json:"outside_temp,omitempty"`
-	ReturnTemp              *float64 `json:"return_temp,omitempty"`
-	SupplyTemp              *float64 `json:"supply_temp,omitempty"`
-	PrimarySupplyTemp       *float64 `json:"primary_supply_temp,omitempty"`
-	SecondarySupplyTemp     *float64 `json:"secondary_supply_temp,omitempty"`
-	PrimaryReturnTemp       *float64 `json:"primary_return_temp,omitempty"`
-	SecondaryReturnTemp     *float64 `json:"secondary_return_temp,omitempty"`
-	DHWTemp                 *float64 `json:"dhw_temp,omitempty"`
-	BoilerTemp              *float64 `json:"boiler_temp,omitempty"`
-	BufferTemp              *float64 `json:"buffer_temp,omitempty"`
-	BufferTempTop           *float64 `json:"buffer_temp_top,omitempty"`
-	CalculatedOutsideTemp   *float64 `json:"calculated_outside_temp,omitempty"`
+	OutsideTemp           *float64 `json:"outside_temp,omitempty"`
+	ReturnTemp            *float64 `json:"return_temp,omitempty"`
+	SupplyTemp            *float64 `json:"supply_temp,omitempty"`
+	PrimarySupplyTemp     *float64 `json:"primary_supply_temp,omitempty"`
+	SecondarySupplyTemp   *float64 `json:"secondary_supply_temp,omitempty"`
+	PrimaryReturnTemp     *float64 `json:"primary_return_temp,omitempty"`
+	SecondaryReturnTemp   *float64 `json:"secondary_return_temp,omitempty"`
+	DHWTemp               *float64 `json:"dhw_temp,omitempty"`
+	BoilerTemp            *float64 `json:"boiler_temp,omitempty"`
+	BufferTemp            *float64 `json:"buffer_temp,omitempty"`
+	BufferTempTop         *float64 `json:"buffer_temp_top,omitempty"`
+	CalculatedOutsideTemp *float64 `json:"calculated_outside_temp,omitempty"`
 
 	// Compressor data
 	CompressorActive     *bool    `json:"compressor_active,omitempty"`
@@ -298,29 +300,60 @@ type TemperatureSnapshot struct {
 	COP            *float64 `json:"cop,omitempty"`
 
 	// Operating state
-	FourWayValve               *string  `json:"four_way_valve,omitempty"`
-	BurnerModulation           *float64 `json:"burner_modulation,omitempty"`
-	SecondaryHeatGeneratorStatus *string `json:"secondary_heat_generator_status,omitempty"`
+	FourWayValve                 *string  `json:"four_way_valve,omitempty"`
+	BurnerModulation             *float64 `json:"burner_modulation,omitempty"`
+	SecondaryHeatGeneratorStatus *string  `json:"secondary_heat_generator_status,omitempty"`
 }
 
 // TemperatureLogSettings holds configuration for temperature logging
 type TemperatureLogSettings struct {
-	Enabled         bool   `json:"enabled"`
-	SampleInterval  int    `json:"sample_interval"`  // Minutes between samples
-	RetentionDays   int    `json:"retention_days"`   // How long to keep data
-	DatabasePath    string `json:"database_path"`    // SQLite database path
+	Enabled        bool   `json:"enabled"`
+	SampleInterval int    `json:"sample_interval"` // Minutes between samples
+	RetentionDays  int    `json:"retention_days"`  // How long to keep data
+	DatabasePath   string `json:"database_path"`   // SQLite database path
 }
 
 // TemperatureLogStatsResponse provides statistics about temperature logging
 type TemperatureLogStatsResponse struct {
-	Enabled         bool   `json:"enabled"`
-	SchedulerRunning bool  `json:"scheduler_running"`
-	TotalSnapshots  int64  `json:"total_snapshots"`
-	SampleInterval  int    `json:"sample_interval"`
-	RetentionDays   int    `json:"retention_days"`
-	DatabasePath    string `json:"database_path"`
-	APIUsage10Min   int    `json:"api_usage_10min"`
-	APIUsage24Hr    int    `json:"api_usage_24hr"`
-	APILimit10Min   int    `json:"api_limit_10min"`
-	APILimit24Hr    int    `json:"api_limit_24hr"`
+	Enabled          bool   `json:"enabled"`
+	SchedulerRunning bool   `json:"scheduler_running"`
+	TotalSnapshots   int64  `json:"total_snapshots"`
+	SampleInterval   int    `json:"sample_interval"`
+	RetentionDays    int    `json:"retention_days"`
+	DatabasePath     string `json:"database_path"`
+	APIUsage10Min    int    `json:"api_usage_10min"`
+	APIUsage24Hr     int    `json:"api_usage_24hr"`
+	APILimit10Min    int    `json:"api_limit_10min"`
+	APILimit24Hr     int    `json:"api_limit_24hr"`
+}
+
+// ConsumptionStats represents aggregated consumption statistics for a time period
+type ConsumptionStats struct {
+	Period          string                 `json:"period"` // "hour", "day", "week", "month", "year"
+	StartTime       time.Time              `json:"start_time"`
+	EndTime         time.Time              `json:"end_time"`
+	ElectricityKWh  float64                `json:"electricity_kwh"` // Total electrical energy consumed
+	ThermalKWh      float64                `json:"thermal_kwh"`     // Total thermal energy produced
+	AvgCOP          float64                `json:"avg_cop"`         // Average coefficient of performance
+	RuntimeHours    float64                `json:"runtime_hours"`   // Hours compressor was active
+	Samples         int                    `json:"samples"`         // Number of snapshots
+	HourlyBreakdown []ConsumptionDataPoint `json:"hourly_breakdown,omitempty"`
+	DailyBreakdown  []ConsumptionDataPoint `json:"daily_breakdown,omitempty"`
+}
+
+// ConsumptionDataPoint represents a single data point in consumption breakdown
+type ConsumptionDataPoint struct {
+	Timestamp      time.Time `json:"timestamp"`
+	ElectricityKWh float64   `json:"electricity_kwh"`
+	ThermalKWh     float64   `json:"thermal_kwh"`
+	AvgCOP         float64   `json:"avg_cop"`
+	RuntimeHours   float64   `json:"runtime_hours"`
+	Samples        int       `json:"samples"`
+}
+
+// ConsumptionComparisonResponse provides comparative consumption statistics
+type ConsumptionComparisonResponse struct {
+	Current       ConsumptionStats `json:"current"`
+	Previous      ConsumptionStats `json:"previous"`
+	PercentChange float64          `json:"percent_change"`
 }

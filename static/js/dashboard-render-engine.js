@@ -296,6 +296,13 @@
                     }
                 }, 300); // Increased timeout from 100ms to 300ms for better DOM layout with multiple circuits
             }
+
+            // Load consumption tile after temperature chart (if enabled)
+            setTimeout(async () => {
+                if (typeof renderConsumptionTile === 'function') {
+                    await renderConsumptionTile(features.deviceInfo, features);
+                }
+            }, 400);
         }
 
         function extractKeyFeatures(features) {

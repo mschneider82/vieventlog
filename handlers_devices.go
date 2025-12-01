@@ -51,12 +51,20 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	correctionFactorPtr := &correctionFactor
 
+	// Set default electricity price if not set
+	electricityPrice := settings.ElectricityPrice
+	if electricityPrice == 0 {
+		electricityPrice = 0.30 // Default: 30 cents per kWh
+	}
+	electricityPricePtr := &electricityPrice
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
 		Success:                         true,
 		CompressorRpmMin:                settings.CompressorRpmMin,
 		CompressorRpmMax:                settings.CompressorRpmMax,
 		CompressorPowerCorrectionFactor: correctionFactorPtr,
+		ElectricityPrice:                electricityPricePtr,
 		UseAirIntakeTemperatureLabel:    settings.UseAirIntakeTemperatureLabel,
 		HasHotWaterBuffer:               settings.HasHotWaterBuffer,
 	})
@@ -104,6 +112,12 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 		// Default to 1.0 if not provided
 		settings.CompressorPowerCorrectionFactor = 1.0
 	}
+	if req.ElectricityPrice != nil {
+		settings.ElectricityPrice = *req.ElectricityPrice
+	} else {
+		// Default to 0.30 EUR/kWh if not provided
+		settings.ElectricityPrice = 0.30
+	}
 	if req.UseAirIntakeTemperatureLabel != nil {
 		settings.UseAirIntakeTemperatureLabel = req.UseAirIntakeTemperatureLabel
 	}
@@ -120,8 +134,8 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logMsg := fmt.Sprintf("Device settings saved for %s (account: %s): min=%d, max=%d, powerCorrectionFactor=%.2f",
-		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax, settings.CompressorPowerCorrectionFactor)
+	logMsg := fmt.Sprintf("Device settings saved for %s (account: %s): min=%d, max=%d, powerCorrectionFactor=%.2f, electricityPrice=%.2f",
+		deviceKey, req.AccountID, req.CompressorRpmMin, req.CompressorRpmMax, settings.CompressorPowerCorrectionFactor, settings.ElectricityPrice)
 	if req.UseAirIntakeTemperatureLabel != nil {
 		logMsg += fmt.Sprintf(", useAirIntakeLabel=%v", *req.UseAirIntakeTemperatureLabel)
 	}

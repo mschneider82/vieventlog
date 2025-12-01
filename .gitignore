@@ -39,3 +39,5 @@ vitocal.txt
 events/
 CLAUDE.md
 viessmann_events.db
+viessmann_events.db-shm
+viessmann_events.db-wal
