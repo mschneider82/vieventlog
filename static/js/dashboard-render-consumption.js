@@ -138,10 +138,80 @@ async function renderConsumptionTile(deviceInfo, features) {
 }
 
 /**
+ * Apply compressor power correction factor to consumption stats
+ * This corrects electricity consumption values and recalculates COP
+ */
+function applyPowerCorrectionFactor(stats, deviceInfo) {
+    if (!stats || !deviceInfo) return stats;
+
+    // Get correction factor from device settings (default: 1.0 = no correction)
+    let correctionFactor = 1.0;
+    if (window.deviceSettingsCache) {
+        const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+        const settings = window.deviceSettingsCache[deviceKey];
+        if (settings && settings.powerCorrectionFactor) {
+            correctionFactor = settings.powerCorrectionFactor;
+            console.log(`[Consumption] Applying correction factor: ${correctionFactor} for device ${deviceKey}`);
+        } else {
+            console.log(`[Consumption] No correction factor found for device ${deviceKey}`, settings);
+        }
+    } else {
+        console.log('[Consumption] deviceSettingsCache not available');
+    }
+
+    // If no correction needed, return original stats
+    if (correctionFactor === 1.0) {
+        console.log('[Consumption] No correction applied (factor = 1.0)');
+        return stats;
+    }
+
+    // Create a deep copy to avoid modifying the original
+    const corrected = JSON.parse(JSON.stringify(stats));
+
+    console.log(`[Consumption] Original electricity: ${stats.electricity_kwh.toFixed(2)} kWh, COP: ${stats.avg_cop.toFixed(2)}`);
+
+    // Apply correction to main stats
+    corrected.electricity_kwh *= correctionFactor;
+
+    // Recalculate COP: COP = Thermal / Electrical
+    if (corrected.electricity_kwh > 0) {
+        corrected.avg_cop = corrected.thermal_kwh / corrected.electricity_kwh;
+    }
+
+    console.log(`[Consumption] Corrected electricity: ${corrected.electricity_kwh.toFixed(2)} kWh, COP: ${corrected.avg_cop.toFixed(2)}`);
+
+    // Apply correction to hourly breakdown
+    if (corrected.hourly_breakdown && Array.isArray(corrected.hourly_breakdown)) {
+        corrected.hourly_breakdown = corrected.hourly_breakdown.map(point => ({
+            ...point,
+            electricity_kwh: point.electricity_kwh * correctionFactor,
+            avg_cop: point.electricity_kwh * correctionFactor > 0
+                ? point.thermal_kwh / (point.electricity_kwh * correctionFactor)
+                : 0
+        }));
+        console.log(`[Consumption] Corrected ${corrected.hourly_breakdown.length} hourly data points`);
+    }
+
+    // Apply correction to daily breakdown
+    if (corrected.daily_breakdown && Array.isArray(corrected.daily_breakdown)) {
+        corrected.daily_breakdown = corrected.daily_breakdown.map(point => ({
+            ...point,
+            electricity_kwh: point.electricity_kwh * correctionFactor,
+            avg_cop: point.electricity_kwh * correctionFactor > 0
+                ? point.thermal_kwh / (point.electricity_kwh * correctionFactor)
+                : 0
+        }));
+        console.log(`[Consumption] Corrected ${corrected.daily_breakdown.length} daily data points`);
+    }
+
+    return corrected;
+}
+
+/**
  * Load consumption data for a specific period
  */
 async function loadConsumptionData(deviceInfo, period, customDate = null) {
-    const { installationId, gatewaySerial, deviceId } = deviceInfo;
+    const { installationId, gatewaySerial, deviceId, accountId } = deviceInfo;
     const cacheKey = customDate ? `${installationId}_${deviceId}_${customDate}` : `${installationId}_${deviceId}_${period}`;
 
     try {
@@ -170,13 +240,16 @@ async function loadConsumptionData(deviceInfo, period, customDate = null) {
             throw new Error(data.error || 'Failed to load consumption data');
         }
 
-        // Cache the data
-        consumptionCache[cacheKey] = data.stats;
+        // Apply correction factor to the stats
+        const correctedStats = applyPowerCorrectionFactor(data.stats, deviceInfo);
+
+        // Cache the corrected data
+        consumptionCache[cacheKey] = correctedStats;
 
         // Render the data
-        renderConsumptionStats(data.stats, period, deviceInfo, customDate);
-        renderConsumptionCharts(data.stats, period, customDate);
-        renderConsumptionBreakdown(data.stats, period, customDate);
+        renderConsumptionStats(correctedStats, period, deviceInfo, customDate);
+        renderConsumptionCharts(correctedStats, period, customDate);
+        renderConsumptionBreakdown(correctedStats, period, customDate);
 
     } catch (err) {
         console.error('Failed to load consumption data:', err);
@@ -347,7 +420,19 @@ function renderHourlyChart(stats, period, customDate = null) {
             axisPointer: { type: 'cross' },
             backgroundColor: 'rgba(30, 30, 46, 0.95)',
             borderColor: 'rgba(255,255,255,0.1)',
-            textStyle: { color: '#e0e0e0' }
+            textStyle: { color: '#e0e0e0' },
+            formatter: function(params) {
+                let result = params[0].axisValue + '<br/>';
+                params.forEach(param => {
+                    const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
+                    result += param.marker + ' ' + param.seriesName + ': ' + value;
+                    if (param.seriesName !== 'COP') {
+                        result += ' kWh';
+                    }
+                    result += '<br/>';
+                });
+                return result;
+            }
         },
         legend: {
             data: ['Stromverbrauch', 'Wärmeerzeugung', 'COP'],
@@ -466,7 +551,19 @@ function renderDailyChart(stats, period, customDate = null) {
             axisPointer: { type: 'cross' },
             backgroundColor: 'rgba(30, 30, 46, 0.95)',
             borderColor: 'rgba(255,255,255,0.1)',
-            textStyle: { color: '#e0e0e0' }
+            textStyle: { color: '#e0e0e0' },
+            formatter: function(params) {
+                let result = params[0].axisValue + '<br/>';
+                params.forEach(param => {
+                    const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
+                    result += param.marker + ' ' + param.seriesName + ': ' + value;
+                    if (param.seriesName !== 'COP') {
+                        result += ' kWh';
+                    }
+                    result += '<br/>';
+                });
+                return result;
+            }
         },
         legend: {
             data: ['Stromverbrauch', 'Wärmeerzeugung', 'COP'],

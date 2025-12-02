@@ -4,6 +4,7 @@
 let temperatureChart = null;
 let temperatureChartRefreshInterval = null;
 let currentTimeRange = '24h';
+let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
 
@@ -56,6 +57,10 @@ async function initTemperatureChart() {
                         <button class="time-btn" data-range="72h">72h</button>
                         <button class="time-btn" data-range="7d">7d</button>
                         <button class="time-btn" data-range="30d">30d</button>
+                        <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
+                            <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
+                            <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -75,9 +80,30 @@ async function initTemperatureChart() {
                 timeButtons.forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 currentTimeRange = e.target.dataset.range;
+                customTemperatureDate = null; // Clear custom date when using time range buttons
                 loadTemperatureData();
             });
         });
+
+        // Add event listener for date picker
+        const datePicker = chartSection.querySelector('#temperatureCustomDatePicker');
+        if (datePicker) {
+            // Set max date to today
+            const today = new Date().toISOString().split('T')[0];
+            datePicker.max = today;
+
+            datePicker.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    // Deactivate all time range buttons
+                    timeButtons.forEach(b => b.classList.remove('active'));
+
+                    // Set custom date and load data for that specific day (24h)
+                    customTemperatureDate = e.target.value;
+                    currentTimeRange = '24h';
+                    loadTemperatureData();
+                }
+            });
+        }
     }
 
     // Initialize or reinitialize ECharts
@@ -106,11 +132,22 @@ async function loadTemperatureData(silent = false) {
     if (!currentInstallationId) return;
 
     try {
-        // Parse time range
-        const hours = parseTimeRange(currentTimeRange);
+        // Build API URL
+        let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=2000`;
+
+        if (customTemperatureDate) {
+            // Use specific date range (from midnight to midnight next day)
+            const startDate = new Date(customTemperatureDate + 'T00:00:00');
+            const endDate = new Date(customTemperatureDate + 'T23:59:59');
+            apiUrl += `&startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`;
+        } else {
+            // Use hours-based time range
+            const hours = parseTimeRange(currentTimeRange);
+            apiUrl += `&hours=${hours}`;
+        }
 
         // Fetch data from API with gateway and device filter
-        const response = await fetch(`/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&hours=${hours}&limit=2000`);
+        const response = await fetch(apiUrl);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
