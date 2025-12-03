@@ -359,6 +359,14 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
 	case "heating.circuits.1.sensors.temperature.return":
 		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+	case "heating.primaryCircuit.sensors.temperature.supply":
+		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
+	case "heating.primaryCircuit.sensors.temperature.return":
+		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+	case "heating.secondaryCircuit.sensors.temperature.supply":
+		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
+	case "heating.secondaryCircuit.sensors.temperature.return":
+		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.boiler.sensors.temperature.main":
@@ -499,15 +507,29 @@ func getPumpStatus(properties map[string]interface{}) *bool {
 // calculateDerivedValues computes thermal power from flow and temperature
 func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	// Calculate thermal power if we have flow and temperature difference
-	// Try primary supply/return first, fallback to generic supply/return
+	// Try multiple combinations of supply/return temperatures
 	var supplyTemp, returnTemp *float64
 
+	// Priority 1: Primary circuit supply + generic return
 	if snapshot.PrimarySupplyTemp != nil && snapshot.ReturnTemp != nil {
 		supplyTemp = snapshot.PrimarySupplyTemp
 		returnTemp = snapshot.ReturnTemp
+	// Priority 2: Primary circuit supply + primary circuit return
+	} else if snapshot.PrimarySupplyTemp != nil && snapshot.PrimaryReturnTemp != nil {
+		supplyTemp = snapshot.PrimarySupplyTemp
+		returnTemp = snapshot.PrimaryReturnTemp
+	// Priority 3: Generic supply + generic return
 	} else if snapshot.SupplyTemp != nil && snapshot.ReturnTemp != nil {
 		supplyTemp = snapshot.SupplyTemp
 		returnTemp = snapshot.ReturnTemp
+	// Priority 4: Secondary circuit supply + generic return
+	} else if snapshot.SecondarySupplyTemp != nil && snapshot.ReturnTemp != nil {
+		supplyTemp = snapshot.SecondarySupplyTemp
+		returnTemp = snapshot.ReturnTemp
+	// Priority 5: Secondary circuit supply + secondary circuit return
+	} else if snapshot.SecondarySupplyTemp != nil && snapshot.SecondaryReturnTemp != nil {
+		supplyTemp = snapshot.SecondarySupplyTemp
+		returnTemp = snapshot.SecondaryReturnTemp
 	}
 
 	if snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
