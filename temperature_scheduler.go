@@ -14,6 +14,10 @@ var (
 	tempSchedulerStop    chan bool
 	tempSchedulerTicker  *time.Ticker
 
+	// Job-level mutex to prevent concurrent job execution
+	tempJobMutex  sync.Mutex
+	tempJobRunning bool
+
 	// API Rate Limiting tracking
 	apiCallsMutex sync.Mutex
 	apiCalls10Min []time.Time // Track calls in 10-minute window
@@ -125,6 +129,23 @@ func RestartTemperatureScheduler() error {
 
 // temperatureLoggingJob is the main job that collects temperature snapshots
 func temperatureLoggingJob() {
+	// Prevent concurrent job execution
+	tempJobMutex.Lock()
+	if tempJobRunning {
+		log.Println("Temperature logging job already running, skipping this tick")
+		tempJobMutex.Unlock()
+		return
+	}
+	tempJobRunning = true
+	tempJobMutex.Unlock()
+
+	// Ensure we reset the running flag when done
+	defer func() {
+		tempJobMutex.Lock()
+		tempJobRunning = false
+		tempJobMutex.Unlock()
+	}()
+
 	log.Println("Running temperature logging job...")
 
 	// Get settings
@@ -319,8 +340,13 @@ func extractTemperatureSnapshot(features *DeviceFeatures, installationID, gatewa
 		return nil
 	}
 
+	// Round timestamp to the nearest minute to prevent near-duplicate entries
+	// This ensures that multiple concurrent job executions produce the same timestamp
+	now := time.Now().UTC()
+	roundedTime := now.Truncate(time.Minute)
+
 	snapshot := &TemperatureSnapshot{
-		Timestamp:      time.Now().UTC(),
+		Timestamp:      roundedTime,
 		InstallationID: installationID,
 		GatewayID:      gatewayID,
 		DeviceID:       deviceID,
