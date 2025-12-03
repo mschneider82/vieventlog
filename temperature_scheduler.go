@@ -385,14 +385,23 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
 	case "heating.circuits.1.sensors.temperature.return":
 		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+	// Fallback features: only use if primary features are not available
 	case "heating.primaryCircuit.sensors.temperature.supply":
-		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
+		if snapshot.PrimarySupplyTemp == nil {
+			snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
+		}
 	case "heating.primaryCircuit.sensors.temperature.return":
-		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+		if snapshot.PrimaryReturnTemp == nil {
+			snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+		}
 	case "heating.secondaryCircuit.sensors.temperature.supply":
-		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
+		if snapshot.SecondarySupplyTemp == nil {
+			snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
+		}
 	case "heating.secondaryCircuit.sensors.temperature.return":
-		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+		if snapshot.SecondaryReturnTemp == nil {
+			snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+		}
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.boiler.sensors.temperature.main":
