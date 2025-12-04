@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -540,44 +541,55 @@ func getPumpStatus(properties map[string]interface{}) *bool {
 }
 
 // calculateDerivedValues computes thermal power from flow and temperature
+// Uses the same logic as the dashboard for consistency
 func calculateDerivedValues(snapshot *TemperatureSnapshot) {
-	// Calculate thermal power if we have flow and temperature difference
-	// Try multiple combinations of supply/return temperatures
-	var supplyTemp, returnTemp *float64
-
-	// Priority 1: Primary circuit supply + generic return
-	if snapshot.PrimarySupplyTemp != nil && snapshot.ReturnTemp != nil {
-		supplyTemp = snapshot.PrimarySupplyTemp
-		returnTemp = snapshot.ReturnTemp
-	// Priority 2: Primary circuit supply + primary circuit return
-	} else if snapshot.PrimarySupplyTemp != nil && snapshot.PrimaryReturnTemp != nil {
-		supplyTemp = snapshot.PrimarySupplyTemp
-		returnTemp = snapshot.PrimaryReturnTemp
-	// Priority 3: Generic supply + generic return
-	} else if snapshot.SupplyTemp != nil && snapshot.ReturnTemp != nil {
-		supplyTemp = snapshot.SupplyTemp
-		returnTemp = snapshot.ReturnTemp
-	// Priority 4: Secondary circuit supply + generic return
-	} else if snapshot.SecondarySupplyTemp != nil && snapshot.ReturnTemp != nil {
-		supplyTemp = snapshot.SecondarySupplyTemp
-		returnTemp = snapshot.ReturnTemp
-	// Priority 5: Secondary circuit supply + secondary circuit return
-	} else if snapshot.SecondarySupplyTemp != nil && snapshot.SecondaryReturnTemp != nil {
-		supplyTemp = snapshot.SecondarySupplyTemp
-		returnTemp = snapshot.SecondaryReturnTemp
+	// Get device settings to determine which temperatures to use
+	hasHotWaterBuffer := true // Default to true (use secondary circuit)
+	deviceKey := fmt.Sprintf("%s_%s", snapshot.InstallationID, snapshot.DeviceID)
+	settings, err := GetDeviceSettings(snapshot.AccountID, deviceKey)
+	if err == nil && settings.HasHotWaterBuffer != nil {
+		hasHotWaterBuffer = *settings.HasHotWaterBuffer
 	}
 
+	var supplyTemp, returnTemp *float64
+
+	if hasHotWaterBuffer {
+		// Mit HW-Puffer: Sekundärkreis Spreizung (like dashboard line 333-342)
+		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply/return
+		// which maps to our SecondarySupplyTemp/SecondaryReturnTemp
+		if snapshot.SecondarySupplyTemp != nil && snapshot.SecondaryReturnTemp != nil {
+			supplyTemp = snapshot.SecondarySupplyTemp
+			returnTemp = snapshot.SecondaryReturnTemp
+		} else if snapshot.SecondarySupplyTemp != nil && snapshot.ReturnTemp != nil {
+			// Fallback: secondary supply + generic return (dashboard line 410 has this fallback)
+			supplyTemp = snapshot.SecondarySupplyTemp
+			returnTemp = snapshot.ReturnTemp
+		}
+	} else {
+		// Ohne HW-Puffer: Heizkreis Spreizung (like dashboard line 344-352)
+		// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
+		// which maps to our PrimarySupplyTemp + ReturnTemp
+		if snapshot.PrimarySupplyTemp != nil && snapshot.ReturnTemp != nil {
+			supplyTemp = snapshot.PrimarySupplyTemp
+			returnTemp = snapshot.ReturnTemp
+		}
+	}
+
+	// Calculate thermal power if we have all required values
 	if snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
-		// Thermal Power (kW) = Flow (L/h) * ΔT (K) * 4.186 (kJ/kg·K) / 3600 (s/h)
-		// Simplified: kW = Flow * ΔT * 0.001163
 		deltaT := *supplyTemp - *returnTemp
 
-		// Only calculate if deltaT is positive and meaningful (>0.1°C)
-		if deltaT > 0.1 {
+		// Only calculate if deltaT is positive and meaningful (>0°C)
+		if deltaT > 0 {
+			// Use the same formula as dashboard (dashboard-render-heating.js line 356-369)
+			// Dashboard: thermalPowerW = massFlow × specificHeatCapacity × spreizung
+			// where massFlow = waterDensity × volumetricFlowM3s
+			// Simplified with constant density (1000 kg/m³) and specific heat (4180 J/kg·K):
+			// kW = Flow * ΔT * 0.001163
 			thermalPowerKW := *snapshot.VolumetricFlow * deltaT * 0.001163
 			snapshot.ThermalPower = &thermalPowerKW
 
-			// Calculate instantaneous COP if we have electrical power from inverter
+			// Calculate instantaneous COP (same as dashboard line 374-377)
 			// CompressorPower is in Watt, ThermalPower is in kW
 			if snapshot.CompressorPower != nil && *snapshot.CompressorPower > 0 {
 				thermalPowerW := thermalPowerKW * 1000 // Convert kW to W
