@@ -840,6 +840,10 @@ Contributions sind willkommen! Bitte beachten Sie:
 
 Bei Fragen, Problemen oder Anregungen öffnen Sie bitte ein Issue auf GitHub. Wir freuen uns über Bug-Reports und Feature-Vorschläge!
 
+## Danksagung
+
+Die Kältekreislauf-Visualisierung im Dashboard verwendet Grafiken aus dem Projekt [iob.vis.vitocal250](https://github.com/MyHomeMyData/iob.vis.vitocal250) von MyHomeMyData. Vielen Dank für die ausgezeichnete Visualisierung des Viessmann Wärmepumpen-Kältekreislaufs!
+
 ## Haftungsausschluss
 
 Diese Software wird "wie besehen" ohne jegliche Garantie bereitgestellt. Die Nutzung erfolgt auf eigenes Risiko. Der Autor übernimmt keine Haftung für Schäden, die durch die Nutzung dieser Software entstehen.
