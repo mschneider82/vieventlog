@@ -1511,3 +1511,107 @@
         transform: rotate(360deg);
     }
 }
+
+/* Refrigerant Circuit Visualization */
+.refrigerant-visual-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.refrigerant-diagram {
+    position: relative;
+    width: 100%;
+    max-width: 847px; /* ioBroker View-Größe, nicht Bild-Größe! */
+    margin: 0 auto;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.refrigerant-diagram .base-diagram {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Component overlays - positioned absolutely on the diagram */
+/* Base diagram size: 850px x 365px */
+.component-overlay {
+    position: absolute;
+    object-fit: contain;
+}
+
+/* Fan overlay (top left corner) - animierter Lüfter */
+/* Position entspricht Fan2 (1776): 68px left, 83px top */
+/* Wichtig: Prozente basierend auf View-Größe 847x363, nicht Bild-Größe 850x365! */
+.fan-overlay {
+    top: 22.9%; /* 83px / 363px */
+    left: 8.03%; /* 68px / 847px */
+    width: 3.78%; /* 32px / 847px */
+    height: auto;
+}
+
+/* DHW Storage (Warmwasserspeicher) - rechts oben */
+.dhw-storage-overlay {
+    top: 44.90%; /* 163px / 363px */
+    left: 92.68%; /* 785px / 847px */
+    width: 4.13%; /* 35px / 847px */
+    height: auto;
+}
+
+/* Heating Storage (Heizwasserspeicher) - rechts mitte */
+.heating-storage-overlay {
+    top: 44.90%; /* 163px / 363px */
+    left: 85.95%; /* 728px / 847px */
+    width: 4.13%; /* 35px / 847px */
+    height: auto;
+}
+
+/* Electric Heater (Heizstab) - rechts-mitte */
+.heater-overlay {
+    top: 31.40%; /* 114px / 363px */
+    left: 72.14%; /* 611px / 847px */
+    width: 3.78%; /* 32px / 847px */
+    height: auto;
+}
+
+/* Compact value labels directly on diagram */
+.value-label {
+    position: absolute;
+    font-size: 11px;
+    color: #ffffff;
+    font-weight: 600;
+    text-shadow:
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000,
+        0 0 3px rgba(0, 0, 0, 0.8);
+    white-space: nowrap;
+    cursor: help;
+    padding: 2px 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.value-label:hover {
+    background: rgba(102, 126, 234, 0.6);
+    transform: scale(1.1);
+    z-index: 10;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .value-label {
+        font-size: 9px;
+        padding: 1px 3px;
+    }
+
+    .component-overlay {
+        max-width: 8%;
+    }
+}

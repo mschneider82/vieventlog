@@ -413,6 +413,12 @@
                 }
             }
 
+            // Add visual diagram if compressor data available (heat pump)
+            let visualDiagram = '';
+            if (hasCompressor && typeof renderRefrigerantCircuitVisual === 'function') {
+                visualDiagram = renderRefrigerantCircuitVisual(kf);
+            }
+
             return `
                 <div class="card wide">
                     <div class="card-header">
@@ -445,6 +451,12 @@
                         <div class="temp-group">
                             <h3 class="temp-group-title">Energiecockpit</h3>
                             <div class="temp-grid">${tempsGroup4}</div>
+                        </div>
+                    ` : ''}
+                    ${visualDiagram ? `
+                        <div class="temp-group">
+                            <h3 class="temp-group-title">Kältekreislauf-Visualisierung</h3>
+                            ${visualDiagram}
                         </div>
                     ` : ''}
                 </div>
