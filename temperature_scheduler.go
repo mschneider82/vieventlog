@@ -496,11 +496,22 @@ func getFloatValue(properties map[string]interface{}) *float64 {
 		if val, ok := valueMap["value"].(float64); ok {
 			return &val
 		}
+		// Try as int if float64 failed
+		if val, ok := valueMap["value"].(int); ok {
+			floatVal := float64(val)
+			return &floatVal
+		}
 	}
 
-	// Try direct properties.value
+	// Try direct properties.value as float64
 	if val, ok := properties["value"].(float64); ok {
 		return &val
+	}
+
+	// Try direct properties.value as int
+	if val, ok := properties["value"].(int); ok {
+		floatVal := float64(val)
+		return &floatVal
 	}
 
 	return nil
