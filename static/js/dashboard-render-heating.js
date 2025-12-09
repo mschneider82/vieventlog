@@ -317,11 +317,18 @@
             }
 
             // --- GROUP 4: Energiecockpit ---
-            // Calculate thermal power and COP if all required values are available
+            // Try to calculate thermal power and COP (either from flow or from direct features)
+
+            // Get device settings
+            const deviceKey2 = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+            const deviceSetting2 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey2];
+            const correctionFactor = deviceSetting2?.powerCorrectionFactor || 1.0;
+
+            let electricalPowerW = null;
+            let thermalPowerW = null;
+
+            // Try flow-based calculation first (primary method)
             if (kf.volumetricFlow && kf.compressorPower) {
-                // Get device settings to determine which spreizung to use
-                const deviceKey2 = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-                const deviceSetting2 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey2];
                 let showSecondaryCircuitSpreizung2 = true; // default
                 if (deviceSetting2 && deviceSetting2.hasHotWaterBuffer !== null && deviceSetting2.hasHotWaterBuffer !== undefined) {
                     showSecondaryCircuitSpreizung2 = deviceSetting2.hasHotWaterBuffer;
@@ -366,50 +373,65 @@
                         const massFlow = waterDensity * volumetricFlowM3s; // kg/s
 
                         // Calculate thermal power: Q = ṁ × c × ΔT
-                        const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
+                        thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
 
-                        // Apply power correction factor to electrical power
-                        const correctionFactor = deviceSetting2?.powerCorrectionFactor || 1.0;
-
-                        // Calculate COP: COP = Q / P_el (with correction factor)
-                        const electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
-                        if (typeof electricalPowerW === 'number' && electricalPowerW > 0) {
-                            const cop = thermalPowerW / electricalPowerW;
-
-                            // Add electrical power consumption tile (in kW)
-                            tempsGroup4 += `
-                                <div class="temp-item">
-                                    <span class="temp-label">Stromverbrauch</span>
-                                    <div>
-                                        <span class="temp-value">${formatNum(electricalPowerW / 1000, 2)}</span>
-                                        <span class="temp-unit">kW</span>
-                                    </div>
-                                </div>
-                            `;
-
-                            // Add thermal power tile (in kW)
-                            tempsGroup4 += `
-                                <div class="temp-item">
-                                    <span class="temp-label">Thermische Leistung</span>
-                                    <div>
-                                        <span class="temp-value">${formatNum(thermalPowerW / 1000, 1)}</span>
-                                        <span class="temp-unit">kW</span>
-                                    </div>
-                                </div>
-                            `;
-
-                            // Add COP tile
-                            tempsGroup4 += `
-                                <div class="temp-item">
-                                    <span class="temp-label">COP (aktuell)</span>
-                                    <div>
-                                        <span class="temp-value">${formatNum(cop, 2)}</span>
-                                        <span class="temp-unit"></span>
-                                    </div>
-                                </div>
-                            `;
-                        }
+                        // Get electrical power with correction factor
+                        electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
                     }
+                }
+            }
+
+            // Fallback for Oplink devices: use direct current features if flow-based calculation failed
+            if (thermalPowerW === null && kf.compressorHeatProductionCurrent) {
+                const heatProductionValue = unwrapValue(kf.compressorHeatProductionCurrent.value);
+                if (typeof heatProductionValue === 'number') {
+                    thermalPowerW = heatProductionValue; // Already in Watt
+                }
+            }
+
+            if (electricalPowerW === null && kf.compressorPowerConsumptionCurrent) {
+                const powerConsumptionValue = unwrapValue(kf.compressorPowerConsumptionCurrent.value);
+                if (typeof powerConsumptionValue === 'number') {
+                    electricalPowerW = powerConsumptionValue * 1000 * correctionFactor; // kW to W (with correction)
+                }
+            }
+
+            // Display Energiecockpit if we have values (from either method)
+            if (electricalPowerW !== null && electricalPowerW > 0) {
+                // Add electrical power consumption tile (in kW)
+                tempsGroup4 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Stromverbrauch</span>
+                        <div>
+                            <span class="temp-value">${formatNum(electricalPowerW / 1000, 2)}</span>
+                            <span class="temp-unit">kW</span>
+                        </div>
+                    </div>
+                `;
+
+                // Add thermal power tile if available
+                if (thermalPowerW !== null) {
+                    tempsGroup4 += `
+                        <div class="temp-item">
+                            <span class="temp-label">Thermische Leistung</span>
+                            <div>
+                                <span class="temp-value">${formatNum(thermalPowerW / 1000, 1)}</span>
+                                <span class="temp-unit">kW</span>
+                            </div>
+                        </div>
+                    `;
+
+                    // Calculate and display COP
+                    const cop = thermalPowerW / electricalPowerW;
+                    tempsGroup4 += `
+                        <div class="temp-item">
+                            <span class="temp-label">COP (aktuell)</span>
+                            <div>
+                                <span class="temp-value">${formatNum(cop, 2)}</span>
+                                <span class="temp-unit"></span>
+                            </div>
+                        </div>
+                    `;
                 }
             }
 

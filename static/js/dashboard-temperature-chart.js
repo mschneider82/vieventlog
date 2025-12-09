@@ -117,13 +117,13 @@ async function initTemperatureChart() {
         // Load initial data
         loadTemperatureData();
 
-        // Start auto-refresh (every 60 seconds)
+        // Start auto-refresh (every 10 minutes)
         if (temperatureChartRefreshInterval) {
             clearInterval(temperatureChartRefreshInterval);
         }
         temperatureChartRefreshInterval = setInterval(() => {
             loadTemperatureData(true);
-        }, 60000);
+        }, 600000);
     }
 }
 
