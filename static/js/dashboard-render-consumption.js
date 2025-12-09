@@ -413,6 +413,10 @@ function renderHourlyChart(stats, period, customDate = null) {
     const thermalData = hourlyData.map(d => d.thermal_kwh);
     const copData = hourlyData.map(d => d.avg_cop);
 
+    // Calculate dynamic COP axis max (round up to next integer, minimum 6)
+    const maxCOP = Math.max(...copData, 0);
+    const copAxisMax = Math.max(Math.ceil(maxCOP + 1), 6);
+
     const option = {
         backgroundColor: 'transparent',
         tooltip: {
@@ -469,7 +473,7 @@ function renderHourlyChart(stats, period, customDate = null) {
                 name: 'COP',
                 position: 'right',
                 min: 0,
-                max: 6,
+                max: copAxisMax,
                 axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
                 axisLabel: {
                     formatter: '{value}',
@@ -544,6 +548,10 @@ function renderDailyChart(stats, period, customDate = null) {
     const thermalData = dailyData.map(d => d.thermal_kwh);
     const copData = dailyData.map(d => d.avg_cop);
 
+    // Calculate dynamic COP axis max (round up to next integer, minimum 6)
+    const maxCOP = Math.max(...copData, 0);
+    const copAxisMax = Math.max(Math.ceil(maxCOP + 1), 6);
+
     const option = {
         backgroundColor: 'transparent',
         tooltip: {
@@ -602,7 +610,7 @@ function renderDailyChart(stats, period, customDate = null) {
                 name: 'COP',
                 position: 'right',
                 min: 0,
-                max: 6,
+                max: copAxisMax,
                 axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
                 axisLabel: {
                     formatter: '{value}',
