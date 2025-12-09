@@ -445,6 +445,10 @@
                 compressorMotorTemp: find(['heating.compressors.0.sensors.temperature.motorChamber']),
                 compressorPressure: find(['heating.compressors.0.sensors.pressure.inlet']),
 
+                // Fallback features for Oplink devices (current consumption/production)
+                compressorPowerConsumptionCurrent: find(['heating.compressors.0.power.consumption.current']),
+                compressorHeatProductionCurrent: find(['heating.compressors.0.heat.production.current']),
+
                 // Noise reduction (heat pump - Vitocal)
                 noiseReductionMode: find(['heating.noise.reduction.operating.programs.active']),
 

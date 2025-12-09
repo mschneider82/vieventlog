@@ -439,6 +439,26 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
 		snapshot.CompressorPower = getFloatValue(feature.Properties)
+	case "heating.compressors.0.power.consumption.current":
+		// Fallback for Oplink devices: direct current power consumption (kilowatt)
+		// Only set if CompressorPower is not already set from inverter
+		if snapshot.CompressorPower == nil {
+			if kwValue := getFloatValue(feature.Properties); kwValue != nil {
+				// Convert from kW to W
+				wValue := *kwValue * 1000.0
+				snapshot.CompressorPower = &wValue
+			}
+		}
+	case "heating.compressors.0.heat.production.current":
+		// Fallback for Oplink devices: direct current heat production (watt)
+		// Only set if ThermalPower is not already calculated from volumetric flow
+		if snapshot.ThermalPower == nil {
+			if wValue := getFloatValue(feature.Properties); wValue != nil {
+				// Convert from W to kW
+				kwValue := *wValue / 1000.0
+				snapshot.ThermalPower = &kwValue
+			}
+		}
 	case "heating.power.consumption.total":
 		// This is cumulative consumption (kWh), not instantaneous power - skip it
 		break
@@ -575,8 +595,8 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		}
 	}
 
-	// Calculate thermal power if we have all required values
-	if snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
+	// Calculate thermal power if we have all required values (only if not already set from fallback)
+	if snapshot.ThermalPower == nil && snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
 		deltaT := *supplyTemp - *returnTemp
 
 		// Only calculate if deltaT is positive and meaningful (>0°C)
@@ -588,15 +608,15 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			// kW = Flow * ΔT * 0.001163
 			thermalPowerKW := *snapshot.VolumetricFlow * deltaT * 0.001163
 			snapshot.ThermalPower = &thermalPowerKW
-
-			// Calculate instantaneous COP (same as dashboard line 374-377)
-			// CompressorPower is in Watt, ThermalPower is in kW
-			if snapshot.CompressorPower != nil && *snapshot.CompressorPower > 0 {
-				thermalPowerW := thermalPowerKW * 1000 // Convert kW to W
-				cop := thermalPowerW / *snapshot.CompressorPower
-				snapshot.COP = &cop
-			}
 		}
+	}
+
+	// Calculate instantaneous COP if both thermal and electrical power are available
+	// This works for both calculated thermal power (from flow) and direct thermal power (from fallback)
+	if snapshot.ThermalPower != nil && snapshot.CompressorPower != nil && *snapshot.CompressorPower > 0 {
+		thermalPowerW := *snapshot.ThermalPower * 1000 // Convert kW to W
+		cop := thermalPowerW / *snapshot.CompressorPower
+		snapshot.COP = &cop
 	}
 }
 

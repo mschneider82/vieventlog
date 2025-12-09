@@ -416,7 +416,7 @@
             }
             autoRefreshInterval = setInterval(() => {
                 loadDashboard();
-            }, 60000); // Every minute
+            }, 600000); // Every 10 minutes
         }
 
         // Event Listeners
