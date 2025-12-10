@@ -87,7 +87,9 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         compressorOilTemp: keyFeatures.compressorOilTemp?.value || null,
         // V: Betriebsart
         operatingMode: keyFeatures.operatingMode?.value || null,
-        // W: Außentemperatur (Lufteintrittstemperatur Verdampfer)
+        // W: Lufteintrittstemperatur Verdampfer (Primärkreis-Vorlauf)
+        airIntakeTemp: keyFeatures.primarySupplyTemp?.value || null,
+        // W2: Außentemperatur
         outsideTemp: keyFeatures.outsideTemp?.value || null,
         // X: Volumenstrom
         volumetricFlow: keyFeatures.volumetricFlow?.value || null,
@@ -189,7 +191,8 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${values.supplyTemp !== null ? `<div class="value-label" style="top: 83.75%; left: 84.53%;" title="Vorlauftemperatur">${formatValue(values.supplyTemp, '°C')}</div>` : ''}
                     ${values.pumpInternal !== null ? `<div class="value-label" style="top: 22.87%; left: 91.38%;" title="Interne Pumpe">${formatValue(values.pumpInternal, '%')}</div>` : ''}
 
-                    ${values.outsideTemp !== null ? `<div class="value-label" style="top: 44.35%; left: 0.71%;" title="Außentemperatur">${formatValue(values.outsideTemp, '°C')}</div>` : ''}
+                    ${values.airIntakeTemp !== null ? `<div class="value-label" style="top: 44.35%; left: 0.71%;" title="Lufteintrittstemperatur">${formatValue(values.airIntakeTemp, '°C')}</div>` : ''}
+                    ${values.outsideTemp !== null ? `<div class="value-label" style="top: 48.35%; left: 0.71%;" title="Außentemperatur">${formatValue(values.outsideTemp, '°C')}</div>` : ''}
                     ${values.volumetricFlow !== null ? `<div class="value-label" style="top: 17.36%; left: 90.32%;" title="Volumenstrom">${formatValue(values.volumetricFlow, 'l/h')}</div>` : ''}
 
                     <!-- Speichertemperaturen (unter den Speicher-Bildern) -->
