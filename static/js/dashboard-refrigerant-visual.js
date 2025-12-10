@@ -106,12 +106,37 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
 
     // Calculate thermal power if all required values are available
     let thermalPowerW = null;
-    if (keyFeatures.supplyTemp?.value && keyFeatures.returnTemp?.value && keyFeatures.volumetricFlow?.value) {
-        const supplyTemp = keyFeatures.supplyTemp.value;
-        const returnTemp = keyFeatures.returnTemp.value;
-        const spreizung = supplyTemp - returnTemp;
+    if (keyFeatures.volumetricFlow?.value) {
+        // Get device settings to determine which spreizung to use
+        const deviceInfo = window.currentDeviceInfo;
+        const deviceKey = deviceInfo ? (deviceInfo.installationId + '_' + deviceInfo.deviceId) : null;
+        const deviceSetting = deviceKey && window.deviceSettingsCache ? window.deviceSettingsCache[deviceKey] : null;
+        let showSecondaryCircuitSpreizung = true; // default
+        if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+            showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+        }
 
-        if (spreizung > 0) {
+        // Calculate spreizung based on setting
+        let spreizung = null;
+        let supplyTemp = null;
+
+        if (showSecondaryCircuitSpreizung) {
+            // Mit HW-Puffer: Sekundärkreis Spreizung
+            if (keyFeatures.secondarySupplyTemp?.value && keyFeatures.secondaryReturnTemp?.value) {
+                supplyTemp = keyFeatures.secondarySupplyTemp.value;
+                const returnTemp = keyFeatures.secondaryReturnTemp.value;
+                spreizung = supplyTemp - returnTemp;
+            }
+        } else {
+            // Ohne HW-Puffer: Heizkreis Spreizung
+            if (keyFeatures.supplyTemp?.value && keyFeatures.returnTemp?.value) {
+                supplyTemp = keyFeatures.supplyTemp.value;
+                const returnTemp = keyFeatures.returnTemp.value;
+                spreizung = supplyTemp - returnTemp;
+            }
+        }
+
+        if (spreizung !== null && spreizung > 0 && supplyTemp !== null) {
             const waterDensity = getWaterDensity(supplyTemp); // kg/m³
             const specificHeatCapacity = 4180; // J/(kg·K)
             const volumetricFlowM3s = keyFeatures.volumetricFlow.value / 3600000; // l/h to m³/s
