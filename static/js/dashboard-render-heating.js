@@ -216,16 +216,22 @@
                     const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
                     const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
                     if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const spreizung = supplyValue - returnValue;
-                        tempsGroup2 += `
-                            <div class="temp-item">
-                                <span class="temp-label">Spreizung Sekundärkreis</span>
-                                <div>
-                                    <span class="temp-value">${formatNum(spreizung)}</span>
-                                    <span class="temp-unit">K</span>
+                        const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
+                        let spreizung = null;
+                        if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
+                            spreizung = supplyValue - returnValue;
+                        }
+                        if (spreizung !== null) {
+                            tempsGroup2 += `
+                                <div class="temp-item">
+                                    <span class="temp-label">Spreizung Sekundärkreis</span>
+                                    <div>
+                                        <span class="temp-value">${formatNum(spreizung)}</span>
+                                        <span class="temp-unit">K</span>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     }
                 }
             } else {
@@ -234,16 +240,22 @@
                     const supplyValue = unwrapValue(kf.supplyTemp.value);
                     const returnValue = unwrapValue(kf.returnTemp.value);
                     if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const spreizung = supplyValue - returnValue;
-                        tempsGroup2 += `
-                            <div class="temp-item">
-                                <span class="temp-label">Spreizung Heizkreis</span>
-                                <div>
-                                    <span class="temp-value">${formatNum(spreizung)}</span>
-                                    <span class="temp-unit">K</span>
+                        const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
+                        let spreizung = null;
+                        if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
+                            spreizung = supplyValue - returnValue;
+                        }
+                        if (spreizung !== null) {
+                            tempsGroup2 += `
+                                <div class="temp-item">
+                                    <span class="temp-label">Spreizung Heizkreis</span>
+                                    <div>
+                                        <span class="temp-value">${formatNum(spreizung)}</span>
+                                        <span class="temp-unit">K</span>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     }
                 }
             }
