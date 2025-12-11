@@ -709,9 +709,19 @@
                             <span class="status-label">Ventilatorringheizung</span>
                             <span class="status-value">
                                 <button id="fanRingToggle" class="toggle-btn ${kf.fanRing.value ? 'active' : ''}"
-                                    data-current="${kf.fanRing.value ? 'true' : 'false'}"
-                                    onclick="toggleFanRing(event)">
+                                    data-current="${kf.fanRing.value ? 'true' : 'false'}">
                                     ${kf.fanRing.value ? '🟢 An' : '⚪ Aus'}
+                                </button>
+                            </span>
+                        </div>
+                    ` : ''}
+                    ${kf.condensatePan ? `
+                        <div class="status-item">
+                            <span class="status-label">Wannenheizung</span>
+                            <span class="status-value">
+                                <button id="condensatePanToggle" class="toggle-btn ${kf.condensatePan.value ? 'active' : ''}"
+                                    data-current="${kf.condensatePan.value ? 'true' : 'false'}">
+                                    ${kf.condensatePan.value ? '🟢 An' : '⚪ Aus'}
                                 </button>
                             </span>
                         </div>
