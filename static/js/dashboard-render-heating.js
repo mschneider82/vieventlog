@@ -1189,7 +1189,8 @@
             const modeMapping = {
                 'eco': 'Eco',
                 'efficient': 'Eco',
-                'efficientWithMinComfort': 'Eco',
+                'efficientWithMinComfort': 'Komfort',
+                'balanced': 'Balanced',
                 'comfort': 'Komfort',
                 'off': 'Aus'
             };
@@ -1211,6 +1212,7 @@
                     <select id="dhwModeSelect" onchange="changeDhwMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         <option value="efficient" ${currentApiMode === 'efficient' ? 'selected' : ''}>Eco</option>
                         <option value="efficientWithMinComfort" ${currentApiMode === 'efficientWithMinComfort' ? 'selected' : ''}>Komfort</option>
+                        <option value="balanced" ${currentApiMode === 'balanced' ? 'selected' : ''}>Balanced</option>
                         <option value="off" ${currentApiMode === 'off' ? 'selected' : ''}>Aus</option>
                     </select>
                 </span>

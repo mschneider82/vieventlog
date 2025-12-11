@@ -331,13 +331,14 @@ func dhwModeSetHandler(w http.ResponseWriter, r *http.Request) {
 	validModes := map[string]bool{
 		"efficient":               true,
 		"efficientWithMinComfort": true,
+		"balanced":                true,
 		"off":                     true,
 	}
 	if !validModes[req.Mode] {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"error":   "Invalid mode. Must be one of: efficient, efficientWithMinComfort, off",
+			"error":   "Invalid mode. Must be one of: efficient, efficientWithMinComfort, balanced, off",
 		})
 		return
 	}
