@@ -656,7 +656,7 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
     "mode": "efficient"
   }
   ```
-  Gültige Modi: `efficient` (Eco), `efficientWithMinComfort` (Eco), `off` (Aus)
+  Gültige Modi: `efficient` (Eco), `efficientWithMinComfort` (Komfort), `balanced` (Balanced), `off` (Aus)
 
 - `POST /api/dhw/temperature/set` - Soll-Temperatur setzen
   ```json
