@@ -69,8 +69,10 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         returnTemp: keyFeatures.returnTemp?.value || keyFeatures.secondaryReturnTemp?.value || null,
         // L: Interne Pumpe (Drehzahl Sekundärpumpe)
         pumpInternal: keyFeatures.pumpInternal?.value || null,
-        // M: Vorlauftemperatur (Vorlauftemperatur Sekundärkreis)
-        supplyTemp: keyFeatures.supplyTemp?.value || keyFeatures.secondarySupplyTemp?.value || null,
+        // M: Vorlauftemperatur (Vorlauftemperatur IDU)
+        supplyTemp: keyFeatures.supplyTemp?.value || null,
+        // M2: Vorlauftemperatur (Vorlauftemperatur ODU Sekundärkreis)
+        supplyTempSec: keyFeatures.secondarySupplyTemp?.value || null,
         // N: 4/3-Wege-Ventil (4-Wege Ventil Kältekreis)
         fourWayValve: keyFeatures.fourWayValve?.value || null,
         // O: Einlassdruck (Saugasdruck Verdichter)
@@ -98,10 +100,10 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
     };
 
     // Format value with unit
-    const formatValue = (value, unit = '') => {
+    const formatValue = (value, unit = '', decimals = 1) => {
         if (value === null || value === undefined) return '-';
         if (typeof value === 'number') {
-            return value.toFixed(1) + (unit ? ' ' + unit : '');
+            return value.toFixed(decimals) + (unit ? ' ' + unit : '');
         }
         return value;
     };
@@ -188,20 +190,21 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
 
                     ${values.returnTemp !== null ? `<div class="value-label" style="top: 17.36%; left: 83.83%;" title="Rücklauftemperatur">${formatValue(values.returnTemp, '°C')}</div>` : ''}
                     ${values.pressure !== null ? `<div class="value-label" style="top: 21%; left: 83.83%;" title="Druck">${formatValue(values.pressure, 'bar')}</div>` : ''}
-                    ${values.supplyTemp !== null ? `<div class="value-label" style="top: 83.75%; left: 84.53%;" title="Vorlauftemperatur">${formatValue(values.supplyTemp, '°C')}</div>` : ''}
+                    ${values.supplyTempSec !== null ? `<div class="value-label" style="top: 83.75%; left: 82.0%;" title="ODU sekundär Vorlauftemperatur">${formatValue(values.supplyTempSec, '°C')}</div>` : ''}
+                    ${values.supplyTemp !== null ? `<div class="value-label" style="top: 83.75%; left: 88.0%;" title="IDU Vorlauftemperatur">${formatValue(values.supplyTemp, '°C')}</div>` : ''}
                     ${values.pumpInternal !== null ? `<div class="value-label" style="top: 22.87%; left: 91.38%;" title="Interne Pumpe">${formatValue(values.pumpInternal, '%')}</div>` : ''}
 
-                    ${values.airIntakeTemp !== null ? `<div class="value-label" style="top: 44.35%; left: 0.71%;" title="Lufteintrittstemperatur">${formatValue(values.airIntakeTemp, '°C')}</div>` : ''}
-                    ${values.outsideTemp !== null ? `<div class="value-label" style="top: 48.35%; left: 0.71%;" title="Außentemperatur">${formatValue(values.outsideTemp, '°C')}</div>` : ''}
-                    ${values.volumetricFlow !== null ? `<div class="value-label" style="top: 17.36%; left: 90.32%;" title="Volumenstrom">${formatValue(values.volumetricFlow, 'l/h')}</div>` : ''}
+                    ${keyFeatures.primarySupplyTemp !== null ? `<div class="value-label" style="top: 44.35%; left: 0.71%;" title="Lufteintrittstemperatur">${formatValue(keyFeatures.primarySupplyTemp.value, '°C')}</div>` : ''}
+                    ${keyFeatures.outsideTemp !== null ? `<div class="value-label" style="top: 48.35%; left: 0.71%;" title="Außentemperatur">${formatValue(keyFeatures.outsideTemp.value, '°C')}</div>` : ''}
+                    ${keyFeatures.volumetricFlow !== null ? `<div class="value-label" style="top: 17.36%; left: 93.0%;" title="Volumenstrom">${formatValue(keyFeatures.volumetricFlow.value, 'l/h', 0)}</div>` : ''}
 
                     <!-- Speichertemperaturen (unter den Speicher-Bildern) -->
                     ${keyFeatures.bufferTemp !== null && keyFeatures.bufferTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 84.65%;" title="Heizpuffer Temperatur">${formatValue(keyFeatures.bufferTemp.value, '°C')}</div>` : ''}
                     ${keyFeatures.dhwTemp !== null && keyFeatures.dhwTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 91.26%;" title="Warmwasser Temperatur">${formatValue(keyFeatures.dhwTemp.value, '°C')}</div>` : ''}
 
                     <!-- Leistungsanzeigen -->
-                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W')}</div>` : ''}
-                    ${thermalPowerW !== null ? `<div class="value-label" style="top: 37.19%; left: 82.64%;" title="Thermische Leistung (berechnet)">${formatValue(thermalPowerW, 'W')}</div>` : ''}
+                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W', 0)}</div>` : ''}
+                    ${thermalPowerW !== null ? `<div class="value-label" style="top: 37.19%; left: 82.64%;" title="Thermische Leistung (berechnet)">${formatValue(thermalPowerW, 'W', 0)}</div>` : ''}
                 </div>
             </div>
     `;
