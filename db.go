@@ -112,6 +112,7 @@ func InitEventDatabase(dbPath string) error {
 		primary_return_temp REAL,
 		secondary_return_temp REAL,
 		dhw_temp REAL,
+		dhw_cylinder_middle_temp REAL,
 		boiler_temp REAL,
 		buffer_temp REAL,
 		buffer_temp_top REAL,
@@ -167,6 +168,12 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to create temperature_log_settings table: %v", err)
 	}
 
+	// Run schema migrations for existing databases
+	err = runSchemaMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to run schema migrations: %v", err)
+	}
+
 	dbInitialized = true
 	log.Printf("Event database initialized at: %s", dbPath)
 	return nil
@@ -182,6 +189,64 @@ func CloseEventDatabase() error {
 		return eventDB.Close()
 	}
 	return nil
+}
+
+// runSchemaMigrations applies schema changes to existing databases
+func runSchemaMigrations() error {
+	// Migration 1: Add dhw_cylinder_middle_temp column (added 2025-12-12)
+	if !columnExists("temperature_snapshots", "dhw_cylinder_middle_temp") {
+		log.Println("Running migration: Adding dhw_cylinder_middle_temp column to temperature_snapshots table")
+		_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN dhw_cylinder_middle_temp REAL")
+		if err != nil {
+			return fmt.Errorf("failed to add dhw_cylinder_middle_temp column: %v", err)
+		}
+		log.Println("Migration completed: dhw_cylinder_middle_temp column added successfully")
+	}
+
+	// Future migrations can be added here
+	// Example:
+	// if !columnExists("temperature_snapshots", "new_column") {
+	//     log.Println("Running migration: Adding new_column...")
+	//     _, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN new_column REAL")
+	//     if err != nil {
+	//         return fmt.Errorf("failed to add new_column: %v", err)
+	//     }
+	//     log.Println("Migration completed: new_column added")
+	// }
+
+	return nil
+}
+
+// columnExists checks if a column exists in a table
+func columnExists(tableName, columnName string) bool {
+	query := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
+	rows, err := eventDB.Query(query)
+	if err != nil {
+		log.Printf("Error checking if column exists: %v", err)
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var dfltValue interface{}
+		var pk int
+
+		err := rows.Scan(&cid, &name, &dataType, &notNull, &dfltValue, &pk)
+		if err != nil {
+			log.Printf("Error scanning column info: %v", err)
+			continue
+		}
+
+		if name == columnName {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ComputeEventHash generates a unique hash for an event to enable deduplication
@@ -490,7 +555,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		INSERT OR REPLACE INTO temperature_snapshots (
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
-			primary_return_temp, secondary_return_temp, dhw_temp, boiler_temp, buffer_temp,
+			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
 			compressor_active, compressor_speed, compressor_current, compressor_pressure,
 			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
@@ -498,7 +563,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			four_way_valve, burner_modulation, secondary_heat_generator_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -516,6 +581,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.PrimaryReturnTemp,
 		snapshot.SecondaryReturnTemp,
 		snapshot.DHWTemp,
+		snapshot.DHWCylinderMiddleTemp,
 		snapshot.BoilerTemp,
 		snapshot.BufferTemp,
 		snapshot.BufferTempTop,
@@ -562,7 +628,7 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 		SELECT
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
-			primary_return_temp, secondary_return_temp, dhw_temp, boiler_temp, buffer_temp,
+			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
 			compressor_active, compressor_speed, compressor_current, compressor_pressure,
 			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
@@ -621,6 +687,7 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.PrimaryReturnTemp,
 			&snapshot.SecondaryReturnTemp,
 			&snapshot.DHWTemp,
+			&snapshot.DHWCylinderMiddleTemp,
 			&snapshot.BoilerTemp,
 			&snapshot.BufferTemp,
 			&snapshot.BufferTempTop,

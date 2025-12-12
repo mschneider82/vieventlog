@@ -272,6 +272,7 @@ type TemperatureSnapshot struct {
 	PrimaryReturnTemp     *float64 `json:"primary_return_temp,omitempty"`
 	SecondaryReturnTemp   *float64 `json:"secondary_return_temp,omitempty"`
 	DHWTemp               *float64 `json:"dhw_temp,omitempty"`
+	DHWCylinderMiddleTemp *float64 `json:"dhw_cylinder_middle_temp,omitempty"`
 	BoilerTemp            *float64 `json:"boiler_temp,omitempty"`
 	BufferTemp            *float64 `json:"buffer_temp,omitempty"`
 	BufferTempTop         *float64 `json:"buffer_temp_top,omitempty"`
