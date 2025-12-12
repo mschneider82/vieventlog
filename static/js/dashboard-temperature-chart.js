@@ -49,10 +49,10 @@ async function initTemperatureChart() {
                 <h2>📊 Temperatur- und Sensor-Verlauf</h2>
                 <div class="chart-controls">
                     <div class="time-range-selector">
-                        <button class="time-btn active" data-range="1h">1h</button>
+                        <button class="time-btn" data-range="1h">1h</button>
                         <button class="time-btn" data-range="6h">6h</button>
                         <button class="time-btn" data-range="12h">12h</button>
-                        <button class="time-btn" data-range="24h">24h</button>
+                        <button class="time-btn active" data-range="24h">24h</button>
                         <button class="time-btn" data-range="48h">48h</button>
                         <button class="time-btn" data-range="72h">72h</button>
                         <button class="time-btn" data-range="7d">7d</button>
