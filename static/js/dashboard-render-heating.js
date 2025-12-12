@@ -410,24 +410,86 @@
 
             // Display Energiecockpit if we have values (from either method)
             if (electricalPowerW !== null && electricalPowerW > 0) {
-                // Add electrical power consumption tile (in kW)
+
+                // Add electrical power consumption tile (in W or kW)
+				let elPow = 0.0;
+				let elPowUnit = " ";
+				let elPowlabel = "Stromverbrauch";
+				if (correctionFactor != 1.0) elPowlabel = elPowlabel + "<br>(korrigiert)";
+				if (electricalPowerW < 1000.0){elPow = formatNum(electricalPowerW, 0); elPowUnit = elPowUnit + "W";}
+				else{elPow = formatNum(electricalPowerW / 1000, 1);elPowUnit = elPowUnit + "kW";}
                 tempsGroup4 += `
                     <div class="temp-item">
-                        <span class="temp-label">Stromverbrauch</span>
+						<span class="temp-label">${elPowlabel}</span>
                         <div>
-                            <span class="temp-value">${formatNum(electricalPowerW / 1000, 2)}</span>
-                            <span class="temp-unit">kW</span>
+                            <span class="temp-value">${elPow}</span>
+                            <span class="temp-unit">${elPowUnit}</span>
                         </div>
                     </div>
                 `;
 
+                // Calculate thermal power if all required values are available
+                if (kf.volumetricFlow || kf.compressorPower){
+
+                    // Get device settings to determine which spreizung to use
+                    const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
+                    const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+                    let showSecondaryCircuitSpreizung = true; // default
+                    if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+                        showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+                    }
+
+                    // Calculate spreizung based on setting
+                    let spreizung = null;
+                    let supplyTemp = null;
+                    if (showSecondaryCircuitSpreizung) {
+                        // Mit HW-Puffer: Sekundärkreis Spreizung
+                        if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                            const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
+                            const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
+                            if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                                spreizung = supplyVal - returnVal;
+                                supplyTemp = supplyVal;
+                            }
+                        }
+                    } else {
+                        // Ohne HW-Puffer: Heizkreis Spreizung
+                        if (kf.supplyTemp && kf.returnTemp) {
+                            const supplyVal = unwrapValue(kf.supplyTemp.value);
+                            const returnVal = unwrapValue(kf.returnTemp.value);
+                            if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                                spreizung = supplyVal - returnVal;
+                                supplyTemp = supplyVal;
+                            }
+                        }
+                    }
+
+                    if (spreizung !== null && spreizung > 0 && supplyTemp !== null){
+
+                        // Calculate water density based on supply temperature
+                        const waterDensity = getWaterDensity(supplyTemp); // kg/m³
+                        const specificHeatCapacity = 4180; // J/(kg·K)
+
+                        // Convert volumetric flow from l/h to m³/s
+                        const volumetricFlowValue = unwrapValue(kf.volumetricFlow.value);
+                        if (typeof volumetricFlowValue !== 'number') return '';
+                        const volumetricFlowM3s = volumetricFlowValue / 3600000; // l/h to m³/s
+
+                        // Calculate mass flow: ṁ = ρ × V̇
+                        const massFlow = waterDensity * volumetricFlowM3s; // kg/s
+
+                        // Calculate thermal power: Q = ṁ × c × ΔT
+                        const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
+					}
+				}
+
                 // Add thermal power tile if available
                 if (thermalPowerW !== null) {
-                    tempsGroup4 += `
+					tempsGroup4 += `
                         <div class="temp-item">
-                            <span class="temp-label">Thermische Leistung</span>
+                            <span class="temp-label">Thermische Leistung<br>(berechnet)</span>
                             <div>
-                                <span class="temp-value">${formatNum(thermalPowerW / 1000, 1)}</span>
+                                <span class="temp-value">${formatNum(thermalPowerW / 1000, 2)}</span>
                                 <span class="temp-unit">kW</span>
                             </div>
                         </div>
@@ -437,7 +499,7 @@
                     const cop = thermalPowerW / electricalPowerW;
                     tempsGroup4 += `
                         <div class="temp-item">
-                            <span class="temp-label">COP (aktuell)</span>
+                            <span class="temp-label">COP (aktuell)<br>(berechnet)</span>
                             <div>
                                 <span class="temp-value">${formatNum(cop, 2)}</span>
                                 <span class="temp-unit"></span>
@@ -562,6 +624,7 @@
                     }
                 }
 
+				const comppowerW = unwrapValue(kf.compressorPower.value)
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
@@ -579,14 +642,7 @@
                     ${kf.compressorPower ? `
                         <div class="status-item">
                             <span class="status-label">Leistung</span>
-                            <span class="status-value">${(() => {
-                                if (!isValidNumericValue(kf.compressorPower)) return '--';
-                                const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
-                                const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-                                const correctionFactor = deviceSetting?.powerCorrectionFactor || 1.0;
-                                const powerW = unwrapValue(kf.compressorPower.value) * correctionFactor;
-                                return formatNum(powerW) + ' W';
-                            })()}</span>
+                            <span class="status-value">${formatNum(comppowerW,0)} W</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
@@ -595,67 +651,9 @@
                             <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatValue(kf.compressorCurrent) : '--'}</span>
                         </div>
                     ` : ''}
-                    ${(() => {
-                        // Calculate thermal power if all required values are available
-                        if (!kf.volumetricFlow || !kf.compressorPower) return '';
 
-                        // Get device settings to determine which spreizung to use
-                        const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
-                        const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-                        let showSecondaryCircuitSpreizung = true; // default
-                        if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-                            showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
-                        }
 
-                        // Calculate spreizung based on setting
-                        let spreizung = null;
-                        let supplyTemp = null;
-                        if (showSecondaryCircuitSpreizung) {
-                            // Mit HW-Puffer: Sekundärkreis Spreizung
-                            if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                                const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
-                                const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
-                                if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                                    spreizung = supplyVal - returnVal;
-                                    supplyTemp = supplyVal;
-                                }
-                            }
-                        } else {
-                            // Ohne HW-Puffer: Heizkreis Spreizung
-                            if (kf.supplyTemp && kf.returnTemp) {
-                                const supplyVal = unwrapValue(kf.supplyTemp.value);
-                                const returnVal = unwrapValue(kf.returnTemp.value);
-                                if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                                    spreizung = supplyVal - returnVal;
-                                    supplyTemp = supplyVal;
-                                }
-                            }
-                        }
 
-                        if (spreizung === null || spreizung <= 0 || supplyTemp === null) return '';
-
-                        // Calculate water density based on supply temperature
-                        const waterDensity = getWaterDensity(supplyTemp); // kg/m³
-                        const specificHeatCapacity = 4180; // J/(kg·K)
-
-                        // Convert volumetric flow from l/h to m³/s
-                        const volumetricFlowValue = unwrapValue(kf.volumetricFlow.value);
-                        if (typeof volumetricFlowValue !== 'number') return '';
-                        const volumetricFlowM3s = volumetricFlowValue / 3600000; // l/h to m³/s
-
-                        // Calculate mass flow: ṁ = ρ × V̇
-                        const massFlow = waterDensity * volumetricFlowM3s; // kg/s
-
-                        // Calculate thermal power: Q = ṁ × c × ΔT
-                        const thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
-
-                        return `
-                            <div class="status-item">
-                                <span class="status-label">Thermische Leistung (berechnet)</span>
-                                <span class="status-value">${formatNum(thermalPowerW, 1)} W</span>
-                            </div>
-                        `;
-                    })()}
                     ${kf.compressorPressure ? `
                         <div class="status-item">
                             <span class="status-label">Einlassdruck</span>
