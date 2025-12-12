@@ -405,6 +405,14 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		}
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
+	case "heating.dhw.sensors.temperature.hotWaterStorage.middle":
+		snapshot.DHWCylinderMiddleTemp = getFloatValue(feature.Properties)
+	case "heating.dhw.sensors.temperature.dhwCylinder":
+		if snapshot.DHWTemp == nil {
+			snapshot.DHWTemp = getFloatValue(feature.Properties)
+		}
+	case "heating.dhw.sensors.temperature.dhwCylinder.middle":
+		snapshot.DHWCylinderMiddleTemp = getFloatValue(feature.Properties)
 	case "heating.boiler.sensors.temperature.main":
 		snapshot.BoilerTemp = getFloatValue(feature.Properties)
 	case "heating.buffer.sensors.temperature.main":

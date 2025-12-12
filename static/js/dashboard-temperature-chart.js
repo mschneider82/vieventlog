@@ -230,6 +230,7 @@ function renderFilters() {
         'primary_return_temp': '↩️ Primär-Rücklauf',
         'secondary_return_temp': '↩️ Sekundär-Rücklauf',
         'dhw_temp': '🚿 Warmwasser',
+        'dhw_cylinder_middle_temp': '🚿 WW Mitte',
         'boiler_temp': '🔥 Kessel',
         'buffer_temp': '📦 Puffer',
         'buffer_temp_top': '📦 Puffer (oben)',
@@ -265,7 +266,7 @@ function renderFilters() {
 
     const categories = {
         'Temperaturen': ['outside_temp', 'calculated_outside_temp', 'primary_supply_temp', 'secondary_supply_temp',
-                        'return_temp', 'primary_return_temp', 'secondary_return_temp', 'dhw_temp', 'boiler_temp',
+                        'return_temp', 'primary_return_temp', 'secondary_return_temp', 'dhw_temp', 'dhw_cylinder_middle_temp', 'boiler_temp',
                         'buffer_temp', 'buffer_temp_top'],
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
@@ -344,6 +345,7 @@ function renderTemperatureChart(data) {
         'primary_return_temp': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true },
         'secondary_return_temp': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true },
         'dhw_temp': { type: 'line', yAxisIndex: 0, color: '#fbbc04', smooth: true },
+        'dhw_cylinder_middle_temp': { type: 'line', yAxisIndex: 0, color: '#fdd663', smooth: true },
         'boiler_temp': { type: 'line', yAxisIndex: 0, color: '#ff5722', smooth: true },
         'buffer_temp': { type: 'line', yAxisIndex: 0, color: '#9c27b0', smooth: true },
         'buffer_temp_top': { type: 'line', yAxisIndex: 0, color: '#ba68c8', smooth: true },
@@ -379,6 +381,7 @@ function renderTemperatureChart(data) {
         'primary_return_temp': 'Primär-Rücklauf',
         'secondary_return_temp': 'Sekundär-Rücklauf',
         'dhw_temp': 'Warmwasser',
+        'dhw_cylinder_middle_temp': 'WW Mitte',
         'boiler_temp': 'Kessel',
         'buffer_temp': 'Puffer',
         'buffer_temp_top': 'Puffer (oben)',
