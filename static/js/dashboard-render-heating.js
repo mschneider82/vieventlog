@@ -624,7 +624,6 @@
                     }
                 }
 
-				const comppowerW = unwrapValue(kf.compressorPower.value)
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
@@ -634,7 +633,7 @@
                         <div class="status-item">
                             <span class="status-label">Drehzahl</span>
                             <span class="status-value">
-                                ${speedValue !== 0 ? formatNum(speedValue) + ' ' + speedUnit : '--'}
+                                ${speedValue !== 0 ? formatNum(speedValue, 0) + ' ' + speedUnit : '--'}
                                 ${rpmPercentage !== null ? `<span style="color: #10b981; margin-left: 8px;">(${rpmPercentage}%)</span>` : ''}
                             </span>
                         </div>
@@ -642,7 +641,11 @@
                     ${kf.compressorPower ? `
                         <div class="status-item">
                             <span class="status-label">Leistung</span>
-                            <span class="status-value">${formatNum(comppowerW,0)} W</span>
+                            <span class="status-value">${(() => {
+                                if (!isValidNumericValue(kf.compressorPower)) return '--';
+                                const powerW = unwrapValue(kf.compressorPower.value);
+                                return formatNum(powerW, 0) + ' W';
+                            })()}</span>
                         </div>
                     ` : ''}
                     ${kf.compressorCurrent ? `
@@ -687,7 +690,7 @@
                     ${compressorHours > 0 ? `
                         <div class="status-item">
                             <span class="status-label">Betriebsstunden Verdichter</span>
-                            <span class="status-value">${formatNum(compressorHours)} Std.</span>
+                            <span class="status-value">${formatNum(compressorHours, 0)} Std.</span>
                         </div>
                     ` : ''}
                     ${compressorStarts > 0 ? `
@@ -2229,7 +2232,7 @@
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Volumenstrom</span>
-                        <span class="status-value">${formatNum(kf.volumetricFlow.value)} ${kf.volumetricFlow.unit || 'l/h'}</span>
+                        <span class="status-value">${formatNum(kf.volumetricFlow.value, 0)} ${kf.volumetricFlow.unit || 'l/h'}</span>
                     </div>
                 `;
             }
@@ -2247,7 +2250,7 @@
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Interne Pumpe</span>
-                        <span class="status-value">${formatNum(kf.pumpInternal.value)} ${kf.pumpInternal.unit || '%'}</span>
+                        <span class="status-value">${formatNum(kf.pumpInternal.value, 0)} ${kf.pumpInternal.unit || '%'}</span>
                     </div>
                 `;
             }
@@ -2256,7 +2259,7 @@
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Lüfter 1</span>
-                        <span class="status-value">${formatNum(kf.fan0.value)} ${kf.fan0.unit || '%'}</span>
+                        <span class="status-value">${formatNum(kf.fan0.value, 0)} ${kf.fan0.unit || '%'}</span>
                     </div>
                 `;
             }
@@ -2265,7 +2268,7 @@
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Lüfter 2</span>
-                        <span class="status-value">${formatNum(kf.fan1.value)} ${kf.fan1.unit || '%'}</span>
+                        <span class="status-value">${formatNum(kf.fan1.value, 0)} ${kf.fan1.unit || '%'}</span>
                     </div>
                 `;
             }
