@@ -304,8 +304,8 @@
                         max: data.compressorRpmMax || 0,
                         powerCorrectionFactor: data.compressorPowerCorrectionFactor || 1.0,
                         electricityPrice: data.electricityPrice || 0.30,
-                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // null = auto-detect, true/false = override
-                        hasHotWaterBuffer: data.hasHotWaterBuffer // null = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer
+                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // true/false
+                        hasHotWaterBuffer: data.hasHotWaterBuffer // true = sekundär ( alt mit HW-Puffer), false = Heizkreis (alt ohne HW-Puffer)
                     };
                 }
             } catch (error) {
@@ -350,12 +350,12 @@
                 radioState = 'primary';
             }
 
-            // Determine radio button state for spreizung
-            let spreizungState = 'auto'; // default
+            // Determine radio button state for spreizung and COP
+            let spreizungState = 'IDU'; // default
             if (hasHotWaterBuffer === true) {
-                spreizungState = 'with';
+                spreizungState = 'ODU';
             } else if (hasHotWaterBuffer === false) {
-                spreizungState = 'without';
+                spreizungState = 'IDU';
             }
 
             modal.innerHTML = `
@@ -428,28 +428,21 @@
 
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
-                            Spreizungsberechnung
+                            Spreizungs- / COP- berechnung
                         </label>
                         <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px;">
                             <div style="margin-bottom: 8px;">
-                                <input type="radio" id="spreizungAuto" name="spreizung" value="auto" ${spreizungState === 'auto' ? 'checked' : ''}
-                                       style="cursor: pointer;">
-                                <label for="spreizungAuto" style="color: #a0a0b0; cursor: pointer; display: inline;">
-                                    Automatisch erkennen (Standard)
-                                </label>
-                            </div>
-                            <div style="margin-bottom: 8px;">
-                                <input type="radio" id="spreizungWith" name="spreizung" value="with" ${spreizungState === 'with' ? 'checked' : ''}
+                                <input type="radio" id="spreizungODU" name="spreizung" value="ODU" ${spreizungState === 'ODU' ? 'checked' : ''}
                                        style="cursor: pointer;">
                                 <label for="spreizungWith" style="color: #a0a0b0; cursor: pointer; display: inline;">
-                                    Mit HW-Puffer (Sekundärkreis)
+                                    ODU Sekundärkreis
                                 </label>
                             </div>
                             <div>
-                                <input type="radio" id="spreizungWithout" name="spreizung" value="without" ${spreizungState === 'without' ? 'checked' : ''}
+                                <input type="radio" id="spreizungIDU" name="spreizung" value="IDU" ${spreizungState === 'IDU' ? 'checked' : ''}
                                        style="cursor: pointer;">
                                 <label for="spreizungWithout" style="color: #a0a0b0; cursor: pointer; display: inline;">
-                                    Ohne HW-Puffer (Heizkreis)
+                                    IDU Heizkreis / Wärmeerzeuger
                                 </label>
                             </div>
                         </div>
@@ -529,12 +522,11 @@
 
             // Get spreizung setting from radio buttons
             const spreizungValue = document.querySelector('input[name="spreizung"]:checked').value;
-            let hasHotWaterBuffer = null;
-            if (spreizungValue === 'with') {
+            let hasHotWaterBuffer = false;
+            if (spreizungValue === 'ODU') {
                 hasHotWaterBuffer = true;
-            } else if (spreizungValue === 'without') {
-                hasHotWaterBuffer = false;
-            }
+            } 
+            // else if (spreizungValue === 'IDU') {hasHotWaterBuffer = false;}
             // else 'auto' means null (auto-detect)
 
             try {
