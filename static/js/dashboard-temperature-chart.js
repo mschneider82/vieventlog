@@ -475,7 +475,8 @@ function renderTemperatureChart(data) {
             data: legend,
             top: 30,
             type: 'scroll',
-            pageButtonPosition: 'start'
+            pageButtonPosition: 'start',
+			textStyle: {color: "#ffffff"}            
         },
         grid: {
             left: '3%',
@@ -487,7 +488,9 @@ function renderTemperatureChart(data) {
         xAxis: {
             type: 'time',
             boundaryGap: false,
+   			nameTextStyle: {color: "#ffffff"},
             axisLabel: {
+   				color: "#ffffff",
                 formatter: xAxisFormatter
             }
         },
@@ -495,19 +498,23 @@ function renderTemperatureChart(data) {
             {
                 type: 'value',
                 name: 'Temperatur (°C)',
+       			nameTextStyle: {color: "#ffffff"},
                 position: 'left',
                 axisLabel: {
+   				    color: "#ffffff",
                     formatter: '{value} °C'
                 }
             },
             {
                 type: 'value',
                 name: 'Status',
+   				nameTextStyle: {color: "#0f9d58"},
                 position: 'right',
                 min: 0,
                 max: 1,
                 interval: 1,
                 axisLabel: {
+       				color: "#0f9d58",
                     formatter: function(value) {
                         return value === 1 ? 'AN' : 'AUS';
                     }
@@ -515,7 +522,9 @@ function renderTemperatureChart(data) {
             },
             {
                 type: 'value',
-                name: 'Leistung/Flow',
+                name: 'Leistung;\nFlow',
+				nameTextStyle: {color: "#ffffff"},
+				axisLabel: {color: "#ffffff"},
                 position: 'right',
                 offset: 60
             }
