@@ -861,7 +861,18 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 		SELECT
 			timestamp,
 			compressor_power,
-			thermal_power,
+			--thermal_power,
+			case when compressor_power > 0 then thermal_power -- usual case
+			else
+				-- w/o compressor power no thermal power as well
+				case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
+				else
+					-- fix thermal power null values to 0 (AVG does not include null values)
+					case when ifnull (thermal_power, 0) = 0 then 0
+					else null -- last exit, should never be the case
+					end
+				end
+			end as thermal_power,
 			cop,
 			compressor_active
 		FROM temperature_snapshots
@@ -964,7 +975,18 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 		SELECT
 			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
 			AVG(compressor_power) as avg_power,
-			AVG(thermal_power) as avg_thermal,
+			--AVG(thermal_power) as avg_thermal,
+			AVG(case when compressor_power > 0 then thermal_power -- usual case
+				else
+					-- w/o compressor power no thermal power as well
+					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
+					else
+						-- fix thermal power null values to 0 (AVG does not include null values)
+						case when ifnull (thermal_power, 0) = 0 then 0
+						else null -- last exit, should never be the case
+						end
+					end
+				end) avg_thermal,
 			AVG(cop) as avg_cop,
 			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
 			COUNT(*) as total_samples
@@ -1048,7 +1070,18 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 		SELECT
 			DATE(timestamp) as day,
 			AVG(compressor_power) as avg_power,
-			AVG(thermal_power) as avg_thermal,
+			--AVG(thermal_power) as avg_thermal,
+			AVG(case when compressor_power > 0 then thermal_power -- usual case
+				else
+					-- w/o compressor power no thermal power as well
+					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
+					else
+						-- fix thermal power null values to 0 (AVG does not include null values)
+						case when ifnull (thermal_power, 0) = 0 then 0
+						else null -- last exit, should never be the case
+						end
+					end
+				end) avg_thermal,
 			AVG(cop) as avg_cop,
 			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
 			COUNT(*) as total_samples
