@@ -204,14 +204,14 @@
             const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
 
             // Determine which spreizung to show based on settings
-            let showSecondaryCircuitSpreizung = true; // default: show secondary circuit (mit HW-Puffer)
+            let showSecondaryCircuitSpreizung = false; // default: show heating circuit
             if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
                 // Use explicit setting: true = mit HW-Puffer (secondary circuit), false = ohne HW-Puffer (heating circuit)
                 showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
             }
 
             if (showSecondaryCircuitSpreizung) {
-                // Sekundärkreis Spreizung (mit HW-Puffer)
+                // Sekundärkreis Spreizung
                 if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
                     const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
                     const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
@@ -235,20 +235,31 @@
                     }
                 }
             } else {
-                // Heizkreis Spreizung (ohne HW-Puffer: Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
+                // Heizkreis Spreizung (Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
                 if (kf.supplyTemp && kf.returnTemp) {
+					let textspreizung = "Spreizung Heizkreis";
                     const supplyValue = unwrapValue(kf.supplyTemp.value);
                     const returnValue = unwrapValue(kf.returnTemp.value);
+                    const boilerValue = unwrapValue(kf.boilerTemp.value);
                     if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
                         const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
                         let spreizung = null;
                         if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
                             spreizung = supplyValue - returnValue;
+	                    	if (spreizung < 0 && kf.boilerTemp) {
+								if (typeof boilerValue === 'number') {
+									if(boilerValue > supplyValue){
+										spreizung = boilerValue - returnValue;
+										supplyTemp = boilerValue;
+										textspreizung = "Spreizung Erzeuger";
+									}
+								}
+							}								
                         }
                         if (spreizung !== null) {
                             tempsGroup2 += `
                                 <div class="temp-item">
-                                    <span class="temp-label">Spreizung Heizkreis</span>
+                                    <span class="temp-label">${textspreizung}</span>
                                     <div>
                                         <span class="temp-value">${formatNum(spreizung)}</span>
                                         <span class="temp-unit">K</span>
@@ -340,7 +351,7 @@
             let thermalPowerW = null;
 
             // Try flow-based calculation first (primary method)
-            if (kf.volumetricFlow && kf.compressorPower) {
+            if (kf.volumetricFlow){ // && kf.compressorPower) { thermal Power doesn't need compress power
                 let showSecondaryCircuitSpreizung2 = true; // default
                 if (deviceSetting2 && deviceSetting2.hasHotWaterBuffer !== null && deviceSetting2.hasHotWaterBuffer !== undefined) {
                     showSecondaryCircuitSpreizung2 = deviceSetting2.hasHotWaterBuffer;
@@ -350,7 +361,7 @@
                 let spreizung = null;
                 let supplyTemp = null;
                 if (showSecondaryCircuitSpreizung2) {
-                    // Mit HW-Puffer: Sekundärkreis Spreizung
+                    // Sekundärkreis Spreizung
                     if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
                         const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
                         const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
@@ -360,13 +371,24 @@
                         }
                     }
                 } else {
-                    // Ohne HW-Puffer: Heizkreis Spreizung
+                    // Heizkreis Spreizung
                     if (kf.supplyTemp && kf.returnTemp) {
                         const supplyVal = unwrapValue(kf.supplyTemp.value);
                         const returnVal = unwrapValue(kf.returnTemp.value);
+                        const boilerVal = unwrapValue(kf.boilerTemp.value);
                         if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
                             spreizung = supplyVal - returnVal;
                             supplyTemp = supplyVal;
+							if(spreizung < 0){
+		                    	if (kf.boilerTemp && kf.secondaryReturnTemp) {
+    		            	        if (typeof boilerVal === 'number' && typeof returnVal === 'number') {
+										if(boilerVal > supplyVal){
+                  	  			        	spreizung = boilerVal - returnVal;
+                            				supplyTemp = boilerVal;
+										}
+                        			}
+                    			}
+							}
                         }
                     }
                 }
@@ -408,6 +430,7 @@
                 }
             }
 
+
             // Display Energiecockpit if we have values (from either method)
             if (electricalPowerW !== null && electricalPowerW > 0) {
 
@@ -417,7 +440,7 @@
 				let elPowlabel = "Stromverbrauch";
 				if (correctionFactor != 1.0) elPowlabel = elPowlabel + "<br>(korrigiert)";
 				if (electricalPowerW < 1000.0){elPow = formatNum(electricalPowerW, 0); elPowUnit = elPowUnit + "W";}
-				else{elPow = formatNum(electricalPowerW / 1000, 1);elPowUnit = elPowUnit + "kW";}
+				else{elPow = formatNum(electricalPowerW / 1000, 2);elPowUnit = elPowUnit + "kW";}
                 tempsGroup4 += `
                     <div class="temp-item">
 						<span class="temp-label">${elPowlabel}</span>
@@ -457,11 +480,22 @@
                         if (kf.supplyTemp && kf.returnTemp) {
                             const supplyVal = unwrapValue(kf.supplyTemp.value);
                             const returnVal = unwrapValue(kf.returnTemp.value);
+	                        const boilerVal = unwrapValue(kf.boilerTemp.value);
                             if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
                                 spreizung = supplyVal - returnVal;
                                 supplyTemp = supplyVal;
                             }
-                        }
+							if(spreizung < 0){
+		                    	if (kf.boilerTemp && kf.secondaryReturnTemp) {
+    		            	        if (typeof boilerVal === 'number' && typeof returnVal === 'number') {
+										if(boilerVal > supplyVal){
+                  	  			        	spreizung = boilerVal - returnVal;
+                            				supplyTemp = boilerVal;
+										}
+                        			}
+                    			}
+							}
+						}
                     }
 
                     if (spreizung !== null && spreizung > 0 && supplyTemp !== null){
