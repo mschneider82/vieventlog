@@ -125,18 +125,25 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         let supplyTemp = null;
 
         if (showSecondaryCircuitSpreizung) {
-            // Mit HW-Puffer: Sekundärkreis Spreizung
+            // Sekundärkreis Spreizung
             if (keyFeatures.secondarySupplyTemp?.value && keyFeatures.secondaryReturnTemp?.value) {
                 supplyTemp = keyFeatures.secondarySupplyTemp.value;
                 const returnTemp = keyFeatures.secondaryReturnTemp.value;
                 spreizung = supplyTemp - returnTemp;
             }
         } else {
-            // Ohne HW-Puffer: Heizkreis Spreizung
+            // Heizkreis Spreizung
             if (keyFeatures.supplyTemp?.value && keyFeatures.returnTemp?.value) {
                 supplyTemp = keyFeatures.supplyTemp.value;
                 const returnTemp = keyFeatures.returnTemp.value;
                 spreizung = supplyTemp - returnTemp;
+                if (spreizung <0  && keyFeatures.boilerTemp?.value){
+                    const boilerTemp = keyFeatures.boilerTemp.value;
+                    if (boilerTemp > supplyTemp){
+                    supplyTemp = boilerTemp;
+                    spreizung = boilerTemp - returnTemp;
+                    }
+                }
             }
         }
 
