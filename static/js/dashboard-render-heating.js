@@ -649,12 +649,21 @@
                 // Get device settings from cache for RPM percentage calculation
                 const deviceInfo = window.currentDeviceInfo;
                 let rpmPercentage = null;
+                let cyclesPerDay = null;
                 if (deviceInfo && window.deviceSettingsCache) {
                     const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
                     const settings = window.deviceSettingsCache[deviceKey];
                     if (settings && settings.max > settings.min && speedValue > 0) {
                         rpmPercentage = Math.round(((speedValue - settings.min) / (settings.max - settings.min)) * 100);
                         rpmPercentage = Math.max(0, Math.min(100, rpmPercentage));
+                    }
+                    // Calculate cycles per day (only if enabled in settings)
+                    if (settings && settings.showCyclesPerDay && settings.cyclesperdaystart && compressorStarts > 0) {
+                        const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+                        const daysSinceStart = (now - settings.cyclesperdaystart) / (60 * 60 * 24);
+                        if (daysSinceStart > 0) {
+                            cyclesPerDay = compressorStarts / daysSinceStart;
+                        }
                     }
                 }
 
@@ -737,6 +746,12 @@
                         <div class="status-item">
                             <span class="status-label">Durchschnittl. mittlere Laufzeit</span>
                             <span class="status-value">${formatNum(avgRuntime)} Std.</span>
+                        </div>
+                    ` : ''}
+                    ${cyclesPerDay !== null ? `
+                        <div class="status-item">
+                            <span class="status-label">Takte pro Tag</span>
+                            <span class="status-value">${formatNum(cyclesPerDay, 1)}</span>
                         </div>
                     ` : ''}
                     ${kf.fanRing ? `
