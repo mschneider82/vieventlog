@@ -649,8 +649,8 @@
                     ` : ''}
                     ${cyclesPerDay !== null ? `
                         <div class="status-item">
-                            <span class="status-label">Takte pro Tag</span>
-                            <span class="status-value">${formatNum(cyclesPerDay, 1)}</span>
+                            <span class="status-label">Durchschnittl. Takte</span>
+                            <span class="status-value">${formatNum(cyclesPerDay, 1)} T/Tag</span>
                         </div>
                     ` : ''}
                     ${kf.fanRing ? `
