@@ -378,7 +378,7 @@
             const refrigerantToggleChecked = showRefrigerantVisual !== undefined ? showRefrigerantVisual : true;
 
             modal.innerHTML = `
-                <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+                <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
                     <h2 style="margin-top: 0; color: #fff;">⚙️ Geräteeinstellungen</h2>
                     <p style="color: #a0a0b0; margin-bottom: 20px;">Device: ${deviceId}</p>
 
