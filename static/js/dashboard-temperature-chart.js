@@ -133,7 +133,7 @@ async function loadTemperatureData(silent = false) {
 
     try {
         // Build API URL
-        let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=2000`;
+        let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
