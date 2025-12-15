@@ -397,14 +397,14 @@
                         label = 'Spreizung Heizkreis';
 
                         // Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ,
-                        // verwende BoilerTemp statt supplyTemp
-                        if (spreizung < 0 && kf.boilerTemp) {
+                        // oder temp. Wärmeerzeuge höher, dann verwende BoilerTemp statt supplyTemp
+                        if (kf.boilerTemp) {
                             const boilerVal = unwrapValue(kf.boilerTemp.value);
-                            if (typeof boilerVal === 'number' && boilerVal > supplyVal) {
+                            if (typeof boilerVal === 'number' && (spreizung < 0 || boilerVal > supplyVal)) {
                                 spreizung = boilerVal - returnVal;
                                 supplyTemp = boilerVal;
                                 usedBoilerFallback = true;
-                                label = 'Spreizung Erzeuger';
+                                label = 'Spreizung W.-Erzeuger';
                             }
                         }
                     }
