@@ -184,11 +184,11 @@ func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse limit
-	limit := 1000
+	limit := 50000
 	limitParam := r.URL.Query().Get("limit")
 	if limitParam != "" {
 		parsedLimit, err := strconv.Atoi(limitParam)
-		if err == nil && parsedLimit > 0 && parsedLimit <= 10000 {
+		if err == nil && parsedLimit > 0 && parsedLimit <= 100000 {
 			limit = parsedLimit
 		}
 	}
