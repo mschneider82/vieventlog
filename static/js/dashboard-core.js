@@ -363,6 +363,64 @@
             return val;
         }
 
+        // Zentrale Spreizungs-Berechnung für alle Dashboard-Komponenten
+        // Verwendet je nach Einstellung Sekundärkreis (ODU/mit Puffer) oder Heizkreis (IDU/ohne Puffer)
+        // Fallback auf BoilerTemp wenn Spreizung negativ (z.B. 250-A mit Puffer)
+        function calculateSpreizung(kf, hasHotWaterBuffer) {
+            let spreizung = null;
+            let supplyTemp = null;
+            let returnTemp = null;
+            let usedBoilerFallback = false;
+            let label = 'Spreizung';
+
+            if (hasHotWaterBuffer) {
+                // Sekundärkreis Spreizung (ODU)
+                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
+                    const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
+                    const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
+                    if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                        spreizung = supplyVal - returnVal;
+                        supplyTemp = supplyVal;
+                        returnTemp = returnVal;
+                        label = 'Spreizung Sekundärkreis';
+                    }
+                }
+            } else {
+                // Heizkreis Spreizung (IDU)
+                if (kf.supplyTemp && kf.returnTemp) {
+                    const supplyVal = unwrapValue(kf.supplyTemp.value);
+                    const returnVal = unwrapValue(kf.returnTemp.value);
+                    if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                        spreizung = supplyVal - returnVal;
+                        supplyTemp = supplyVal;
+                        returnTemp = returnVal;
+                        label = 'Spreizung Heizkreis';
+
+                        // Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ,
+                        // verwende BoilerTemp statt supplyTemp
+                        if (spreizung < 0 && kf.boilerTemp) {
+                            const boilerVal = unwrapValue(kf.boilerTemp.value);
+                            if (typeof boilerVal === 'number' && boilerVal > supplyVal) {
+                                spreizung = boilerVal - returnVal;
+                                supplyTemp = boilerVal;
+                                usedBoilerFallback = true;
+                                label = 'Spreizung Erzeuger';
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                spreizung: spreizung,
+                supplyTemp: supplyTemp,
+                returnTemp: returnTemp,
+                usedBoilerFallback: usedBoilerFallback,
+                label: label,
+                isValid: spreizung !== null && spreizung > 0
+            };
+        }
+
         function formatValue(featureValue) {
             if (!featureValue || featureValue.value === undefined) {
                 return '--';

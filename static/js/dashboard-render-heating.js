@@ -199,75 +199,28 @@
                     </div>
                 `;
             }
-            // Spreizung Sekundärkreis/Heizkreis - check device settings for override
+            // Spreizung Sekundärkreis/Heizkreis - use central calculation
             const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
             const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-
-            // Determine which spreizung to show based on settings
-            let showSecondaryCircuitSpreizung = false; // default: show heating circuit
+            let hasHotWaterBuffer = false; // default: show heating circuit (IDU)
             if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-                // Use explicit setting: true = mit HW-Puffer (secondary circuit), false = ohne HW-Puffer (heating circuit)
-                showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+                hasHotWaterBuffer = deviceSetting.hasHotWaterBuffer;
             }
 
-            if (showSecondaryCircuitSpreizung) {
-                // Sekundärkreis Spreizung
-                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                    const supplyValue = unwrapValue(kf.secondarySupplyTemp.value);
-                    const returnValue = unwrapValue(kf.secondaryReturnTemp.value);
-                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
-                        let spreizung = null;
-                        if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
-                            spreizung = supplyValue - returnValue;
-                        }
-                        if (spreizung !== null) {
-                            tempsGroup2 += `
-                                <div class="temp-item">
-                                    <span class="temp-label">Spreizung Sekundärkreis</span>
-                                    <div>
-                                        <span class="temp-value">${formatNum(spreizung)}</span>
-                                        <span class="temp-unit">K</span>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
-                }
-            } else {
-                // Heizkreis Spreizung (Gemeinsame Vorlauftemperatur - Rücklauftemperatur)
-                if (kf.supplyTemp && kf.returnTemp) {
-					let textspreizung = "Spreizung Heizkreis";
-                    const supplyValue = unwrapValue(kf.supplyTemp.value);
-                    const returnValue = unwrapValue(kf.returnTemp.value);
-                    const boilerValue = unwrapValue(kf.boilerTemp.value);
-                    if (typeof supplyValue === 'number' && typeof returnValue === 'number') {
-                        const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
-                        let spreizung = null;
-                        if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
-                            spreizung = supplyValue - returnValue;
-	                    	if (spreizung < 0 && kf.boilerTemp) {
-								if (typeof boilerValue === 'number') {
-									if(boilerValue > supplyValue){
-										spreizung = boilerValue - returnValue;
-										supplyTemp = boilerValue;
-										textspreizung = "Spreizung Erzeuger";
-									}
-								}
-							}								
-                        }
-                        if (spreizung !== null) {
-                            tempsGroup2 += `
-                                <div class="temp-item">
-                                    <span class="temp-label">${textspreizung}</span>
-                                    <div>
-                                        <span class="temp-value">${formatNum(spreizung)}</span>
-                                        <span class="temp-unit">K</span>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
+            // Only show spreizung when there is flow > 50 l/h
+            const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
+            if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
+                const spreizungResult = calculateSpreizung(kf, hasHotWaterBuffer);
+                if (spreizungResult.spreizung !== null) {
+                    tempsGroup2 += `
+                        <div class="temp-item">
+                            <span class="temp-label">${spreizungResult.label}</span>
+                            <div>
+                                <span class="temp-value">${formatNum(spreizungResult.spreizung)}</span>
+                                <span class="temp-unit">K</span>
+                            </div>
+                        </div>
+                    `;
                 }
             }
 
@@ -352,48 +305,17 @@
 
             // Try flow-based calculation first (primary method)
             if (kf.volumetricFlow){ // && kf.compressorPower) { thermal Power doesn't need compress power
-                let showSecondaryCircuitSpreizung2 = true; // default
+                let hasHotWaterBuffer = true; // default
                 if (deviceSetting2 && deviceSetting2.hasHotWaterBuffer !== null && deviceSetting2.hasHotWaterBuffer !== undefined) {
-                    showSecondaryCircuitSpreizung2 = deviceSetting2.hasHotWaterBuffer;
+                    hasHotWaterBuffer = deviceSetting2.hasHotWaterBuffer;
                 }
 
-                // Calculate spreizung based on setting
-                let spreizung = null;
-                let supplyTemp = null;
-                if (showSecondaryCircuitSpreizung2) {
-                    // Sekundärkreis Spreizung
-                    if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                        const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
-                        const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
-                        if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                            spreizung = supplyVal - returnVal;
-                            supplyTemp = supplyVal;
-                        }
-                    }
-                } else {
-                    // Heizkreis Spreizung
-                    if (kf.supplyTemp && kf.returnTemp) {
-                        const supplyVal = unwrapValue(kf.supplyTemp.value);
-                        const returnVal = unwrapValue(kf.returnTemp.value);
-                        const boilerVal = unwrapValue(kf.boilerTemp.value);
-                        if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                            spreizung = supplyVal - returnVal;
-                            supplyTemp = supplyVal;
-							if(spreizung < 0){
-		                    	if (kf.boilerTemp && kf.secondaryReturnTemp) {
-    		            	        if (typeof boilerVal === 'number' && typeof returnVal === 'number') {
-										if(boilerVal > supplyVal){
-                  	  			        	spreizung = boilerVal - returnVal;
-                            				supplyTemp = boilerVal;
-										}
-                        			}
-                    			}
-							}
-                        }
-                    }
-                }
+                // Use central spreizung calculation
+                const spreizungResult = calculateSpreizung(kf, hasHotWaterBuffer);
+                const spreizung = spreizungResult.spreizung;
+                const supplyTemp = spreizungResult.supplyTemp;
 
-                if (spreizung !== null && spreizung > 0 && supplyTemp !== null) {
+                if (spreizungResult.isValid) {
                     // Calculate water density based on supply temperature
                     const waterDensity = getWaterDensity(supplyTemp); // kg/m³
                     const specificHeatCapacity = 4180; // J/(kg·K)
@@ -454,51 +376,19 @@
                 // Calculate thermal power if all required values are available
                 if (kf.volumetricFlow || kf.compressorPower){
 
-                    // Get device settings to determine which spreizung to use
-                    const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
-                    const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-                    let showSecondaryCircuitSpreizung = true; // default
-                    if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-                        showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+                    // Use central spreizung calculation
+                    const deviceKey3 = deviceInfo.installationId + '_' + deviceInfo.deviceId;
+                    const deviceSetting3 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey3];
+                    let hasHotWaterBuffer3 = true; // default
+                    if (deviceSetting3 && deviceSetting3.hasHotWaterBuffer !== null && deviceSetting3.hasHotWaterBuffer !== undefined) {
+                        hasHotWaterBuffer3 = deviceSetting3.hasHotWaterBuffer;
                     }
 
-                    // Calculate spreizung based on setting
-                    let spreizung = null;
-                    let supplyTemp = null;
-                    if (showSecondaryCircuitSpreizung) {
-                        // Mit HW-Puffer: Sekundärkreis Spreizung
-                        if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                            const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
-                            const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
-                            if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                                spreizung = supplyVal - returnVal;
-                                supplyTemp = supplyVal;
-                            }
-                        }
-                    } else {
-                        // Ohne HW-Puffer: Heizkreis Spreizung
-                        if (kf.supplyTemp && kf.returnTemp) {
-                            const supplyVal = unwrapValue(kf.supplyTemp.value);
-                            const returnVal = unwrapValue(kf.returnTemp.value);
-	                        const boilerVal = unwrapValue(kf.boilerTemp.value);
-                            if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                                spreizung = supplyVal - returnVal;
-                                supplyTemp = supplyVal;
-                            }
-							if(spreizung < 0){
-		                    	if (kf.boilerTemp && kf.secondaryReturnTemp) {
-    		            	        if (typeof boilerVal === 'number' && typeof returnVal === 'number') {
-										if(boilerVal > supplyVal){
-                  	  			        	spreizung = boilerVal - returnVal;
-                            				supplyTemp = boilerVal;
-										}
-                        			}
-                    			}
-							}
-						}
-                    }
+                    const spreizungResult3 = calculateSpreizung(kf, hasHotWaterBuffer3);
+                    const spreizung = spreizungResult3.spreizung;
+                    const supplyTemp = spreizungResult3.supplyTemp;
 
-                    if (spreizung !== null && spreizung > 0 && supplyTemp !== null){
+                    if (spreizungResult3.isValid){
 
                         // Calculate water density based on supply temperature
                         const waterDensity = getWaterDensity(supplyTemp); // kg/m³
