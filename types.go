@@ -186,6 +186,7 @@ type DeviceSettingsRequest struct {
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
 	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
+	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
@@ -199,6 +200,7 @@ type DeviceSettingsResponse struct {
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
 	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
+	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
 }
 
 type DebugDeviceInfo struct {

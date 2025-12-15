@@ -543,10 +543,19 @@
                 }
             }
 
-            // Add visual diagram if compressor data available (heat pump)
+            // Add visual diagram if compressor data available (heat pump) and enabled in settings
             let visualDiagram = '';
             if (hasCompressor && typeof renderRefrigerantCircuitVisual === 'function') {
-                visualDiagram = renderRefrigerantCircuitVisual(kf);
+                // Check if refrigerant visual is enabled (default: true)
+                const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
+                const deviceSettings = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
+                const showRefrigerantVisual = deviceSettings && deviceSettings.showRefrigerantVisual !== undefined
+                    ? deviceSettings.showRefrigerantVisual
+                    : true;
+
+                if (showRefrigerantVisual) {
+                    visualDiagram = renderRefrigerantCircuitVisual(kf);
+                }
             }
 
             return `
