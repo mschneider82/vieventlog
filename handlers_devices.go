@@ -67,6 +67,15 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 	// Include ShowCyclesPerDay
 	showCyclesPerDayPtr := &settings.ShowCyclesPerDay
 
+	// Include ShowRefrigerantVisual (default: true if not set)
+	var showRefrigerantVisualPtr *bool
+	if settings.ShowRefrigerantVisual != nil {
+		showRefrigerantVisualPtr = settings.ShowRefrigerantVisual
+	} else {
+		defaultTrue := true
+		showRefrigerantVisualPtr = &defaultTrue
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
 		Success:                         true,
@@ -78,6 +87,7 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		HasHotWaterBuffer:               settings.HasHotWaterBuffer,
 		CyclesPerDayStart:               cyclesPerDayStartPtr,
 		ShowCyclesPerDay:                showCyclesPerDayPtr,
+		ShowRefrigerantVisual:           showRefrigerantVisualPtr,
 	})
 }
 
@@ -140,6 +150,9 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ShowCyclesPerDay != nil {
 		settings.ShowCyclesPerDay = *req.ShowCyclesPerDay
+	}
+	if req.ShowRefrigerantVisual != nil {
+		settings.ShowRefrigerantVisual = req.ShowRefrigerantVisual
 	}
 
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
