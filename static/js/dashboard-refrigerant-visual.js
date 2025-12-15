@@ -115,44 +115,20 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         const deviceInfo = window.currentDeviceInfo;
         const deviceKey = deviceInfo ? (deviceInfo.installationId + '_' + deviceInfo.deviceId) : null;
         const deviceSetting = deviceKey && window.deviceSettingsCache ? window.deviceSettingsCache[deviceKey] : null;
-        let showSecondaryCircuitSpreizung = true; // default
+        let hasHotWaterBuffer = true; // default
         if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-            showSecondaryCircuitSpreizung = deviceSetting.hasHotWaterBuffer;
+            hasHotWaterBuffer = deviceSetting.hasHotWaterBuffer;
         }
 
-        // Calculate spreizung based on setting
-        let spreizung = null;
-        let supplyTemp = null;
+        // Use central spreizung calculation
+        const spreizungResult = calculateSpreizung(keyFeatures, hasHotWaterBuffer);
 
-        if (showSecondaryCircuitSpreizung) {
-            // Sekundärkreis Spreizung
-            if (keyFeatures.secondarySupplyTemp?.value && keyFeatures.secondaryReturnTemp?.value) {
-                supplyTemp = keyFeatures.secondarySupplyTemp.value;
-                const returnTemp = keyFeatures.secondaryReturnTemp.value;
-                spreizung = supplyTemp - returnTemp;
-            }
-        } else {
-            // Heizkreis Spreizung
-            if (keyFeatures.supplyTemp?.value && keyFeatures.returnTemp?.value) {
-                supplyTemp = keyFeatures.supplyTemp.value;
-                const returnTemp = keyFeatures.returnTemp.value;
-                spreizung = supplyTemp - returnTemp;
-                if (spreizung <0  && keyFeatures.boilerTemp?.value){
-                    const boilerTemp = keyFeatures.boilerTemp.value;
-                    if (boilerTemp > supplyTemp){
-                    supplyTemp = boilerTemp;
-                    spreizung = boilerTemp - returnTemp;
-                    }
-                }
-            }
-        }
-
-        if (spreizung !== null && spreizung > 0 && supplyTemp !== null) {
-            const waterDensity = getWaterDensity(supplyTemp); // kg/m³
+        if (spreizungResult.isValid) {
+            const waterDensity = getWaterDensity(spreizungResult.supplyTemp); // kg/m³
             const specificHeatCapacity = 4180; // J/(kg·K)
             const volumetricFlowM3s = keyFeatures.volumetricFlow.value / 3600000; // l/h to m³/s
             const massFlow = waterDensity * volumetricFlowM3s; // kg/s
-            thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
+            thermalPowerW = massFlow * specificHeatCapacity * spreizungResult.spreizung; // W
         }
     }
 
