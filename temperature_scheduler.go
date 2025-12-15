@@ -618,6 +618,14 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if snapshot.ThermalPower == nil && snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
 		deltaT := *supplyTemp - *returnTemp
 
+		// Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ wäre,
+		// verwende BoilerTemp statt supplyTemp. Bei manchen Anlagentypen liefert
+		// die API die "gemeinsame Vorlauftemperatur" statt der höchsten Temperatur.
+		if deltaT < 0 && snapshot.BoilerTemp != nil {
+			supplyTemp = snapshot.BoilerTemp
+			deltaT = *supplyTemp - *returnTemp
+		}
+
 		// Only calculate if deltaT is positive and meaningful (>0°C)
 		if deltaT > 0 {
 			// Use the same formula as dashboard (dashboard-render-heating.js line 356-369)
