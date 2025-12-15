@@ -184,6 +184,8 @@ type DeviceSettingsRequest struct {
 	ElectricityPrice                *float64 `json:"electricityPrice,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool    `json:"useAirIntakeTemperatureLabel,omitempty"`
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
+	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
+	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
@@ -195,6 +197,8 @@ type DeviceSettingsResponse struct {
 	ElectricityPrice                *float64 `json:"electricityPrice,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool    `json:"useAirIntakeTemperatureLabel,omitempty"`
 	HasHotWaterBuffer               *bool    `json:"hasHotWaterBuffer,omitempty"`
+	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
+	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 }
 
 type DebugDeviceInfo struct {

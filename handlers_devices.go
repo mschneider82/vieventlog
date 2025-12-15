@@ -58,6 +58,15 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	electricityPricePtr := &electricityPrice
 
+	// Include CyclesPerDayStart if set
+	var cyclesPerDayStartPtr *int64
+	if settings.CyclesPerDayStart != 0 {
+		cyclesPerDayStartPtr = &settings.CyclesPerDayStart
+	}
+
+	// Include ShowCyclesPerDay
+	showCyclesPerDayPtr := &settings.ShowCyclesPerDay
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
 		Success:                         true,
@@ -67,6 +76,8 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		ElectricityPrice:                electricityPricePtr,
 		UseAirIntakeTemperatureLabel:    settings.UseAirIntakeTemperatureLabel,
 		HasHotWaterBuffer:               settings.HasHotWaterBuffer,
+		CyclesPerDayStart:               cyclesPerDayStartPtr,
+		ShowCyclesPerDay:                showCyclesPerDayPtr,
 	})
 }
 
@@ -123,6 +134,12 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.HasHotWaterBuffer != nil {
 		settings.HasHotWaterBuffer = req.HasHotWaterBuffer
+	}
+	if req.CyclesPerDayStart != nil {
+		settings.CyclesPerDayStart = *req.CyclesPerDayStart
+	}
+	if req.ShowCyclesPerDay != nil {
+		settings.ShowCyclesPerDay = *req.ShowCyclesPerDay
 	}
 
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {

@@ -304,8 +304,10 @@
                         max: data.compressorRpmMax || 0,
                         powerCorrectionFactor: data.compressorPowerCorrectionFactor || 1.0,
                         electricityPrice: data.electricityPrice || 0.30,
-                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // true/false
-                        hasHotWaterBuffer: data.hasHotWaterBuffer // true = sekundär ( alt mit HW-Puffer), false = Heizkreis (alt ohne HW-Puffer)
+                        useAirIntakeTemperatureLabel: data.useAirIntakeTemperatureLabel, // null = auto-detect, true/false = override
+                        hasHotWaterBuffer: data.hasHotWaterBuffer, // true = secundär , false = Heizkreis
+                        cyclesperdaystart: data.cyclesperdaystart,
+                        showCyclesPerDay: data.showCyclesPerDay
                     };
                 }
             } catch (error) {
@@ -330,14 +332,14 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.electricityPrice || 0.30, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.electricityPrice || 0.30, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer, data.cyclesperdaystart, data.showCyclesPerDay);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null, null, false);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer, cyclesperdaystart, showCyclesPerDay) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
@@ -357,6 +359,19 @@
             } else if (hasHotWaterBuffer === false) {
                 spreizungState = 'IDU';
             }
+
+            // Format cyclesperdaystart for date picker (CORRECTED VERSION)
+            let cyclestart = "2025-01-01";
+            if (cyclesperdaystart !== undefined && !isNaN(cyclesperdaystart)) {
+                const date = new Date(cyclesperdaystart * 1000);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                cyclestart = `${year}-${month}-${day}`;
+            }
+
+            // Determine toggle state (default to true if cyclesperdaystart is set)
+            const toggleChecked = showCyclesPerDay !== undefined ? showCyclesPerDay : (cyclesperdaystart !== undefined);
 
             modal.innerHTML = `
                 <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
@@ -448,6 +463,26 @@
                         </div>
                     </div>
 
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
+                            Takte pro Tag
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                            <label style="color: #a0a0b0; font-size: 16px;">Anzeigen:</label>
+                            <label style="position: relative; display: inline-block; width: 50px; height: 24px; cursor: pointer;">
+                                <input type="checkbox" id="showCyclesPerDayToggle" ${toggleChecked ? 'checked' : ''}
+                                       onchange="document.getElementById('showCyclesPerDayToggle').nextElementSibling.style.backgroundColor = this.checked ? '#667eea' : 'rgba(255,255,255,0.2)'; document.getElementById('showCyclesPerDayToggle').nextElementSibling.nextElementSibling.style.transform = this.checked ? 'translateX(26px)' : 'translateX(0)';"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${toggleChecked ? '#667eea' : 'rgba(255,255,255,0.2)'}; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1);"></span>
+                                <span style="position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: ${toggleChecked ? 'translateX(26px)' : 'translateX(0)'};"></span>
+                            </label>
+                        </div>
+                        <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
+                            <label for="cyclesperDayCustomDatePicker" style="color: #a0a0b0; font-size: 16px; white-space: nowrap;">📅 erster Tag:</label>
+                            <input type="date" id="cyclesperDayCustomDatePicker" class="custom-date-input" value="${cyclestart}" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 16px; cursor: pointer;">
+                        </div>
+                    </div>
+
                     <div style="display: flex; gap: 10px; margin-top: 30px;">
                         <button onclick="saveDeviceSettings('${installationId}', '${deviceId}')"
                                 style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
@@ -525,9 +560,24 @@
             let hasHotWaterBuffer = false;
             if (spreizungValue === 'ODU') {
                 hasHotWaterBuffer = true;
-            } 
+            }
             // else if (spreizungValue === 'IDU') {hasHotWaterBuffer = false;}
             // else 'auto' means null (auto-detect)
+
+            // Get cycles per day start date
+            let cyclesperdaystart = 1735686000; // Default: 2025-01-01
+            const datePicker = document.querySelector('#cyclesperDayCustomDatePicker');
+            if (datePicker && datePicker.value) {
+                const startdate = datePicker.value;
+                cyclesperdaystart = Date.parse(startdate) / 1000; // Convert to Unix timestamp in seconds
+                if (isNaN(cyclesperdaystart)) {
+                    cyclesperdaystart = 1735686000; // Fallback if date parsing fails
+                }
+            }
+
+            // Get show cycles per day toggle
+            const showCyclesPerDayToggle = document.querySelector('#showCyclesPerDayToggle');
+            const showCyclesPerDay = showCyclesPerDayToggle ? showCyclesPerDayToggle.checked : false;
 
             try {
                 const response = await fetch('/api/device-settings/set', {
@@ -542,7 +592,9 @@
                         compressorPowerCorrectionFactor: powerCorrectionFactor,
                         electricityPrice: electricityPrice,
                         useAirIntakeTemperatureLabel: useAirIntakeTemperatureLabel,
-                        hasHotWaterBuffer: hasHotWaterBuffer
+                        hasHotWaterBuffer: hasHotWaterBuffer,
+                        cyclesperdaystart: cyclesperdaystart,
+                        showCyclesPerDay: showCyclesPerDay
                     })
                 });
 
@@ -560,6 +612,8 @@
                     window.deviceSettingsCache[deviceKey].electricityPrice = electricityPrice;
                     window.deviceSettingsCache[deviceKey].useAirIntakeTemperatureLabel = useAirIntakeTemperatureLabel;
                     window.deviceSettingsCache[deviceKey].hasHotWaterBuffer = hasHotWaterBuffer;
+                    window.deviceSettingsCache[deviceKey].cyclesperdaystart = cyclesperdaystart;
+                    window.deviceSettingsCache[deviceKey].showCyclesPerDay = showCyclesPerDay;
 
                     alert('Einstellungen gespeichert!');
                     closeDeviceSettingsModal();

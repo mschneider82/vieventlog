@@ -44,6 +44,8 @@ type DeviceSettings struct {
 	HybridProControl                *HybridProControlSettings `json:"hybridProControl,omitempty"`
 	UseAirIntakeTemperatureLabel    *bool                     `json:"useAirIntakeTemperatureLabel,omitempty"` // Override label for primary supply temp (nil = auto-detect, true = Lufteintrittstemperatur, false = Primärkreisvorlauf)
 	HasHotWaterBuffer               *bool                     `json:"hasHotWaterBuffer,omitempty"`            // Override spreizung calculation (nil = auto-detect, true = mit HW-Puffer, false = ohne HW-Puffer)
+	CyclesPerDayStart               int64                     `json:"cyclesperdaystart,omitempty"`            // Unix timestamp (seconds) for start date of cycles per day calculation
+	ShowCyclesPerDay                bool                      `json:"showCyclesPerDay,omitempty"`             // Show/hide cycles per day in dashboard
 }
 
 type HybridProControlSettings struct {
