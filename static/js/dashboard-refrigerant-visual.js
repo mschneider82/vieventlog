@@ -186,7 +186,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${keyFeatures.dhwTemp !== null && keyFeatures.dhwTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 91.26%;" title="Warmwasser Temperatur">${formatValue(keyFeatures.dhwTemp.value, '°C')}</div>` : ''}
 
                     <!-- Leistungsanzeigen -->
-                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W', 0)}</div>` : ''}
+                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower !== undefined && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W', 0)}</div>` : ''}
                     ${thermalPowerW !== null ? `<div class="value-label" style="top: 37.19%; left: 82.64%;" title="Thermische Leistung (berechnet)">${formatValue(thermalPowerW, 'W', 0)}</div>` : ''}
                 </div>
             </div>
