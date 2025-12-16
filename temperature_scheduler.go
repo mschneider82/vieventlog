@@ -268,9 +268,14 @@ func fetchFeaturesForDeviceWithTracking(installationID, gatewayID, deviceID, acc
 	}
 
 	// Calculate cache duration: use sample interval if < 5 minutes, otherwise 5 minutes
+	// Subtract 5 seconds to ensure cache expires before next sample (ticker is not exact)
 	cacheDuration := 5 * time.Minute
 	if settings.SampleInterval < 5 {
-		cacheDuration = time.Duration(settings.SampleInterval) * time.Minute
+		cacheDuration = time.Duration(settings.SampleInterval)*time.Minute - 5*time.Second
+		// Ensure minimum cache duration of 10 seconds
+		if cacheDuration < 10*time.Second {
+			cacheDuration = 10 * time.Second
+		}
 	}
 
 	// Use cached version with custom cache duration
