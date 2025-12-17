@@ -9,6 +9,26 @@ import (
 )
 
 // ============================================================================
+// Template Data Structures
+// ============================================================================
+
+// TemplateData holds common data passed to all templates
+type TemplateData struct {
+	Version string
+	Commit  string
+	Date    string
+}
+
+// newTemplateData creates a new TemplateData with version information
+func newTemplateData() TemplateData {
+	return TemplateData{
+		Version: version,
+		Commit:  commit,
+		Date:    date,
+	}
+}
+
+// ============================================================================
 // Page Handlers
 // ============================================================================
 
@@ -24,7 +44,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func loginPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +53,7 @@ func loginPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func dashboardPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +62,7 @@ func dashboardPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func accountsPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +71,7 @@ func accountsPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func smartClimatePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +80,7 @@ func smartClimatePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func vitochargePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +89,7 @@ func vitochargePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 func apiTestPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +98,7 @@ func apiTestPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, newTemplateData())
 }
 
 // ============================================================================
