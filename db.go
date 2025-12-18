@@ -203,16 +203,30 @@ func runSchemaMigrations() error {
 		log.Println("Migration completed: dhw_cylinder_middle_temp column added successfully")
 	}
 
-	// Future migrations can be added here
-	// Example:
-	// if !columnExists("temperature_snapshots", "new_column") {
-	//     log.Println("Running migration: Adding new_column...")
-	//     _, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN new_column REAL")
-	//     if err != nil {
-	//         return fmt.Errorf("failed to add new_column: %v", err)
-	//     }
-	//     log.Println("Migration completed: new_column added")
-	// }
+	// Migration 2: Add sample_interval column (added 2025-12-18)
+	// This fixes issue #118: incorrect energy calculations when sample interval changes
+	if !columnExists("temperature_snapshots", "sample_interval") {
+		log.Println("Running migration: Adding sample_interval column to temperature_snapshots table")
+		_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN sample_interval INTEGER")
+		if err != nil {
+			return fmt.Errorf("failed to add sample_interval column: %v", err)
+		}
+
+		// Backfill existing records with the current sample interval setting
+		log.Println("Backfilling sample_interval for existing records...")
+		settings, err := GetTemperatureLogSettings()
+		if err != nil {
+			log.Printf("Warning: Could not get current sample interval for backfill, using default of 5 minutes: %v", err)
+			_, err = eventDB.Exec("UPDATE temperature_snapshots SET sample_interval = 5 WHERE sample_interval IS NULL")
+		} else {
+			_, err = eventDB.Exec("UPDATE temperature_snapshots SET sample_interval = ? WHERE sample_interval IS NULL", settings.SampleInterval)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to backfill sample_interval: %v", err)
+		}
+
+		log.Println("Migration completed: sample_interval column added and backfilled successfully")
+	}
 
 	return nil
 }
@@ -554,6 +568,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 	insertSQL := `
 		INSERT OR REPLACE INTO temperature_snapshots (
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
+			sample_interval,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
 			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
@@ -563,7 +578,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			four_way_valve, burner_modulation, secondary_heat_generator_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -573,6 +588,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.DeviceID,
 		snapshot.AccountID,
 		snapshot.AccountName,
+		snapshot.SampleInterval,
 		snapshot.OutsideTemp,
 		snapshot.ReturnTemp,
 		snapshot.SupplyTemp,
@@ -848,13 +864,20 @@ func SetTemperatureLogSettings(settings *TemperatureLogSettings) error {
 }
 
 // GetConsumptionStats calculates aggregated consumption statistics for a given time period
-func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, endTime time.Time, sampleInterval int) (*ConsumptionStats, error) {
+func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, endTime time.Time) (*ConsumptionStats, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
+
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
 
 	// Query to get snapshots in time range
 	query := `
@@ -874,7 +897,8 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 				end
 			end as thermal_power,
 			cop,
-			compressor_active
+			compressor_active,
+			COALESCE(sample_interval, ?) as sample_interval
 		FROM temperature_snapshots
 		WHERE installation_id = ?
 			AND gateway_id = ?
@@ -884,7 +908,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 		ORDER BY timestamp ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, installationID, gatewayID, deviceID,
 		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query consumption data: %v", err)
@@ -898,20 +922,22 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 	var runtimeMinutes float64
 	var samples int
 
-	intervalMinutes := float64(sampleInterval)
-
 	for rows.Next() {
 		var timestampStr string
 		var compressorPower, thermalPower, cop *float64
 		var compressorActiveInt *int
+		var sampleIntervalMinutes int
 
-		err := rows.Scan(&timestampStr, &compressorPower, &thermalPower, &cop, &compressorActiveInt)
+		err := rows.Scan(&timestampStr, &compressorPower, &thermalPower, &cop, &compressorActiveInt, &sampleIntervalMinutes)
 		if err != nil {
 			log.Printf("Warning: failed to scan consumption row: %v", err)
 			continue
 		}
 
 		samples++
+
+		// Use the actual sample interval from this specific row
+		intervalMinutes := float64(sampleIntervalMinutes)
 
 		// Calculate energy using trapezoidal integration (power * time)
 		// compressor_power is in Watts, thermal_power is in kW
@@ -959,13 +985,20 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 }
 
 // GetHourlyConsumptionBreakdown returns hourly consumption data for a given day
-func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, date time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, date time.Time) ([]ConsumptionDataPoint, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
+
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
 
 	// Start of day (00:00:00) to end of day (23:59:59)
 	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -974,21 +1007,19 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	query := `
 		SELECT
 			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
-			AVG(compressor_power) as avg_power,
-			--AVG(thermal_power) as avg_thermal,
-			AVG(case when compressor_power > 0 then thermal_power -- usual case
+			-- Calculate total energy by summing (power * interval) for each sample
+			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
+			SUM(COALESCE(case when compressor_power > 0 then thermal_power
 				else
-					-- w/o compressor power no thermal power as well
 					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
 					else
-						-- fix thermal power null values to 0 (AVG does not include null values)
 						case when ifnull (thermal_power, 0) = 0 then 0
-						else null -- last exit, should never be the case
+						else null
 						end
 					end
-				end) avg_thermal,
+				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
 			AVG(cop) as avg_cop,
-			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
 			COUNT(*) as total_samples
 		FROM temperature_snapshots
 		WHERE installation_id = ?
@@ -1000,7 +1031,8 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 		ORDER BY hour ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
+		installationID, gatewayID, deviceID,
 		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
@@ -1008,14 +1040,15 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	defer rows.Close()
 
 	var dataPoints []ConsumptionDataPoint
-	intervalMinutes := float64(sampleInterval)
 
 	for rows.Next() {
 		var hourStr string
-		var avgPower, avgThermal, avgCOP *float64
-		var activeSamples, totalSamples int
+		var totalElectricityWh, totalThermalWh *float64
+		var avgCOP *float64
+		var runtimeMinutes float64
+		var totalSamples int
 
-		err := rows.Scan(&hourStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		err := rows.Scan(&hourStr, &totalElectricityWh, &totalThermalWh, &avgCOP, &runtimeMinutes, &totalSamples)
 		if err != nil {
 			log.Printf("Warning: failed to scan hourly breakdown row: %v", err)
 			continue
@@ -1027,24 +1060,22 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 			continue
 		}
 
-		// Calculate energy for this hour
+		// Convert Wh to kWh (energy already calculated correctly in SQL)
 		electricityKWh := 0.0
 		thermalKWh := 0.0
-		if avgPower != nil {
-			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0 // W -> kWh
+		if totalElectricityWh != nil {
+			electricityKWh = (*totalElectricityWh) / 1000.0 // Wh -> kWh
 		}
-		if avgThermal != nil {
-			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0) // already in kW
+		if totalThermalWh != nil {
+			thermalKWh = (*totalThermalWh) / 1000.0 // Wh -> kWh
 		}
-
-		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
 
 		dataPoint := ConsumptionDataPoint{
 			Timestamp:      hourTime,
 			ElectricityKWh: electricityKWh,
 			ThermalKWh:     thermalKWh,
 			AvgCOP:         0.0,
-			RuntimeHours:   runtimeHours,
+			RuntimeHours:   runtimeMinutes / 60.0,
 			Samples:        totalSamples,
 		}
 		if avgCOP != nil {
@@ -1058,7 +1089,7 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 }
 
 // GetDailyConsumptionBreakdown returns daily consumption data for a given period
-func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, startDate, endDate time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, startDate, endDate time.Time) ([]ConsumptionDataPoint, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -1066,24 +1097,29 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
 
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
+
 	query := `
 		SELECT
 			DATE(timestamp) as day,
-			AVG(compressor_power) as avg_power,
-			--AVG(thermal_power) as avg_thermal,
-			AVG(case when compressor_power > 0 then thermal_power -- usual case
+			-- Calculate total energy by summing (power * interval) for each sample
+			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
+			SUM(COALESCE(case when compressor_power > 0 then thermal_power
 				else
-					-- w/o compressor power no thermal power as well
 					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
 					else
-						-- fix thermal power null values to 0 (AVG does not include null values)
 						case when ifnull (thermal_power, 0) = 0 then 0
-						else null -- last exit, should never be the case
+						else null
 						end
 					end
-				end) avg_thermal,
+				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
 			AVG(cop) as avg_cop,
-			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
 			COUNT(*) as total_samples
 		FROM temperature_snapshots
 		WHERE installation_id = ?
@@ -1095,7 +1131,8 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 		ORDER BY day ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
+		installationID, gatewayID, deviceID,
 		startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
@@ -1103,14 +1140,15 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	defer rows.Close()
 
 	var dataPoints []ConsumptionDataPoint
-	intervalMinutes := float64(sampleInterval)
 
 	for rows.Next() {
 		var dayStr string
-		var avgPower, avgThermal, avgCOP *float64
-		var activeSamples, totalSamples int
+		var totalElectricityWh, totalThermalWh *float64
+		var avgCOP *float64
+		var runtimeMinutes float64
+		var totalSamples int
 
-		err := rows.Scan(&dayStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		err := rows.Scan(&dayStr, &totalElectricityWh, &totalThermalWh, &avgCOP, &runtimeMinutes, &totalSamples)
 		if err != nil {
 			log.Printf("Warning: failed to scan daily breakdown row: %v", err)
 			continue
@@ -1122,24 +1160,22 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 			continue
 		}
 
-		// Calculate energy for this day
+		// Convert Wh to kWh (energy already calculated correctly in SQL)
 		electricityKWh := 0.0
 		thermalKWh := 0.0
-		if avgPower != nil {
-			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0
+		if totalElectricityWh != nil {
+			electricityKWh = (*totalElectricityWh) / 1000.0 // Wh -> kWh
 		}
-		if avgThermal != nil {
-			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0)
+		if totalThermalWh != nil {
+			thermalKWh = (*totalThermalWh) / 1000.0 // Wh -> kWh
 		}
-
-		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
 
 		dataPoint := ConsumptionDataPoint{
 			Timestamp:      dayTime,
 			ElectricityKWh: electricityKWh,
 			ThermalKWh:     thermalKWh,
 			AvgCOP:         0.0,
-			RuntimeHours:   runtimeHours,
+			RuntimeHours:   runtimeMinutes / 60.0,
 			Samples:        totalSamples,
 		}
 		if avgCOP != nil {

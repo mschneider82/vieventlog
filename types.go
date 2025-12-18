@@ -268,6 +268,7 @@ type TemperatureSnapshot struct {
 	DeviceID       string    `json:"device_id"`
 	AccountID      string    `json:"account_id"`
 	AccountName    string    `json:"account_name"`
+	SampleInterval int       `json:"sample_interval"` // Sample interval in minutes when this snapshot was taken
 
 	// Temperature sensors
 	OutsideTemp           *float64 `json:"outside_temp,omitempty"`

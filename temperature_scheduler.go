@@ -229,6 +229,9 @@ func temperatureLoggingJob() {
 						continue
 					}
 
+					// Set the sample interval for this snapshot
+					snapshot.SampleInterval = settings.SampleInterval
+
 					// Save to database
 					err = SaveTemperatureSnapshot(snapshot)
 					if err != nil {
