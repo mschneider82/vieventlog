@@ -168,6 +168,21 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to create temperature_log_settings table: %v", err)
 	}
 
+	// Create schema_migrations table to track applied migrations
+	createMigrationsTableSQL := `
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		description TEXT,
+		applied_at TEXT NOT NULL
+	);
+	`
+
+	_, err = eventDB.Exec(createMigrationsTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create schema_migrations table: %v", err)
+	}
+
 	// Run schema migrations for existing databases
 	err = runSchemaMigrations()
 	if err != nil {
@@ -191,41 +206,287 @@ func CloseEventDatabase() error {
 	return nil
 }
 
+// migrationApplied checks if a migration was already run
+func migrationApplied(name string) bool {
+	var count int
+	err := eventDB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", name).Scan(&count)
+	if err != nil {
+		log.Printf("Warning: Could not check migration status for '%s': %v", name, err)
+		return false
+	}
+	return count > 0
+}
+
+// recordMigration marks a migration as completed
+func recordMigration(id int, name, description string) error {
+	_, err := eventDB.Exec(
+		"INSERT INTO schema_migrations (id, name, description, applied_at) VALUES (?, ?, ?, ?)",
+		id, name, description, time.Now().UTC().Format(time.RFC3339),
+	)
+	return err
+}
+
 // runSchemaMigrations applies schema changes to existing databases
 func runSchemaMigrations() error {
 	// Migration 1: Add dhw_cylinder_middle_temp column (added 2025-12-12)
-	if !columnExists("temperature_snapshots", "dhw_cylinder_middle_temp") {
-		log.Println("Running migration: Adding dhw_cylinder_middle_temp column to temperature_snapshots table")
-		_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN dhw_cylinder_middle_temp REAL")
-		if err != nil {
-			return fmt.Errorf("failed to add dhw_cylinder_middle_temp column: %v", err)
+	if !migrationApplied("add_dhw_cylinder_middle_temp") {
+		log.Println("Running migration 1: Adding dhw_cylinder_middle_temp column")
+
+		if !columnExists("temperature_snapshots", "dhw_cylinder_middle_temp") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN dhw_cylinder_middle_temp REAL")
+			if err != nil {
+				return fmt.Errorf("migration 1 failed: %v", err)
+			}
 		}
-		log.Println("Migration completed: dhw_cylinder_middle_temp column added successfully")
+
+		if err := recordMigration(1, "add_dhw_cylinder_middle_temp", "Add middle cylinder temperature sensor"); err != nil {
+			return fmt.Errorf("failed to record migration 1: %v", err)
+		}
+		log.Println("Migration 1 completed successfully")
 	}
 
-	// Migration 2: Add sample_interval column (added 2025-12-18)
+	// Migration 2: Add sample_interval column with intelligent backfill (added 2025-12-18)
 	// This fixes issue #118: incorrect energy calculations when sample interval changes
-	if !columnExists("temperature_snapshots", "sample_interval") {
-		log.Println("Running migration: Adding sample_interval column to temperature_snapshots table")
-		_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN sample_interval INTEGER")
-		if err != nil {
-			return fmt.Errorf("failed to add sample_interval column: %v", err)
+	if !migrationApplied("add_sample_interval_with_backfill") {
+		log.Println("Running migration 2: Adding sample_interval with intelligent backfill")
+
+		// Step 1: Add column if not exists
+		if !columnExists("temperature_snapshots", "sample_interval") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN sample_interval INTEGER")
+			if err != nil {
+				return fmt.Errorf("migration 2 failed (add column): %v", err)
+			}
 		}
 
-		// Backfill existing records with the current sample interval setting
-		log.Println("Backfilling sample_interval for existing records...")
-		settings, err := GetTemperatureLogSettings()
+		// Step 2: Intelligent backfill - calculate from actual timestamp differences
+		log.Println("Backfilling sample_interval from timestamp analysis...")
+		backfillSQL := `
+			WITH diffs AS (
+			  SELECT
+			    id,
+			    timestamp,
+			    installation_id,
+			    gateway_id,
+			    device_id,
+			    LEAD(timestamp) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS next_ts
+			  FROM temperature_snapshots
+			  WHERE sample_interval IS NULL
+			),
+			calc AS (
+			  SELECT
+			    id,
+			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+			    LAG(
+			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+			    ) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS prev_diff
+			  FROM diffs
+			),
+			rules AS (
+			  SELECT
+			    id,
+			    CASE
+			      WHEN diff_minutes IS NULL THEN prev_diff
+			      WHEN diff_minutes > 15 THEN prev_diff
+			      WHEN diff_minutes != prev_diff THEN prev_diff
+			      ELSE diff_minutes
+			    END AS base_value
+			  FROM calc
+			),
+			context AS (
+			  SELECT
+			    r.id,
+			    r.base_value,
+			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+			  FROM rules r
+			)
+			UPDATE temperature_snapshots
+			SET sample_interval = CASE
+			    WHEN context.base_value > 15 THEN COALESCE(context.prev_val, 5)
+			    WHEN context.base_value = 0 AND context.prev_val IS NOT NULL AND context.prev_val != 0 THEN context.prev_val
+			    WHEN context.base_value = 0 AND context.next_val IS NOT NULL AND context.next_val != 0 THEN context.next_val
+			    WHEN context.base_value IS NULL THEN COALESCE(context.next_val, context.prev_val, 5)
+			    ELSE context.base_value
+			END
+			FROM context
+			WHERE temperature_snapshots.id = context.id
+			  AND temperature_snapshots.sample_interval IS NULL
+		`
+
+		_, err := eventDB.Exec(backfillSQL)
 		if err != nil {
-			log.Printf("Warning: Could not get current sample interval for backfill, using default of 5 minutes: %v", err)
-			_, err = eventDB.Exec("UPDATE temperature_snapshots SET sample_interval = 5 WHERE sample_interval IS NULL")
-		} else {
-			_, err = eventDB.Exec("UPDATE temperature_snapshots SET sample_interval = ? WHERE sample_interval IS NULL", settings.SampleInterval)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to backfill sample_interval: %v", err)
+			return fmt.Errorf("migration 2 failed (backfill): %v", err)
 		}
 
-		log.Println("Migration completed: sample_interval column added and backfilled successfully")
+		if err := recordMigration(2, "add_sample_interval_with_backfill", "Add sample_interval with intelligent backfill from timestamps (#118)"); err != nil {
+			return fmt.Errorf("failed to record migration 2: %v", err)
+		}
+		log.Println("Migration 2 completed successfully")
+	}
+
+	// Migration 3: Intelligent re-backfill of sample_interval (added 2025-12-19)
+	// This re-calculates sample_interval from timestamp differences for existing data
+	// Fixes issue where old migration used fixed value instead of actual intervals
+	if !migrationApplied("intelligent_sample_interval_rebackfill") {
+		log.Println("Running migration 3: Re-backfilling sample_interval with intelligent algorithm")
+
+		// Count how many records will be updated
+		var totalRecords int
+		err := eventDB.QueryRow("SELECT COUNT(*) FROM temperature_snapshots").Scan(&totalRecords)
+		if err == nil {
+			log.Printf("Analyzing %d temperature snapshots...", totalRecords)
+		}
+
+		// Step 1: Calculate mode (most common interval) per device for fallback
+		log.Println("Step 1: Calculating mode (most common interval) per device...")
+		modeTableSQL := `
+			CREATE TEMP TABLE device_modes AS
+			WITH interval_counts AS (
+				SELECT
+					installation_id,
+					gateway_id,
+					device_id,
+					sample_interval,
+					COUNT(*) as frequency,
+					ROW_NUMBER() OVER (
+						PARTITION BY installation_id, gateway_id, device_id
+						ORDER BY COUNT(*) DESC, sample_interval DESC
+					) as rn
+				FROM temperature_snapshots
+				WHERE sample_interval IS NOT NULL
+				GROUP BY installation_id, gateway_id, device_id, sample_interval
+			)
+			SELECT
+				installation_id,
+				gateway_id,
+				device_id,
+				sample_interval as mode_interval,
+				frequency
+			FROM interval_counts
+			WHERE rn = 1;
+		`
+		_, err = eventDB.Exec(modeTableSQL)
+		if err != nil {
+			return fmt.Errorf("migration 3 failed (create mode table): %v", err)
+		}
+
+		// Step 2: Intelligent re-backfill - calculate from actual timestamp differences
+		log.Println("Step 2: Re-calculating intervals from timestamp differences...")
+		rebackfillSQL := `
+			WITH diffs AS (
+			  SELECT
+			    id,
+			    timestamp,
+			    installation_id,
+			    gateway_id,
+			    device_id,
+			    LEAD(timestamp) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS next_ts
+			  FROM temperature_snapshots
+			),
+			calc AS (
+			  SELECT
+			    id,
+			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+			    LAG(
+			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+			    ) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS prev_diff
+			  FROM diffs
+			),
+			rules AS (
+			  SELECT
+			    id,
+			    CASE
+			      WHEN diff_minutes IS NULL THEN prev_diff
+			      WHEN diff_minutes > 15 THEN prev_diff
+			      WHEN diff_minutes != prev_diff THEN prev_diff
+			      ELSE diff_minutes
+			    END AS base_value
+			  FROM calc
+			),
+			context AS (
+			  SELECT
+			    r.id,
+			    r.base_value,
+			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+			  FROM rules r
+			),
+			with_mode AS (
+			  SELECT
+			    c.id,
+			    c.base_value,
+			    c.prev_val,
+			    c.next_val,
+			    d.id as ts_id,
+			    dm.mode_interval
+			  FROM context c
+			  JOIN diffs d ON c.id = d.id
+			  LEFT JOIN device_modes dm
+			    ON d.installation_id = dm.installation_id
+			    AND d.gateway_id = dm.gateway_id
+			    AND d.device_id = dm.device_id
+			)
+			UPDATE temperature_snapshots
+			SET sample_interval = CASE
+			    -- Use mode for problematic values (too large, too small, or NULL)
+			    WHEN with_mode.base_value IS NULL THEN COALESCE(with_mode.mode_interval, 15)
+			    WHEN with_mode.base_value > 15 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, 15)
+			    WHEN with_mode.base_value = 0 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, with_mode.next_val, 15)
+			    WHEN with_mode.base_value = 1 THEN COALESCE(with_mode.mode_interval, 15)
+			    -- Normal case: use calculated value
+			    ELSE with_mode.base_value
+			END
+			FROM with_mode
+			WHERE temperature_snapshots.id = with_mode.id
+		`
+
+		_, err = eventDB.Exec(rebackfillSQL)
+		if err != nil {
+			return fmt.Errorf("migration 3 failed (re-backfill): %v", err)
+		}
+
+		// Step 3: Cleanup temp table
+		eventDB.Exec("DROP TABLE IF EXISTS device_modes")
+
+		// Report results
+		type IntervalStats struct {
+			Interval int
+			Count    int
+		}
+		var stats []IntervalStats
+		rows, err := eventDB.Query("SELECT sample_interval, COUNT(*) as count FROM temperature_snapshots GROUP BY sample_interval ORDER BY count DESC LIMIT 5")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var s IntervalStats
+				rows.Scan(&s.Interval, &s.Count)
+				stats = append(stats, s)
+			}
+		}
+
+		log.Println("Step 3: Re-backfill completed successfully")
+		log.Printf("Top intervals: %v", stats)
+
+		var uniqueCount int
+		eventDB.QueryRow("SELECT COUNT(DISTINCT sample_interval) FROM temperature_snapshots").Scan(&uniqueCount)
+		log.Printf("Found %d unique sample intervals across %d snapshots", uniqueCount, totalRecords)
+
+		if err := recordMigration(3, "intelligent_sample_interval_rebackfill", "Re-calculate sample_interval from timestamps for existing data (#118)"); err != nil {
+			return fmt.Errorf("failed to record migration 3: %v", err)
+		}
+		log.Println("Migration 3 completed successfully")
 	}
 
 	return nil
