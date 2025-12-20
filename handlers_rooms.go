@@ -459,7 +459,7 @@ func setRoomTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make API request
-	apiReq, err := http.NewRequest("POST", url, strings.NewReader(string(bodyJSON)))
+	apiReq, err := NewRequest("POST", url, strings.NewReader(string(bodyJSON)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
