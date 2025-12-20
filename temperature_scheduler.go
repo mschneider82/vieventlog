@@ -229,6 +229,9 @@ func temperatureLoggingJob() {
 						continue
 					}
 
+					// Set the sample interval for this snapshot
+					snapshot.SampleInterval = settings.SampleInterval
+
 					// Save to database
 					err = SaveTemperatureSnapshot(snapshot)
 					if err != nil {
@@ -257,11 +260,30 @@ cleanup:
 		snapshotCount, totalCount, usage10min, usage24hr)
 }
 
-// fetchFeaturesForDeviceWithTracking wraps fetchFeaturesWithCache with API call tracking
+// fetchFeaturesForDeviceWithTracking wraps fetchFeaturesWithCustomCache with API call tracking
+// Cache duration is based on sample interval (min 1 minute, max 5 minutes)
 func fetchFeaturesForDeviceWithTracking(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
-	// Use cached version - if cache is fresh (< 5 min), no API call is made
-	// If cache is stale, fetchFeaturesWithCache will make an API call and we track it
-	features, err := fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken)
+	// Get temperature log settings to determine cache duration
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		// Fallback to default 5 minutes on error
+		settings = &TemperatureLogSettings{SampleInterval: 5}
+	}
+
+	// Calculate cache duration: use sample interval if < 5 minutes, otherwise 5 minutes
+	// Subtract 5 seconds to ensure cache expires before next sample (ticker is not exact)
+	cacheDuration := 5 * time.Minute
+	if settings.SampleInterval < 5 {
+		cacheDuration = time.Duration(settings.SampleInterval)*time.Minute - 5*time.Second
+		// Ensure minimum cache duration of 10 seconds
+		if cacheDuration < 10*time.Second {
+			cacheDuration = 10 * time.Second
+		}
+	}
+
+	// Use cached version with custom cache duration
+	// If cache is stale, fetchFeaturesWithCustomCache will make an API call and we track it
+	features, err := fetchFeaturesWithCustomCache(installationID, gatewayID, deviceID, accessToken, cacheDuration)
 
 	// Only track API call if cache was stale (indicated by fresh LastUpdate)
 	if err == nil && time.Since(features.LastUpdate) < 1*time.Second {
@@ -621,9 +643,11 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		// Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ wäre,
 		// verwende BoilerTemp statt supplyTemp. Bei manchen Anlagentypen liefert
 		// die API die "gemeinsame Vorlauftemperatur" statt der höchsten Temperatur.
-		if deltaT < 0 && snapshot.BoilerTemp != nil {
-			supplyTemp = snapshot.BoilerTemp
-			deltaT = *supplyTemp - *returnTemp
+		if snapshot.BoilerTemp != nil {
+			if deltaT < 0 || *snapshot.BoilerTemp > *supplyTemp {
+				supplyTemp = snapshot.BoilerTemp
+				deltaT = *supplyTemp - *returnTemp
+			}
 		}
 
 		// Only calculate if deltaT is positive and meaningful (>0°C)

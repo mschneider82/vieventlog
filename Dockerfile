@@ -12,8 +12,16 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Build arguments for version information
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
+
 # Build with nokeyring tag (no CGO, no keyring dependencies)
-RUN CGO_ENABLED=0 go build -tags nokeyring -ldflags="-s -w" -o vieventlog .
+# Version information is injected via ldflags
+RUN CGO_ENABLED=0 go build -tags nokeyring \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+    -o vieventlog .
 
 # Runtime stage - minimal image
 FROM debian:bookworm-slim

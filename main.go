@@ -28,6 +28,11 @@ const (
 )
 
 var (
+	// Build-time version information (set via ldflags)
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+
 	// Configuration - will be loaded from keyring or env
 	currentCreds *Credentials // Legacy support
 

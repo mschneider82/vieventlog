@@ -291,15 +291,20 @@ func parseFeatures(features []Feature, installationID, gatewayID, deviceID strin
 	return df
 }
 
-// fetchFeaturesWithCache fetches features with caching support
+// fetchFeaturesWithCache fetches features with caching support (default 5 minutes)
 func fetchFeaturesWithCache(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
+	return fetchFeaturesWithCustomCache(installationID, gatewayID, deviceID, accessToken, 5*time.Minute)
+}
+
+// fetchFeaturesWithCustomCache fetches features with configurable cache duration
+func fetchFeaturesWithCustomCache(installationID, gatewayID, deviceID, accessToken string, cacheDuration time.Duration) (*DeviceFeatures, error) {
 	cacheKey := fmt.Sprintf("%s:%s:%s", installationID, gatewayID, deviceID)
 
 	// Check cache first
 	featuresCacheMutex.RLock()
 	if cached, exists := featuresCache[cacheKey]; exists {
-		// Cache valid for 5 minutes
-		if time.Since(cached.LastUpdate) < 5*time.Minute {
+		// Cache valid for specified duration
+		if time.Since(cached.LastUpdate) < cacheDuration {
 			featuresCacheMutex.RUnlock()
 			return cached, nil
 		}

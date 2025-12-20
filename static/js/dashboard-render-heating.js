@@ -332,7 +332,9 @@
                         thermalPowerW = massFlow * specificHeatCapacity * spreizung; // W
 
                         // Get electrical power with correction factor
-                        electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
+                        if (kf.compressorPower && kf.compressorPower.value !== undefined) {
+                            electricalPowerW = unwrapValue(kf.compressorPower.value) * correctionFactor; // W (corrected)
+                        }
                     }
                 }
             }
@@ -585,6 +587,7 @@
                             <span class="status-label">Leistung</span>
                             <span class="status-value">${(() => {
                                 if (!isValidNumericValue(kf.compressorPower)) return '--';
+                                if (!kf.compressorPower.value) return '--';
                                 const powerW = unwrapValue(kf.compressorPower.value);
                                 return formatNum(powerW, 0) + ' W';
                             })()}</span>
@@ -649,8 +652,8 @@
                     ` : ''}
                     ${cyclesPerDay !== null ? `
                         <div class="status-item">
-                            <span class="status-label">Takte pro Tag</span>
-                            <span class="status-value">${formatNum(cyclesPerDay, 1)}</span>
+                            <span class="status-label">Durchschnittl. Takte</span>
+                            <span class="status-value">${formatNum(cyclesPerDay, 1)} T/Tag</span>
                         </div>
                     ` : ''}
                     ${kf.fanRing ? `

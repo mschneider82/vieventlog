@@ -168,6 +168,21 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to create temperature_log_settings table: %v", err)
 	}
 
+	// Create schema_migrations table to track applied migrations
+	createMigrationsTableSQL := `
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		description TEXT,
+		applied_at TEXT NOT NULL
+	);
+	`
+
+	_, err = eventDB.Exec(createMigrationsTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create schema_migrations table: %v", err)
+	}
+
 	// Run schema migrations for existing databases
 	err = runSchemaMigrations()
 	if err != nil {
@@ -191,28 +206,288 @@ func CloseEventDatabase() error {
 	return nil
 }
 
+// migrationApplied checks if a migration was already run
+func migrationApplied(name string) bool {
+	var count int
+	err := eventDB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name = ?", name).Scan(&count)
+	if err != nil {
+		log.Printf("Warning: Could not check migration status for '%s': %v", name, err)
+		return false
+	}
+	return count > 0
+}
+
+// recordMigration marks a migration as completed
+func recordMigration(id int, name, description string) error {
+	_, err := eventDB.Exec(
+		"INSERT INTO schema_migrations (id, name, description, applied_at) VALUES (?, ?, ?, ?)",
+		id, name, description, time.Now().UTC().Format(time.RFC3339),
+	)
+	return err
+}
+
 // runSchemaMigrations applies schema changes to existing databases
 func runSchemaMigrations() error {
 	// Migration 1: Add dhw_cylinder_middle_temp column (added 2025-12-12)
-	if !columnExists("temperature_snapshots", "dhw_cylinder_middle_temp") {
-		log.Println("Running migration: Adding dhw_cylinder_middle_temp column to temperature_snapshots table")
-		_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN dhw_cylinder_middle_temp REAL")
-		if err != nil {
-			return fmt.Errorf("failed to add dhw_cylinder_middle_temp column: %v", err)
+	if !migrationApplied("add_dhw_cylinder_middle_temp") {
+		log.Println("Running migration 1: Adding dhw_cylinder_middle_temp column")
+
+		if !columnExists("temperature_snapshots", "dhw_cylinder_middle_temp") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN dhw_cylinder_middle_temp REAL")
+			if err != nil {
+				return fmt.Errorf("migration 1 failed: %v", err)
+			}
 		}
-		log.Println("Migration completed: dhw_cylinder_middle_temp column added successfully")
+
+		if err := recordMigration(1, "add_dhw_cylinder_middle_temp", "Add middle cylinder temperature sensor"); err != nil {
+			return fmt.Errorf("failed to record migration 1: %v", err)
+		}
+		log.Println("Migration 1 completed successfully")
 	}
 
-	// Future migrations can be added here
-	// Example:
-	// if !columnExists("temperature_snapshots", "new_column") {
-	//     log.Println("Running migration: Adding new_column...")
-	//     _, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN new_column REAL")
-	//     if err != nil {
-	//         return fmt.Errorf("failed to add new_column: %v", err)
-	//     }
-	//     log.Println("Migration completed: new_column added")
-	// }
+	// Migration 2: Add sample_interval column with intelligent backfill (added 2025-12-18)
+	// This fixes issue #118: incorrect energy calculations when sample interval changes
+	if !migrationApplied("add_sample_interval_with_backfill") {
+		log.Println("Running migration 2: Adding sample_interval with intelligent backfill")
+
+		// Step 1: Add column if not exists
+		if !columnExists("temperature_snapshots", "sample_interval") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN sample_interval INTEGER")
+			if err != nil {
+				return fmt.Errorf("migration 2 failed (add column): %v", err)
+			}
+		}
+
+		// Step 2: Intelligent backfill - calculate from actual timestamp differences
+		log.Println("Backfilling sample_interval from timestamp analysis...")
+		backfillSQL := `
+			WITH diffs AS (
+			  SELECT
+			    id,
+			    timestamp,
+			    installation_id,
+			    gateway_id,
+			    device_id,
+			    LEAD(timestamp) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS next_ts
+			  FROM temperature_snapshots
+			  WHERE sample_interval IS NULL
+			),
+			calc AS (
+			  SELECT
+			    id,
+			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+			    LAG(
+			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+			    ) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS prev_diff
+			  FROM diffs
+			),
+			rules AS (
+			  SELECT
+			    id,
+			    CASE
+			      WHEN diff_minutes IS NULL THEN prev_diff
+			      WHEN diff_minutes > 15 THEN prev_diff
+			      WHEN diff_minutes != prev_diff THEN prev_diff
+			      ELSE diff_minutes
+			    END AS base_value
+			  FROM calc
+			),
+			context AS (
+			  SELECT
+			    r.id,
+			    r.base_value,
+			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+			  FROM rules r
+			)
+			UPDATE temperature_snapshots
+			SET sample_interval = CASE
+			    WHEN context.base_value > 15 THEN COALESCE(context.prev_val, 5)
+			    WHEN context.base_value = 0 AND context.prev_val IS NOT NULL AND context.prev_val != 0 THEN context.prev_val
+			    WHEN context.base_value = 0 AND context.next_val IS NOT NULL AND context.next_val != 0 THEN context.next_val
+			    WHEN context.base_value IS NULL THEN COALESCE(context.next_val, context.prev_val, 5)
+			    ELSE context.base_value
+			END
+			FROM context
+			WHERE temperature_snapshots.id = context.id
+			  AND temperature_snapshots.sample_interval IS NULL
+		`
+
+		_, err := eventDB.Exec(backfillSQL)
+		if err != nil {
+			return fmt.Errorf("migration 2 failed (backfill): %v", err)
+		}
+
+		if err := recordMigration(2, "add_sample_interval_with_backfill", "Add sample_interval with intelligent backfill from timestamps (#118)"); err != nil {
+			return fmt.Errorf("failed to record migration 2: %v", err)
+		}
+		log.Println("Migration 2 completed successfully")
+	}
+
+	// Migration 3: Intelligent re-backfill of sample_interval (added 2025-12-19)
+	// This re-calculates sample_interval from timestamp differences for existing data
+	// Fixes issue where old migration used fixed value instead of actual intervals
+	if !migrationApplied("intelligent_sample_interval_rebackfill") {
+		log.Println("Running migration 3: Re-backfilling sample_interval with intelligent algorithm")
+
+		// Count how many records will be updated
+		var totalRecords int
+		err := eventDB.QueryRow("SELECT COUNT(*) FROM temperature_snapshots").Scan(&totalRecords)
+		if err == nil {
+			log.Printf("Analyzing %d temperature snapshots...", totalRecords)
+		}
+
+		// Step 1: Calculate mode (most common interval) per device for fallback
+		log.Println("Step 1: Calculating mode (most common interval) per device...")
+		modeTableSQL := `
+			CREATE TEMP TABLE device_modes AS
+			WITH interval_counts AS (
+				SELECT
+					installation_id,
+					gateway_id,
+					device_id,
+					sample_interval,
+					COUNT(*) as frequency,
+					ROW_NUMBER() OVER (
+						PARTITION BY installation_id, gateway_id, device_id
+						ORDER BY COUNT(*) DESC, sample_interval DESC
+					) as rn
+				FROM temperature_snapshots
+				WHERE sample_interval IS NOT NULL
+				GROUP BY installation_id, gateway_id, device_id, sample_interval
+			)
+			SELECT
+				installation_id,
+				gateway_id,
+				device_id,
+				sample_interval as mode_interval,
+				frequency
+			FROM interval_counts
+			WHERE rn = 1;
+		`
+		_, err = eventDB.Exec(modeTableSQL)
+		if err != nil {
+			return fmt.Errorf("migration 3 failed (create mode table): %v", err)
+		}
+
+		// Step 2: Intelligent re-backfill - calculate from actual timestamp differences
+		log.Println("Step 2: Re-calculating intervals from timestamp differences...")
+		rebackfillSQL := `
+			WITH diffs AS (
+			  SELECT
+			    id,
+			    timestamp,
+			    installation_id,
+			    gateway_id,
+			    device_id,
+			    LEAD(timestamp) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS next_ts
+			  FROM temperature_snapshots
+			),
+			calc AS (
+			  SELECT
+			    id,
+			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+			    LAG(
+			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+			    ) OVER (
+			      PARTITION BY installation_id, gateway_id, device_id
+			      ORDER BY timestamp
+			    ) AS prev_diff
+			  FROM diffs
+			),
+			rules AS (
+			  SELECT
+			    id,
+			    CASE
+			      WHEN diff_minutes IS NULL THEN prev_diff
+			      WHEN diff_minutes > 15 THEN prev_diff
+			      WHEN diff_minutes != prev_diff THEN prev_diff
+			      ELSE diff_minutes
+			    END AS base_value
+			  FROM calc
+			),
+			context AS (
+			  SELECT
+			    r.id,
+			    r.base_value,
+			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+			  FROM rules r
+			),
+			with_mode AS (
+			  SELECT
+			    c.id,
+			    c.base_value,
+			    c.prev_val,
+			    c.next_val,
+			    d.id as ts_id,
+			    dm.mode_interval
+			  FROM context c
+			  JOIN diffs d ON c.id = d.id
+			  LEFT JOIN device_modes dm
+			    ON d.installation_id = dm.installation_id
+			    AND d.gateway_id = dm.gateway_id
+			    AND d.device_id = dm.device_id
+			)
+			UPDATE temperature_snapshots
+			SET sample_interval = CASE
+			    -- Use mode for problematic values (too large, too small, or NULL)
+			    WHEN with_mode.base_value IS NULL THEN COALESCE(with_mode.mode_interval, 15)
+			    WHEN with_mode.base_value > 15 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, 15)
+			    WHEN with_mode.base_value = 0 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, with_mode.next_val, 15)
+			    WHEN with_mode.base_value = 1 THEN COALESCE(with_mode.mode_interval, 15)
+			    -- Normal case: use calculated value
+			    ELSE with_mode.base_value
+			END
+			FROM with_mode
+			WHERE temperature_snapshots.id = with_mode.id
+		`
+
+		_, err = eventDB.Exec(rebackfillSQL)
+		if err != nil {
+			return fmt.Errorf("migration 3 failed (re-backfill): %v", err)
+		}
+
+		// Step 3: Cleanup temp table
+		eventDB.Exec("DROP TABLE IF EXISTS device_modes")
+
+		// Report results
+		type IntervalStats struct {
+			Interval int
+			Count    int
+		}
+		var stats []IntervalStats
+		rows, err := eventDB.Query("SELECT sample_interval, COUNT(*) as count FROM temperature_snapshots GROUP BY sample_interval ORDER BY count DESC LIMIT 5")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var s IntervalStats
+				rows.Scan(&s.Interval, &s.Count)
+				stats = append(stats, s)
+			}
+		}
+
+		log.Println("Step 3: Re-backfill completed successfully")
+		log.Printf("Top intervals: %v", stats)
+
+		var uniqueCount int
+		eventDB.QueryRow("SELECT COUNT(DISTINCT sample_interval) FROM temperature_snapshots").Scan(&uniqueCount)
+		log.Printf("Found %d unique sample intervals across %d snapshots", uniqueCount, totalRecords)
+
+		if err := recordMigration(3, "intelligent_sample_interval_rebackfill", "Re-calculate sample_interval from timestamps for existing data (#118)"); err != nil {
+			return fmt.Errorf("failed to record migration 3: %v", err)
+		}
+		log.Println("Migration 3 completed successfully")
+	}
 
 	return nil
 }
@@ -554,6 +829,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 	insertSQL := `
 		INSERT OR REPLACE INTO temperature_snapshots (
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
+			sample_interval,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
 			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
@@ -563,7 +839,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			four_way_valve, burner_modulation, secondary_heat_generator_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -573,6 +849,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.DeviceID,
 		snapshot.AccountID,
 		snapshot.AccountName,
+		snapshot.SampleInterval,
 		snapshot.OutsideTemp,
 		snapshot.ReturnTemp,
 		snapshot.SupplyTemp,
@@ -848,13 +1125,20 @@ func SetTemperatureLogSettings(settings *TemperatureLogSettings) error {
 }
 
 // GetConsumptionStats calculates aggregated consumption statistics for a given time period
-func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, endTime time.Time, sampleInterval int) (*ConsumptionStats, error) {
+func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, endTime time.Time) (*ConsumptionStats, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
+
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
 
 	// Query to get snapshots in time range
 	query := `
@@ -874,7 +1158,8 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 				end
 			end as thermal_power,
 			cop,
-			compressor_active
+			compressor_active,
+			COALESCE(sample_interval, ?) as sample_interval
 		FROM temperature_snapshots
 		WHERE installation_id = ?
 			AND gateway_id = ?
@@ -884,7 +1169,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 		ORDER BY timestamp ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, installationID, gatewayID, deviceID,
 		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query consumption data: %v", err)
@@ -898,20 +1183,22 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 	var runtimeMinutes float64
 	var samples int
 
-	intervalMinutes := float64(sampleInterval)
-
 	for rows.Next() {
 		var timestampStr string
 		var compressorPower, thermalPower, cop *float64
 		var compressorActiveInt *int
+		var sampleIntervalMinutes int
 
-		err := rows.Scan(&timestampStr, &compressorPower, &thermalPower, &cop, &compressorActiveInt)
+		err := rows.Scan(&timestampStr, &compressorPower, &thermalPower, &cop, &compressorActiveInt, &sampleIntervalMinutes)
 		if err != nil {
 			log.Printf("Warning: failed to scan consumption row: %v", err)
 			continue
 		}
 
 		samples++
+
+		// Use the actual sample interval from this specific row
+		intervalMinutes := float64(sampleIntervalMinutes)
 
 		// Calculate energy using trapezoidal integration (power * time)
 		// compressor_power is in Watts, thermal_power is in kW
@@ -959,13 +1246,20 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 }
 
 // GetHourlyConsumptionBreakdown returns hourly consumption data for a given day
-func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, date time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, date time.Time) ([]ConsumptionDataPoint, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
+
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
 
 	// Start of day (00:00:00) to end of day (23:59:59)
 	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -974,21 +1268,19 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	query := `
 		SELECT
 			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
-			AVG(compressor_power) as avg_power,
-			--AVG(thermal_power) as avg_thermal,
-			AVG(case when compressor_power > 0 then thermal_power -- usual case
+			-- Calculate total energy by summing (power * interval) for each sample
+			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
+			SUM(COALESCE(case when compressor_power > 0 then thermal_power
 				else
-					-- w/o compressor power no thermal power as well
 					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
 					else
-						-- fix thermal power null values to 0 (AVG does not include null values)
 						case when ifnull (thermal_power, 0) = 0 then 0
-						else null -- last exit, should never be the case
+						else null
 						end
 					end
-				end) avg_thermal,
+				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
 			AVG(cop) as avg_cop,
-			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
 			COUNT(*) as total_samples
 		FROM temperature_snapshots
 		WHERE installation_id = ?
@@ -1000,7 +1292,8 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 		ORDER BY hour ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
+		installationID, gatewayID, deviceID,
 		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
@@ -1008,14 +1301,15 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	defer rows.Close()
 
 	var dataPoints []ConsumptionDataPoint
-	intervalMinutes := float64(sampleInterval)
 
 	for rows.Next() {
 		var hourStr string
-		var avgPower, avgThermal, avgCOP *float64
-		var activeSamples, totalSamples int
+		var totalElectricityWh, totalThermalWh *float64
+		var avgCOP *float64
+		var runtimeMinutes float64
+		var totalSamples int
 
-		err := rows.Scan(&hourStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		err := rows.Scan(&hourStr, &totalElectricityWh, &totalThermalWh, &avgCOP, &runtimeMinutes, &totalSamples)
 		if err != nil {
 			log.Printf("Warning: failed to scan hourly breakdown row: %v", err)
 			continue
@@ -1027,24 +1321,22 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 			continue
 		}
 
-		// Calculate energy for this hour
+		// Convert Wh to kWh (energy already calculated correctly in SQL)
 		electricityKWh := 0.0
 		thermalKWh := 0.0
-		if avgPower != nil {
-			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0 // W -> kWh
+		if totalElectricityWh != nil {
+			electricityKWh = (*totalElectricityWh) / 1000.0 // Wh -> kWh
 		}
-		if avgThermal != nil {
-			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0) // already in kW
+		if totalThermalWh != nil {
+			thermalKWh = (*totalThermalWh) / 1000.0 // Wh -> kWh
 		}
-
-		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
 
 		dataPoint := ConsumptionDataPoint{
 			Timestamp:      hourTime,
 			ElectricityKWh: electricityKWh,
 			ThermalKWh:     thermalKWh,
 			AvgCOP:         0.0,
-			RuntimeHours:   runtimeHours,
+			RuntimeHours:   runtimeMinutes / 60.0,
 			Samples:        totalSamples,
 		}
 		if avgCOP != nil {
@@ -1058,7 +1350,7 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 }
 
 // GetDailyConsumptionBreakdown returns daily consumption data for a given period
-func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, startDate, endDate time.Time, sampleInterval int) ([]ConsumptionDataPoint, error) {
+func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, startDate, endDate time.Time) ([]ConsumptionDataPoint, error) {
 	if !dbInitialized || eventDB == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -1066,24 +1358,29 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	dbMutex.RLock()
 	defer dbMutex.RUnlock()
 
+	// Get current sample interval as fallback for old records
+	settings, err := GetTemperatureLogSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temperature log settings: %v", err)
+	}
+	fallbackInterval := settings.SampleInterval
+
 	query := `
 		SELECT
 			DATE(timestamp) as day,
-			AVG(compressor_power) as avg_power,
-			--AVG(thermal_power) as avg_thermal,
-			AVG(case when compressor_power > 0 then thermal_power -- usual case
+			-- Calculate total energy by summing (power * interval) for each sample
+			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
+			SUM(COALESCE(case when compressor_power > 0 then thermal_power
 				else
-					-- w/o compressor power no thermal power as well
 					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
 					else
-						-- fix thermal power null values to 0 (AVG does not include null values)
 						case when ifnull (thermal_power, 0) = 0 then 0
-						else null -- last exit, should never be the case
+						else null
 						end
 					end
-				end) avg_thermal,
+				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
 			AVG(cop) as avg_cop,
-			SUM(CASE WHEN compressor_active = 1 THEN 1 ELSE 0 END) as active_samples,
+			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
 			COUNT(*) as total_samples
 		FROM temperature_snapshots
 		WHERE installation_id = ?
@@ -1095,7 +1392,8 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 		ORDER BY day ASC
 	`
 
-	rows, err := eventDB.Query(query, installationID, gatewayID, deviceID,
+	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
+		installationID, gatewayID, deviceID,
 		startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
@@ -1103,14 +1401,15 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	defer rows.Close()
 
 	var dataPoints []ConsumptionDataPoint
-	intervalMinutes := float64(sampleInterval)
 
 	for rows.Next() {
 		var dayStr string
-		var avgPower, avgThermal, avgCOP *float64
-		var activeSamples, totalSamples int
+		var totalElectricityWh, totalThermalWh *float64
+		var avgCOP *float64
+		var runtimeMinutes float64
+		var totalSamples int
 
-		err := rows.Scan(&dayStr, &avgPower, &avgThermal, &avgCOP, &activeSamples, &totalSamples)
+		err := rows.Scan(&dayStr, &totalElectricityWh, &totalThermalWh, &avgCOP, &runtimeMinutes, &totalSamples)
 		if err != nil {
 			log.Printf("Warning: failed to scan daily breakdown row: %v", err)
 			continue
@@ -1122,24 +1421,22 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 			continue
 		}
 
-		// Calculate energy for this day
+		// Convert Wh to kWh (energy already calculated correctly in SQL)
 		electricityKWh := 0.0
 		thermalKWh := 0.0
-		if avgPower != nil {
-			electricityKWh = (*avgPower) * float64(totalSamples) * (intervalMinutes / 60.0) / 1000.0
+		if totalElectricityWh != nil {
+			electricityKWh = (*totalElectricityWh) / 1000.0 // Wh -> kWh
 		}
-		if avgThermal != nil {
-			thermalKWh = (*avgThermal) * float64(totalSamples) * (intervalMinutes / 60.0)
+		if totalThermalWh != nil {
+			thermalKWh = (*totalThermalWh) / 1000.0 // Wh -> kWh
 		}
-
-		runtimeHours := float64(activeSamples) * (intervalMinutes / 60.0)
 
 		dataPoint := ConsumptionDataPoint{
 			Timestamp:      dayTime,
 			ElectricityKWh: electricityKWh,
 			ThermalKWh:     thermalKWh,
 			AvgCOP:         0.0,
-			RuntimeHours:   runtimeHours,
+			RuntimeHours:   runtimeMinutes / 60.0,
 			Samples:        totalSamples,
 		}
 		if avgCOP != nil {

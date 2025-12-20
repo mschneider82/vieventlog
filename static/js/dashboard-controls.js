@@ -378,7 +378,7 @@
             const refrigerantToggleChecked = showRefrigerantVisual !== undefined ? showRefrigerantVisual : true;
 
             modal.innerHTML = `
-                <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+                <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
                     <h2 style="margin-top: 0; color: #fff;">⚙️ Geräteeinstellungen</h2>
                     <p style="color: #a0a0b0; margin-bottom: 20px;">Device: ${deviceId}</p>
 
@@ -469,7 +469,7 @@
 
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
-                            Takte pro Tag
+                            Durchschnittl. Takte
                         </label>
                         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
                             <label style="color: #a0a0b0; font-size: 16px;">Anzeigen:</label>
@@ -482,7 +482,7 @@
                             </label>
                         </div>
                         <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
-                            <label for="cyclesperDayCustomDatePicker" style="color: #a0a0b0; font-size: 16px; white-space: nowrap;">📅 erster Tag:</label>
+                            <label for="cyclesperDayCustomDatePicker" style="color: #a0a0b0; font-size: 16px; white-space: nowrap;">📅 Inbetriebnahmedatum:</label>
                             <input type="date" id="cyclesperDayCustomDatePicker" class="custom-date-input" value="${cyclestart}" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 16px; cursor: pointer;">
                         </div>
                     </div>

@@ -597,7 +597,12 @@
     <div class="container">
         <header>
             <div class="header-top">
-                <h1>ViEventLog</h1>
+                <div>
+                    <h1 style="display: inline;">ViEventLog</h1>
+                    {{if .Version}}
+                    <span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">{{.Version}}</span>
+                    {{end}}
+                </div>
                 <div style="display: flex; gap: 10px;">
                     <a href="/smartclimate" class="header-link">🏠 SmartClimate</a>
                     <a href="/vitovent" class="header-link">🌬️ Vitovent</a>

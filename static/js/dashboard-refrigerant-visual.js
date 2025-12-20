@@ -47,6 +47,40 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                         keyFeatures.secondaryHeater?.value === true ||
                         keyFeatures.secondaryHeatGeneratorStatus?.value === 'on';
 
+    // Calculate compressor speed with percentage if device settings available
+    let compressorSpeedValue = null;
+    let compressorSpeedUnit = '';
+    if (keyFeatures.compressorSpeed?.value) {
+        let speedValue = keyFeatures.compressorSpeed.value;
+        const speedUnit = keyFeatures.compressorSpeed.unit;
+
+        // Convert revolutionsPerSecond to RPM
+        if (speedUnit === 'revolutionsPerSecond') {
+            speedValue = speedValue * 60;
+        }
+
+        // Get device settings for RPM percentage calculation
+        const deviceInfo = window.currentDeviceInfo;
+        let rpmPercentage = null;
+        if (deviceInfo && window.deviceSettingsCache) {
+            const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
+            const settings = window.deviceSettingsCache[deviceKey];
+            if (settings && settings.max > settings.min && speedValue > 0) {
+                rpmPercentage = Math.round(((speedValue - settings.min) / (settings.max - settings.min)) * 100);
+                rpmPercentage = Math.max(0, Math.min(100, rpmPercentage));
+            }
+        }
+
+        // Use percentage if available, otherwise RPM
+        if (rpmPercentage !== null) {
+            compressorSpeedValue = rpmPercentage;
+            compressorSpeedUnit = '%';
+        } else {
+            compressorSpeedValue = speedValue;
+            compressorSpeedUnit = 'RPM';
+        }
+    }
+
     // Map values according to Mapping.png
     const values = {
         // A: Lüfter 1 (Drehzahl Ventilator 1)
@@ -83,8 +117,9 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         compressorInletTemp: keyFeatures.compressorInletTemp?.value || null,
         // S: Auslasstemperatur (Heissgastemperatur)
         compressorOutletTemp: keyFeatures.compressorOutletTemp?.value || null,
-        // T: Drehzahl (Position Verdichter in Prozent)
-        compressorSpeed: keyFeatures.compressorSpeed?.value || null,
+        // T: Drehzahl Verdichter (RPM oder % je nach Konfiguration)
+        compressorSpeed: compressorSpeedValue,
+        compressorSpeedUnit: compressorSpeedUnit,
         // U: Öltemperatur (Verdichtertemperatur)
         compressorOilTemp: keyFeatures.compressorOilTemp?.value || null,
         // V: Betriebsart
@@ -163,7 +198,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
 
                     ${values.economizer !== null ? `<div class="value-label" style="top: 17.36%; left: 38.72%;" title="Economizer">${formatValue(values.economizer, '°C')}</div>` : ''}
 
-                    ${values.compressorSpeed !== null ? `<div class="value-label" style="top: 71.35%; left: 38.61%;" title="Kompressor Drehzahl">${formatValue(values.compressorSpeed, '%')}</div>` : ''}
+                    ${values.compressorSpeed !== null ? `<div class="value-label" style="top: 71.35%; left: 38.61%;" title="Kompressor Drehzahl">${formatValue(values.compressorSpeed, values.compressorSpeedUnit, 0)}</div>` : ''}
                     ${values.compressorInletTemp !== null ? `<div class="value-label" style="top: 69.70%; left: 47.93%;" title="Kompressor Einlasstemperatur">${formatValue(values.compressorInletTemp, '°C')}</div>` : ''}
                     ${values.compressorOutletTemp !== null ? `<div class="value-label" style="top: 93.94%; left: 38.84%;" title="Kompressor Auslasstemperatur">${formatValue(values.compressorOutletTemp, '°C')}</div>` : ''}
                     ${values.compressorOilTemp !== null ? `<div class="value-label" style="top: 52.62%; left: 32.35%;" title="Kompressor Öltemperatur">${formatValue(values.compressorOilTemp, '°C')}</div>` : ''}
@@ -186,7 +221,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${keyFeatures.dhwTemp !== null && keyFeatures.dhwTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 91.26%;" title="Warmwasser Temperatur">${formatValue(keyFeatures.dhwTemp.value, '°C')}</div>` : ''}
 
                     <!-- Leistungsanzeigen -->
-                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W', 0)}</div>` : ''}
+                    ${keyFeatures.compressorPower !== null && keyFeatures.compressorPower !== undefined && keyFeatures.compressorPower.value !== null ? `<div class="value-label" style="top: 55.37%; left: 43.68%;" title="Elektrische Leistung Kompressor">${formatValue(keyFeatures.compressorPower.value, 'W', 0)}</div>` : ''}
                     ${thermalPowerW !== null ? `<div class="value-label" style="top: 37.19%; left: 82.64%;" title="Thermische Leistung (berechnet)">${formatValue(thermalPowerW, 'W', 0)}</div>` : ''}
                 </div>
             </div>
