@@ -190,7 +190,7 @@ func temperatureLoggingJob() {
 		for _, installationID := range token.InstallationIDs {
 			// Check API rate limits before making calls
 			if !checkAPIRateLimit() {
-				log.Println("Internal calculated API rate limit reached; instead of skipping remaining installations - do nothing !!!")
+				log.Println("Internal calculated API rate limit reached; instead of skipping remaining installations - no further handling currently !")
 			//	goto cleanup
 			}
 
@@ -213,7 +213,7 @@ func temperatureLoggingJob() {
 
 					// Check rate limit again
 					if !checkAPIRateLimit() {
-						log.Println("Internal calculated API rate limit reached during device processing - do nothing !!!")
+						log.Println("Internal calculated API rate limit reached during device processing - no further handling currently !!!")
 					//	goto cleanup
 					}
 					
