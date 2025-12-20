@@ -59,7 +59,7 @@ func AuthenticateWithViCare(username, password, clientID string) (*TokenResponse
 	authURL := authorizeURL + "?" + authParams.Encode()
 
 	// Step 1: POST to authorization URL with credentials
-	req, err := http.NewRequest("POST", authURL, nil)
+	req, err := NewRequest("POST", authURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth request: %w", err)
 	}
@@ -110,7 +110,7 @@ func AuthenticateWithViCare(username, password, clientID string) (*TokenResponse
 	tokenParams.Add("code", code)
 	tokenParams.Add("code_verifier", codeVerifier)
 
-	tokenReq, err := http.NewRequest("POST", tokenURL, strings.NewReader(tokenParams.Encode()))
+	tokenReq, err := NewRequest("POST", tokenURL, strings.NewReader(tokenParams.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
@@ -153,7 +153,7 @@ func AuthenticateWithPasswordGrant(username, password, clientID, clientSecret st
 	tokenParams.Add("client_secret", clientSecret)
 	tokenParams.Add("scope", "openid offline_access Internal")
 
-	tokenReq, err := http.NewRequest("POST", tokenURL, strings.NewReader(tokenParams.Encode()))
+	tokenReq, err := NewRequest("POST", tokenURL, strings.NewReader(tokenParams.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
