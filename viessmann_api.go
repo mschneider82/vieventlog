@@ -87,6 +87,23 @@ func fetchEventsForInstallationFullSync(installationID, accessToken string, acco
 	return fetchEventsForInstallationInternal(installationID, accessToken, account, daysBack, false)
 }
 
+// setAPICallsCount can be used to set an Ui variable
+func setAPICallsCount() {
+	usage10min, usage24hr := getAPIUsage()
+	// todo: set variable für UI
+	log.Printf("API usage ----- %d/10min ----- %d/24hr -----", usage10min, usage24hr)
+}
+
+// NewRequest wraps method http.NewRequest to track API calls
+func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
+    req, err := http.NewRequest(method, url, body)
+	if err == nil {
+		trackAPICall()
+		setAPICallsCount()
+	}
+	return req, err
+}
+
 // fetchEventsForInstallationInternal is the internal implementation with optional early-stop
 func fetchEventsForInstallationInternal(installationID, accessToken string, account *Account, daysBack int, enableEarlyStop bool) ([]Event, error) {
 	var allEvents []Event
@@ -99,7 +116,7 @@ func fetchEventsForInstallationInternal(installationID, accessToken string, acco
 
 		// Build URL with cursor or lastNDays parameter
 		baseURL := fmt.Sprintf("https://api.viessmann-climatesolutions.com/iot/v2/events-history/installations/%s/events", installationID)
-		req, err := http.NewRequest("GET", baseURL, nil)
+		req, err := NewRequest("GET", baseURL, nil)
 		if err != nil {
 			return allEvents, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -224,7 +241,7 @@ func fetchFeaturesForDevice(installationID, gatewayID, deviceID, accessToken str
 
 	log.Printf("Fetching features from API: %s\n", url)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -361,7 +378,7 @@ func getDeviceNameFromFeatures(installationID, gatewayID, deviceID, accessToken 
 // fetchGatewayIDForInstallation fetches the gateway ID for an installation
 func fetchGatewayIDForInstallation(installationID, accessToken string) (string, error) {
 	// Fetch all installations to get gateway info
-	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
+	req, err := NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
 	if err != nil {
 		return "", err
 	}
@@ -428,7 +445,7 @@ func executeAPIRequest(method, url, accessToken string, requestBody map[string]i
 		bodyReader = strings.NewReader(string(bodyBytes))
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := NewRequest(method, url, bodyReader)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to create request: %w", err)
 	}

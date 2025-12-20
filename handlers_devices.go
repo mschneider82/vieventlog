@@ -407,7 +407,7 @@ func dhwModeSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -524,7 +524,7 @@ func dhwTemperatureSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -641,7 +641,7 @@ func dhwTemperature2SetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -774,7 +774,7 @@ func dhwHysteresisSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -888,7 +888,7 @@ func dhwOneTimeChargeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1010,7 +1010,7 @@ func heatingCurveSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1144,7 +1144,7 @@ func heatingModeSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1262,7 +1262,7 @@ func supplyTempMaxSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1414,7 +1414,7 @@ func roomTempSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1548,7 +1548,7 @@ func noiseReductionModeSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1665,7 +1665,7 @@ func fanRingToggleHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Make API call
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, err := http.NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
+	httpReq, err := NewRequest(http.MethodPost, url, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{

@@ -658,7 +658,7 @@ func vitoventOperatingModeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequest("POST", url, strings.NewReader(string(bodyBytes)))
+	httpReq, err := NewRequest("POST", url, strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -785,7 +785,7 @@ func vitoventQuickModeHandler(w http.ResponseWriter, r *http.Request) {
 		req.InstallationID, req.GatewaySerial, req.DeviceID, req.Mode, command)
 
 	// Create HTTP request (empty body for these commands)
-	httpReq, err := http.NewRequest("POST", url, strings.NewReader("{}"))
+	httpReq, err := NewRequest("POST", url, strings.NewReader("{}"))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
