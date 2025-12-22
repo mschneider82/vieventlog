@@ -518,6 +518,7 @@
                 deviceSerial: find(['device.serial']),
                 deviceType: find(['device.type']),
                 deviceVariant: find(['device.variant', 'heating.device.variant']),
+                deviceWiFI: find(['tcu.wifi']),
 
                 // Compressor statistics (load classes)
                 compressorStats0: find(['heating.compressors.0.statistics']),
