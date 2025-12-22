@@ -2610,8 +2610,16 @@
                     </div>
                 `;
             }
+            if (kf.deviceWiFi) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">WiFi Pegel</span>
+                        <span class="status-value" style="font-family: monospace;">${kf.deviceWiFi.value.strength.value} dBm</span>
+                    </div>
+                `;
+            }
 
-            // JAZ / COP / SCOP / SPF values (Coefficient of Performance)
+			// JAZ / COP / SCOP / SPF values (Coefficient of Performance)
             if (kf.copTotal || kf.copHeating || kf.copDhw || kf.copCooling || kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
                 info += `
                     <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
