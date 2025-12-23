@@ -394,53 +394,89 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 
 	// Temperature sensors
 	switch featureName {
+		
+	//   dashboard  outsideTemp: find(['heating.sensors.temperature.outside'], ['outside']),
 	case "heating.sensors.temperature.outside":
 		snapshot.OutsideTemp = getFloatValue(feature.Properties)
+		
+	//   dashboard  returnTemp: find(['heating.sensors.temperature.return']), Ruecklauf IDU/ODU
 	case "heating.sensors.temperature.return":
 		snapshot.ReturnTemp = getFloatValue(feature.Properties)
-	case "heating.sensors.temperature.supply":
-		snapshot.SupplyTemp = getFloatValue(feature.Properties)
+		
+	//   dashboard  supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']),	Gemeinsame Vorlauftemperatur IDU ( auch Vorlauf 1. Heizkreis) 
 	case "heating.circuits.0.sensors.temperature.supply":
 		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
-	case "heating.circuits.1.sensors.temperature.supply":
-		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
-	case "heating.circuits.0.sensors.temperature.return":
-		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
-	case "heating.circuits.1.sensors.temperature.return":
-		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
-	// Fallback features: only use if primary features are not available
-	case "heating.primaryCircuit.sensors.temperature.supply":
-		if snapshot.PrimarySupplyTemp == nil {
-			snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
-		}
-	case "heating.primaryCircuit.sensors.temperature.return":
-		if snapshot.PrimaryReturnTemp == nil {
-			snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
-		}
+//		if snapshot.PrimarySupplyTemp != nil {			snapshot.SupplyTemp = snapshot.PrimarySupplyTemp	}
+
+	//   dashboard  secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),  sek. Vorlauf in ODU
 	case "heating.secondaryCircuit.sensors.temperature.supply":
-		if snapshot.SecondarySupplyTemp == nil {
-			snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
-		}
+		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
+		
+// nicht genutzt	im Dashboard und hier	
+/*	//   dashboard  secondaryReturnTemp: find(['heating.secondaryCircuit.sensors.temperature.return', 'heating.sensors.temperature.return']),
 	case "heating.secondaryCircuit.sensors.temperature.return":
+		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+	//Fallback   fuer heating.sensors.temperature.return
 		if snapshot.SecondaryReturnTemp == nil {
-			snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+			snapshot.SecondaryReturnTemp = snapshot.ReturnTemp
 		}
+*/
+
+	//  dashboard   primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),	Lufteintrittstemperatur
+	// Achtung falscher Bezeichner wegen bestehenden Datenbankfeldern / Definitionen in types.go / Verarbeitung in db.go
+	case "heating.primaryCircuit.sensors.temperature.supply":
+		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+
+	//  dashboard  primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']),	 Rücklauf ODU Primaerkreis 250-A nicht existent
+	case "heating.primaryCircuit.sensors.temperature.return":
+		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+		
+
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.dhw.sensors.temperature.hotWaterStorage.middle":
 		snapshot.DHWCylinderMiddleTemp = getFloatValue(feature.Properties)
+
+	// Fallback features: only use if primary features are not available
 	case "heating.dhw.sensors.temperature.dhwCylinder":
 		if snapshot.DHWTemp == nil {
 			snapshot.DHWTemp = getFloatValue(feature.Properties)
 		}
 	case "heating.dhw.sensors.temperature.dhwCylinder.middle":
 		snapshot.DHWCylinderMiddleTemp = getFloatValue(feature.Properties)
-	case "heating.boiler.sensors.temperature.main":
+
+
+	//   dashboard   boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
+	case "heating.boiler.sensors.temperature.commonSupply":
 		snapshot.BoilerTemp = getFloatValue(feature.Properties)
+//neu  Fallback (2x)
+	case "heating.boiler.temperature.current":
+		if snapshot.BoilerTemp == nil {
+			snapshot.BoilerTemp = getFloatValue(feature.Properties)
+		}
+	case "heating.boiler.temperature":
+		if snapshot.BoilerTemp == nil {
+			snapshot.BoilerTemp = getFloatValue(feature.Properties)
+		}
+		
+	//   dashboard   bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
 	case "heating.buffer.sensors.temperature.main":
 		snapshot.BufferTemp = getFloatValue(feature.Properties)
+//neu   Fallback
+	case "heating.bufferCylinder.sensors.temperature.main":
+		if snapshot.BufferTemp == nil {
+			snapshot.BufferTemp = getFloatValue(feature.Properties)
+		}		
+		
+	//   dashboard   backgroundufferTempTop: find(['heating.buffer.sensors.temperature.top', 'heating.bufferCylinder.sensors.temperature.top']),
 	case "heating.buffer.sensors.temperature.top":
 		snapshot.BufferTempTop = getFloatValue(feature.Properties)
+//neu  Fallback
+	case "heating.bufferCylinder.sensors.temperature.top":
+		if snapshot.BufferTempTop == nil {
+			snapshot.BufferTempTop = getFloatValue(feature.Properties)
+		}		
+		
 	case "heating.sensors.temperature.outside.calculated":
 		snapshot.CalculatedOutsideTemp = getFloatValue(feature.Properties)
 
@@ -615,25 +651,24 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	var supplyTemp, returnTemp *float64
 
 	if hasHotWaterBuffer {
-		// Mit HW-Puffer: Sekundärkreis Spreizung (like dashboard line 333-342)
-		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply/return
-		// which maps to our SecondarySupplyTemp/SecondaryReturnTemp
-		if snapshot.SecondarySupplyTemp != nil && snapshot.SecondaryReturnTemp != nil {
+//RS
+		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
+		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
+		// which maps to our SecondarySupplyTemp  + ReturnTemp
+		if snapshot.SecondarySupplyTemp != nil {
 			supplyTemp = snapshot.SecondarySupplyTemp
-			returnTemp = snapshot.SecondaryReturnTemp
-		} else if snapshot.SecondarySupplyTemp != nil && snapshot.ReturnTemp != nil {
-			// Fallback: secondary supply + generic return (dashboard line 410 has this fallback)
-			supplyTemp = snapshot.SecondarySupplyTemp
-			returnTemp = snapshot.ReturnTemp
 		}
 	} else {
-		// Ohne HW-Puffer: Heizkreis Spreizung (like dashboard line 344-352)
+		// Ohne HW-Puffer: Heizkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
-		// which maps to our PrimarySupplyTemp + ReturnTemp
-		if snapshot.PrimarySupplyTemp != nil && snapshot.ReturnTemp != nil {
-			supplyTemp = snapshot.PrimarySupplyTemp
-			returnTemp = snapshot.ReturnTemp
+		// which maps to our SupplyTemp   + ReturnTemp
+		if snapshot.PrimarySupplyTemp != nil{
+			supplyTemp = snapshot.SupplyTemp
 		}
+	}
+	// returnTemp always same
+	if snapshot.ReturnTemp != nil {
+		returnTemp = snapshot.ReturnTemp
 	}
 
 	// Calculate thermal power if we have all required values (only if not already set from fallback)
