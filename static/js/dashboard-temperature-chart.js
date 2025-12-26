@@ -205,8 +205,21 @@ function updateAvailableFields(data) {
 
     // Auto-select important fields if nothing selected yet
     if (selectedFields.size === 0) {
+        let hasHotWaterBuffer = false; // default: show heating circuit (IDU)
+        // Get device settings
+        const deviceInfo = window.currentDeviceInfo;
+        const deviceKey = deviceInfo ? (deviceInfo.installationId + '_' + deviceInfo.deviceId) : null;
+        const deviceSetting = deviceKey && window.deviceSettingsCache ? window.deviceSettingsCache[deviceKey] : null;
+        if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
+            hasHotWaterBuffer = deviceSetting.hasHotWaterBuffer;
+        }
         // Default: Only main temperature fields (Außen, Primär-Vorlauf, Rücklauf, Warmwasser, Puffer)
-        const defaultFields = ['outside_temp', 'primary_supply_temp', 'return_temp', 'dhw_temp', 'buffer_temp'];
+        let defaultFields = ['outside_temp', 'primary_supply_temp', 'return_temp', 'dhw_temp', 'buffer_temp'];
+        // with buffer main temperature fields (Außen, Sekundär-Vorlauf, Rücklauf, Warmwasser, Puffer)
+        if (hasHotWaterBuffer) {
+            defaultFields = ['outside_temp', 'secondary_supply_temp', 'return_temp', 'dhw_temp', 'buffer_temp'];
+        }
+
         defaultFields.forEach(field => {
             if (availableDataFields.has(field)) {
                 selectedFields.add(field);
@@ -221,14 +234,14 @@ function renderFilters() {
     if (!filtersContainer) return;
 
     const fieldLabels = {
-        // Temperatures
+        // Temperatures (Info: Primär-Vorlauf ist der gem. Vorlauf; Sekundär-Return enthält Lufteintrittstemp)
         'outside_temp': '🌡️ Außentemperatur',
         'return_temp': '↩️ Rücklauftemperatur',
         'supply_temp': '↗️ Vorlauftemperatur',
-        'primary_supply_temp': '↗️ Primär-Vorlauf',
-        'secondary_supply_temp': '↗️ Sekundär-Vorlauf',
+        'primary_supply_temp': '↗️ Vorlauftemperatur (IDU)',
+        'secondary_supply_temp': '↗️ Sekundär-Vorlauf (ODU)',
         'primary_return_temp': '↩️ Primär-Rücklauf',
-        'secondary_return_temp': '↩️ Sekundär-Rücklauf',
+        'secondary_return_temp': '🌡️ Lufteintrittstemperatur',
         'dhw_temp': '🚿 Warmwasser',
         'dhw_cylinder_middle_temp': '🚿 WW Mitte',
         'boiler_temp': '🔥 Kessel',
@@ -375,11 +388,11 @@ function renderTemperatureChart(data) {
     const fieldNames = {
         'outside_temp': 'Außentemp.',
         'calculated_outside_temp': 'Außentemp. (ged.)',
-        'primary_supply_temp': 'Primär-Vorlauf',
-        'secondary_supply_temp': 'Sekundär-Vorlauf',
+        'primary_supply_temp': 'Vorlauf IDU',
+        'secondary_supply_temp': 'Sekundär-Vorlauf ODU',
         'return_temp': 'Rücklauf',
         'primary_return_temp': 'Primär-Rücklauf',
-        'secondary_return_temp': 'Sekundär-Rücklauf',
+        'secondary_return_temp': 'Lufteintrittstemperatur',
         'dhw_temp': 'Warmwasser',
         'dhw_cylinder_middle_temp': 'WW Mitte',
         'boiler_temp': 'Kessel',
@@ -501,11 +514,12 @@ function renderTemperatureChart(data) {
        			nameTextStyle: {color: "#ffffff"},
                 position: 'left',
                 // Minimum and maximum variations according to the value of incoming
+                // Add 20% padding below and 10% above for better readability
                 min: function(value){
-                    return Math.floor(value.min);
+                    return Math.floor(0.8 * value.min);
                 },
                 max: function(value){
-                    return Math.ceil(value.max);
+                    return Math.ceil(1.1 * value.max);
                 },
                 axisLabel: {
    				    color: "#ffffff",

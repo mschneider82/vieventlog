@@ -154,8 +154,17 @@
                     </div>
                 `;
             }
-            // Gemeinsame Vorlauftemperatur
-            if (kf.supplyTemp) {
+
+            // Gemeinsame Vorlauftemperatur (only show when NO hot water buffer)
+            // Get hasHotWaterBuffer setting
+            const deviceKeyForSupplyTemp = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+            const deviceSettingForSupplyTemp = window.deviceSettingsCache && window.deviceSettingsCache[deviceKeyForSupplyTemp];
+            let hasHotWaterBufferForSupplyTemp = false; // default
+            if (deviceSettingForSupplyTemp && deviceSettingForSupplyTemp.hasHotWaterBuffer !== null && deviceSettingForSupplyTemp.hasHotWaterBuffer !== undefined) {
+                hasHotWaterBufferForSupplyTemp = deviceSettingForSupplyTemp.hasHotWaterBuffer;
+            }
+
+            if (!hasHotWaterBufferForSupplyTemp && kf.supplyTemp) {
                 const formatted = formatValue(kf.supplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
