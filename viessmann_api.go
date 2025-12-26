@@ -96,7 +96,7 @@ func setAPICallsCount() {
 
 // NewRequest wraps method http.NewRequest to track API calls
 func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
-    req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequest(method, url, body)
 	if err == nil {
 		trackAPICall()
 		setAPICallsCount()
