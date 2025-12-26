@@ -1837,16 +1837,25 @@
             const dayArray = kf.powerConsumptionDhw?.properties?.day?.value || kf.powerConsumptionHeating?.properties?.day?.value || [];
             const maxDays = Math.min(dayArray.length, 8);
             let dayTabsHtml = '', dayContentHtml = '';
-        
-            for (let i = 0; i < maxDays; i++) {
+
+            let firstday = 0;
+            const dayValueReadAt = kf.powerConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
+            if(dayValueReadAt != 0){
+                const anyTime = new Date(dayValueReadAt).getTime();
+                const currentTime = new Date().getTime();
+                if( (currentTime - anyTime) > 4*3600*1000 ){  // more than 4 hours old
+                    firstday = 1;                       // don't show day '0'
+                }
+            }
+            for (let i = firstday; i < maxDays; i++) {
                 const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'day', i);
                 const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'day', i);
                 if (powerDhw === null && powerHeating === null) continue;
-        
+
                 const totalPower = (powerDhw || 0) + (powerHeating || 0);
-                dayTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-day-${i}')">${getDayLabel(i)}</button>`;
+                dayTabsHtml += `<button class="stat-tab ${i === firstday ? 'active' : ''}" onclick="switchStatTab(event, 'power-day-${i}')">${getDayLabel(i)}</button>`;
                 dayContentHtml += `
-                    <div id="power-day-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                    <div id="power-day-${i}" class="stat-tab-content" style="${i === firstday ? 'display: block;' : 'display: none;'}">
                         <div class="stat-grid">
                             ${powerDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(powerDhw)} kWh</span></div>` : ''}
                             ${powerHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(powerHeating)} kWh</span></div>` : ''}
@@ -2598,6 +2607,15 @@
                     <div class="status-item">
                         <span class="status-label">Seriennummer</span>
                         <span class="status-value" style="font-family: monospace;">${kf.deviceSerial.value}</span>
+                    </div>
+                `;
+            }
+
+            if (kf.deviceWiFi) {
+                info += `
+                    <div class="status-item">
+                        <span class="status-label">WiFi Pegel</span>
+                        <span class="status-value" style="font-family: monospace;">${kf.deviceWiFi.value.strength.value} dBm</span>
                     </div>
                 `;
             }
