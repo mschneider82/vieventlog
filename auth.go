@@ -30,7 +30,7 @@ func testCredentials(creds *Credentials) error {
 	}
 
 	// Try to fetch installations to verify the token works
-	req, err := http.NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
+	req, err := NewRequest("GET", "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -158,7 +158,7 @@ func fetchInstallationIDsForAccount(accessToken string) ([]string, map[string]*I
 
 		// Build URL with cursor and includeGateways parameter
 		baseURL := "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations"
-		req, err := http.NewRequest("GET", baseURL, nil)
+		req, err := NewRequest("GET", baseURL, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -361,7 +361,7 @@ func fetchInstallationIDs() error {
 
 		// Build URL with cursor parameter
 		baseURL := "https://api.viessmann-climatesolutions.com/iot/v2/equipment/installations"
-		req, err := http.NewRequest("GET", baseURL, nil)
+		req, err := NewRequest("GET", baseURL, nil)
 		if err != nil {
 			return err
 		}
