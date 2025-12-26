@@ -190,8 +190,8 @@ func temperatureLoggingJob() {
 		for _, installationID := range token.InstallationIDs {
 			// Check API rate limits before making calls
 			if !checkAPIRateLimit() {
-				log.Println("API rate limit reached, skipping remaining installations")
-				goto cleanup
+				log.Println("Internal calculated API rate limit reached; instead of skipping remaining installations - no further handling currently !")
+			//	goto cleanup
 			}
 
 			// Fetch installation details to get gateways and devices
@@ -200,6 +200,8 @@ func temperatureLoggingJob() {
 				log.Printf("Installation %s not found in token cache", installationID)
 				continue
 			}
+
+			lastGateway := ""
 
 			// Process each gateway and device
 			for _, gateway := range installation.Gateways {
@@ -211,10 +213,10 @@ func temperatureLoggingJob() {
 
 					// Check rate limit again
 					if !checkAPIRateLimit() {
-						log.Println("API rate limit reached during device processing")
-						goto cleanup
+						log.Println("Internal calculated API rate limit reached during device processing - no further handling currently !!!")
+					//	goto cleanup
 					}
-
+					
 					// Fetch all features for this device
 					features, err := fetchFeaturesForDeviceWithTracking(installationID, gateway.Serial, device.DeviceID, token.AccessToken)
 					if err != nil {
@@ -238,15 +240,18 @@ func temperatureLoggingJob() {
 						log.Printf("Error saving temperature snapshot: %v", err)
 						continue
 					}
-
-					snapshotCount++
-					log.Printf("Saved temperature snapshot for installation %s (account: %s)", installationID, account.Name)
+					
+					if lastGateway != gateway.Serial {
+						snapshotCount++
+						log.Printf("Saved temperature snapshot for installation %s (account: %s)", installationID, account.Name)
+						lastGateway = gateway.Serial
+					}	
 				}
 			}
 		}
 	}
 
-cleanup:
+//cleanup:
 	// Cleanup old snapshots based on retention policy
 	err = CleanupOldTemperatureSnapshots(settings.RetentionDays)
 	if err != nil {
@@ -265,10 +270,12 @@ cleanup:
 func fetchFeaturesForDeviceWithTracking(installationID, gatewayID, deviceID, accessToken string) (*DeviceFeatures, error) {
 	// Get temperature log settings to determine cache duration
 	settings, err := GetTemperatureLogSettings()
-	if err != nil {
+	
+	// ??? Nein, bitte nicht !
+	//if err != nil {
 		// Fallback to default 5 minutes on error
-		settings = &TemperatureLogSettings{SampleInterval: 5}
-	}
+		// settings = &TemperatureLogSettings{SampleInterval: 5}
+	//}
 
 	// Calculate cache duration: use sample interval if < 5 minutes, otherwise 5 minutes
 	// Subtract 5 seconds to ensure cache expires before next sample (ticker is not exact)
@@ -286,9 +293,11 @@ func fetchFeaturesForDeviceWithTracking(installationID, gatewayID, deviceID, acc
 	features, err := fetchFeaturesWithCustomCache(installationID, gatewayID, deviceID, accessToken, cacheDuration)
 
 	// Only track API call if cache was stale (indicated by fresh LastUpdate)
-	if err == nil && time.Since(features.LastUpdate) < 1*time.Second {
+	// if err == nil && time.Since(features.LastUpdate) < 1*time.Second {
+	if err == nil && time.Since(features.LastUpdate) < 2*time.Second {
 		// Cache was just updated, meaning an API call was made
-		trackAPICall()
+		// Counted elsewhere 
+		// trackAPICall()
 	}
 
 	return features, err
