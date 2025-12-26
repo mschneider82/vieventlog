@@ -403,12 +403,21 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.return":
 		snapshot.ReturnTemp = getFloatValue(feature.Properties)
 
+	// Keep for backward compatibility (legacy devices may still use this)
+	case "heating.sensors.temperature.supply":
+		snapshot.SupplyTemp = getFloatValue(feature.Properties)
+
 	// dashboard: supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']), Gemeinsame Vorlauftemperatur IDU (auch Vorlauf 1. Heizkreis)
 	case "heating.circuits.0.sensors.temperature.supply":
 		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
-		// Also set SupplyTemp for backward compatibility and COP calculation
-		if snapshot.PrimarySupplyTemp != nil {
+
+		// Bidirectional fallback between SupplyTemp and PrimarySupplyTemp
+		// This ensures both fields are populated for maximum compatibility
+		if snapshot.PrimarySupplyTemp != nil && snapshot.SupplyTemp == nil {
 			snapshot.SupplyTemp = snapshot.PrimarySupplyTemp
+		}
+		if snapshot.PrimarySupplyTemp == nil && snapshot.SupplyTemp != nil {
+			snapshot.PrimarySupplyTemp = snapshot.SupplyTemp
 		}
 
 	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
