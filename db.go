@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -32,6 +34,12 @@ func InitEventDatabase(dbPath string) error {
 	// Close existing connection if any (only if reinitializing with different path)
 	if eventDB != nil {
 		eventDB.Close()
+	}
+
+	// Ensure the database directory exists
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return fmt.Errorf("failed to create database directory: %v", err)
 	}
 
 	var err error
