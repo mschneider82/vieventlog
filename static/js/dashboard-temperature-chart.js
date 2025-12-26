@@ -500,6 +500,13 @@ function renderTemperatureChart(data) {
                 name: 'Temperatur (°C)',
        			nameTextStyle: {color: "#ffffff"},
                 position: 'left',
+                // Minimum and maximum variations according to the value of incoming
+                min: function(value){
+                    return Math.floor(value.min);
+                },
+                max: function(value){
+                    return Math.ceil(value.max);
+                },
                 axisLabel: {
    				    color: "#ffffff",
                     formatter: '{value} °C'
