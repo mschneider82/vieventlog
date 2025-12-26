@@ -2621,10 +2621,11 @@
             }
 
             if (kf.deviceWiFi) {
+                const wifiStrength = kf.deviceWiFi.value.strength.value - 20.0;
                 info += `
                     <div class="status-item">
                         <span class="status-label">WiFi Pegel</span>
-                        <span class="status-value" style="font-family: monospace;">${kf.deviceWiFi.value.strength.value} dBm</span>
+                        <span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
                     </div>
                 `;
             }
