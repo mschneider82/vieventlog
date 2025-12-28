@@ -652,7 +652,6 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 
 	var supplyTemp, returnTemp *float64
 
-//RS ReturnTemp
 	if hasHotWaterBuffer {
 		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
