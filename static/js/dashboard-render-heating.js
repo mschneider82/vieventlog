@@ -8,6 +8,17 @@
             if (kf.deviceName && kf.deviceName.value) {
                 deviceTitle = kf.deviceName.value;
             }
+			
+//RS get deviceSettings only once
+            const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
+            const deviceSettings = window.deviceSettingsCache[deviceKey];
+
+            let hasHotWaterBuffer = true; // default
+            if (deviceSettings && deviceSettings.hasHotWaterBuffer !== null && deviceSettings.hasHotWaterBuffer !== undefined) {
+                hasHotWaterBuffer = deviceSettings.hasHotWaterBuffer;
+            }
+			
+            const correctionFactor = deviceSettings?.powerCorrectionFactor || 1.0;
 
             // Show settings button for heat pumps (devices with compressor)
             const hasCompressor = kf.compressorSpeed || kf.compressorActive || kf.compressorHours;
@@ -77,12 +88,10 @@
                 let label = 'Primärkreis-Vorlauf'; // Default
 
                 // Check if there's a device setting override
-                const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-                const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
 
-                if (deviceSetting && deviceSetting.useAirIntakeTemperatureLabel !== null && deviceSetting.useAirIntakeTemperatureLabel !== undefined) {
+                if (deviceSettings && deviceSettings.useAirIntakeTemperatureLabel !== null && deviceSettings.useAirIntakeTemperatureLabel !== undefined) {
                     // Use the explicit setting from device settings
-                    label = deviceSetting.useAirIntakeTemperatureLabel ? 'Lufteintritts-temperatur' : 'Primärkreis-Vorlauf';
+                    label = deviceSettings.useAirIntakeTemperatureLabel ? 'Lufteintritts-temperatur' : 'Primärkreis-Vorlauf';
                 } else {
                     // Fall back to auto-detection based on compressor sensors
                     const isVitocal = kf.compressorActive || kf.compressorSpeed || kf.compressorInletTemp ||
@@ -156,15 +165,8 @@
             }
 
             // Gemeinsame Vorlauftemperatur (only show when NO hot water buffer)
-            // Get hasHotWaterBuffer setting
-            const deviceKeyForSupplyTemp = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-            const deviceSettingForSupplyTemp = window.deviceSettingsCache && window.deviceSettingsCache[deviceKeyForSupplyTemp];
-            let hasHotWaterBufferForSupplyTemp = false; // default
-            if (deviceSettingForSupplyTemp && deviceSettingForSupplyTemp.hasHotWaterBuffer !== null && deviceSettingForSupplyTemp.hasHotWaterBuffer !== undefined) {
-                hasHotWaterBufferForSupplyTemp = deviceSettingForSupplyTemp.hasHotWaterBuffer;
-            }
 
-            if (!hasHotWaterBufferForSupplyTemp && kf.supplyTemp) {
+            if (!hasHotWaterBuffer && kf.supplyTemp) {
                 const formatted = formatValue(kf.supplyTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
@@ -209,12 +211,6 @@
                 `;
             }
             // Spreizung Sekundärkreis/Heizkreis - use central calculation
-            const deviceKey = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-            const deviceSetting = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
-            let hasHotWaterBuffer = false; // default: show heating circuit (IDU)
-            if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
-                hasHotWaterBuffer = deviceSetting.hasHotWaterBuffer;
-            }
 
             // Only show spreizung when there is flow > 50 l/h
             const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
@@ -304,20 +300,11 @@
             // --- GROUP 4: Energiecockpit ---
             // Try to calculate thermal power and COP (either from flow or from direct features)
 
-            // Get device settings
-            const deviceKey2 = `${deviceInfo.installationId}_${deviceInfo.deviceId}`;
-            const deviceSetting2 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey2];
-            const correctionFactor = deviceSetting2?.powerCorrectionFactor || 1.0;
-
             let electricalPowerW = null;
             let thermalPowerW = null;
 
             // Try flow-based calculation first (primary method)
             if (kf.volumetricFlow){ // && kf.compressorPower) { thermal Power doesn't need compress power
-                let hasHotWaterBuffer = true; // default
-                if (deviceSetting2 && deviceSetting2.hasHotWaterBuffer !== null && deviceSetting2.hasHotWaterBuffer !== undefined) {
-                    hasHotWaterBuffer = deviceSetting2.hasHotWaterBuffer;
-                }
 
                 // Use central spreizung calculation
                 const spreizungResult = calculateSpreizung(kf, hasHotWaterBuffer);
@@ -387,15 +374,10 @@
                 // Calculate thermal power if all required values are available
                 if (kf.volumetricFlow || kf.compressorPower){
 
-                    // Use central spreizung calculation
-                    const deviceKey3 = deviceInfo.installationId + '_' + deviceInfo.deviceId;
-                    const deviceSetting3 = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey3];
-                    let hasHotWaterBuffer3 = true; // default
-                    if (deviceSetting3 && deviceSetting3.hasHotWaterBuffer !== null && deviceSetting3.hasHotWaterBuffer !== undefined) {
-                        hasHotWaterBuffer3 = deviceSetting3.hasHotWaterBuffer;
-                    }
 
-                    const spreizungResult3 = calculateSpreizung(kf, hasHotWaterBuffer3);
+                    // Use central spreizung calculation
+
+                    const spreizungResult3 = calculateSpreizung(kf, hasHotWaterBuffer);
                     const spreizung = spreizungResult3.spreizung;
                     const supplyTemp = spreizungResult3.supplyTemp;
 
@@ -448,8 +430,6 @@
             let visualDiagram = '';
             if (hasCompressor && typeof renderRefrigerantCircuitVisual === 'function') {
                 // Check if refrigerant visual is enabled (default: true)
-                const deviceKey = deviceInfo.installationId + '_' + deviceInfo.deviceId;
-                const deviceSettings = window.deviceSettingsCache && window.deviceSettingsCache[deviceKey];
                 const showRefrigerantVisual = deviceSettings && deviceSettings.showRefrigerantVisual !== undefined
                     ? deviceSettings.showRefrigerantVisual
                     : true;
@@ -692,6 +672,7 @@
                 title = '🔥 Brenner';
                 const modulation = kf.burnerModulation ? kf.burnerModulation.value : 0;
                 const isRunning = modulation > 0;
+				const consumption = kf.burnerConsumption ? kf.burnerConsumption :-1;
 
                 content = `
                     <div class="status-item">
@@ -1698,13 +1679,25 @@
             }
 
             // Gas consumption
-            if (kf.gasConsumptionToday) {
-                consumption += `
+            if (kf.gasConsumption) {
+				let gasconsumptiontoday = kf.gasConsumption.properties?.day["0"]?.value ? 0 : -1;
+				if (gasconsumptiontoday == 0){
+				  gasconsumptiontoday = kf.gasConsumption.properties.day["0"].value;
+				  let gasconsumptionyesterday = kf.gasConsumption.properties.day["1"].value;
+				
+                  consumption += `
                     <div class="status-item">
                         <span class="status-label">Gasverbrauch heute</span>
-                        <span class="status-value">${formatValue(kf.gasConsumptionToday)}</span>
+                        <span class="status-value">${formatValue(gasconsumptiontoday)}</span>
                     </div>
-                `;
+                  `;
+                  consumption += `
+                    <div class="status-item">
+                        <span class="status-label">Gasverbrauch gestern</span>
+                        <span class="status-value">${formatValue(gasconsumptionyesterday)}</span>
+                    </div>
+                  `;
+				}
             }
             if (kf.gasConsumptionHeatingToday) {
                 consumption += `
