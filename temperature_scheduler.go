@@ -665,19 +665,16 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		// Ohne HW-Puffer: Heizkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
 		// which maps to our PrimarySupplyTemp + ReturnTemp
-		
-		// fallback between SupplyTemp and PrimarySupplyTemp
-		// This ensures maximum compatibility
-		if snapshot.PrimarySupplyTemp == nil && snapshot.SupplyTemp != nil {
-			supplyTemp = snapshot.SupplyTemp
-			returnTemp = snapshot.ReturnTemp
-		}
 		if snapshot.PrimarySupplyTemp != nil {
 			supplyTemp = snapshot.PrimarySupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	}
-
+	// fallback for supplyTemp
+	// This ensures maximum compatibility
+	if supplyTemp == nil && snapshot.SupplyTemp != nil {
+			supplyTemp = snapshot.SupplyTemp
+	}
 	// Calculate thermal power if we have all required values (only if not already set from fallback)
 	if snapshot.ThermalPower == nil && snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
 		deltaT := *supplyTemp - *returnTemp
