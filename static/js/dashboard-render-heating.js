@@ -434,7 +434,7 @@
                     const cop = thermalPowerW / electricalPowerW;
                     tempsGroup4 += `
                         <div class="temp-item">
-                            <span class="temp-label">COP (aktuell)<br>(berechnet)</span>
+                            <span class="temp-label">moment. ArbeitsZahl<br>(berechnet)</span>
                             <div>
                                 <span class="temp-value">${formatNum(cop, 2)}</span>
                                 <span class="temp-unit"></span>
@@ -2168,7 +2168,7 @@
                             ` : ''}
                             ${totalHeat > 0 && totalPower > 0 ? `
                                 <div class="stat-item stat-cop">
-                                    <span class="stat-label">📊 JAZ (${period.label})</span>
+                                    <span class="stat-label">📊 momentane AZ (${period.label})</span>
                                     <span class="stat-value">${cop}</span>
                                 </div>
                             ` : ''}
@@ -2634,7 +2634,7 @@
             if (kf.copTotal || kf.copHeating || kf.copDhw || kf.copCooling || kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
                 info += `
                     <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
-                        <span class="status-label" style="font-weight: 600; color: #667eea;">Coefficient of Performance (JAZ)</span>
+                        <span class="status-label" style="font-weight: 600; color: #667eea;">interne Geräte-JAZ</span>
                     </div>
                 `;
 

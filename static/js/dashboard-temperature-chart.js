@@ -269,7 +269,7 @@ function renderFilters() {
         // Flow/Energy
         'volumetric_flow': '💧 Volumenstrom',
         'thermal_power': '🔥 Thermische Leistung',
-        'cop': '📊 COP',
+        'cop': '📊 moment. Arbeitszahl (AZ)',
 
         // Operating state
         'four_way_valve': '🔀 4-Wege-Ventil',
@@ -413,7 +413,7 @@ function renderTemperatureChart(data) {
         'internal_pump_active': 'Int. Pumpe',
         'volumetric_flow': 'Volumenstrom',
         'thermal_power': 'Therm. Leistung',
-        'cop': 'COP',
+        'cop': 'AZ',
         'burner_modulation': 'Brenner Mod.'
     };
 

@@ -326,9 +326,9 @@ function renderConsumptionStats(stats, period, deviceInfo, customDate = null) {
         <div class="consumption-stat-card ${copColorClass}">
             <div class="stat-icon">📊</div>
             <div class="stat-content">
-                <div class="stat-label">Durchschnittlicher COP</div>
+                <div class="stat-label">Ø ArbeitsZahl</div>
                 <div class="stat-value">${stats.avg_cop.toFixed(2)}</div>
-                <div class="stat-sublabel">Coefficient of Performance</div>
+                <div class="stat-sublabel">aus moment. ArbeitsZahl</div>
             </div>
         </div>
 
@@ -430,7 +430,7 @@ function renderHourlyChart(stats, period, customDate = null) {
                 params.forEach(param => {
                     const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
                     result += param.marker + ' ' + param.seriesName + ': ' + value;
-                    if (param.seriesName !== 'COP') {
+                    if (param.seriesName !== 'ArbeitsZahl') {
                         result += ' kWh';
                     }
                     result += '<br/>';
@@ -439,7 +439,7 @@ function renderHourlyChart(stats, period, customDate = null) {
             }
         },
         legend: {
-            data: ['Stromverbrauch', 'Wärmeerzeugung', 'COP'],
+            data: ['Stromverbrauch', 'Wärmeerzeugung', 'ArbeitsZahl'],
             bottom: 0,
             textStyle: { color: '#a0a0b0' }
         },
@@ -470,7 +470,7 @@ function renderHourlyChart(stats, period, customDate = null) {
             },
             {
                 type: 'value',
-                name: 'COP',
+                name: 'ArbeitsZahl',
                 position: 'right',
                 min: 0,
                 max: copAxisMax,
@@ -498,7 +498,7 @@ function renderHourlyChart(stats, period, customDate = null) {
                 yAxisIndex: 0
             },
             {
-                name: 'COP',
+                name: 'ArbeitsZahl',
                 type: 'line',
                 data: copData,
                 smooth: true,
@@ -565,7 +565,7 @@ function renderDailyChart(stats, period, customDate = null) {
                 params.forEach(param => {
                     const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
                     result += param.marker + ' ' + param.seriesName + ': ' + value;
-                    if (param.seriesName !== 'COP') {
+                    if (param.seriesName !== 'ArbeitsZahl') {
                         result += ' kWh';
                     }
                     result += '<br/>';
@@ -574,7 +574,7 @@ function renderDailyChart(stats, period, customDate = null) {
             }
         },
         legend: {
-            data: ['Stromverbrauch', 'Wärmeerzeugung', 'COP'],
+            data: ['Stromverbrauch', 'Wärmeerzeugung', 'ArbeitsZahl'],
             bottom: 0,
             textStyle: { color: '#a0a0b0' }
         },
@@ -607,7 +607,7 @@ function renderDailyChart(stats, period, customDate = null) {
             },
             {
                 type: 'value',
-                name: 'COP',
+                name: 'ArbeitsZahl',
                 position: 'right',
                 min: 0,
                 max: copAxisMax,
@@ -635,7 +635,7 @@ function renderDailyChart(stats, period, customDate = null) {
                 yAxisIndex: 0
             },
             {
-                name: 'COP',
+                name: 'ArbeitsZahl',
                 type: 'line',
                 data: copData,
                 smooth: true,
@@ -756,7 +756,7 @@ function renderConsumptionBreakdown(stats, period, customDate = null) {
                         <th>${period === 'today' || period === 'yesterday' ? 'Uhrzeit' : 'Datum'}</th>
                         <th>Strom (kWh)</th>
                         <th>Wärme (kWh)</th>
-                        <th>COP</th>
+                        <th>ArbeitsZahl</th>
                         <th>Laufzeit</th>
                         <th>Samples</th>
                     </tr>
