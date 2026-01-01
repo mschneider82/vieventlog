@@ -46,7 +46,9 @@ async function renderConsumptionTile(deviceInfo, features) {
     consumptionSection.className = 'temperature-chart-container'; // Use same class as temperature chart
     consumptionSection.innerHTML = `
         <div class="chart-header">
-            <h2>⚡ Verbrauchsstatistiken</h2>
+            <h2>⚡ Verbrauchsstatistiken
+				<span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
+			</h2>
             <div class="chart-controls">
                 <div class="time-range-selector">
                     <button class="time-btn active" data-period="today">Heute</button>
