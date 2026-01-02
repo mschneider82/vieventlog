@@ -2692,7 +2692,7 @@
                         // This is the load class data (heating.compressors.X.statistics with loadClassOne, etc.)
                         html += `
             <div class="status-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 10px; padding-top: 10px;">
-                <span class="status-label" style="font-weight: 600; color: #667eea;">Kältemittelkreislauf ${compressorIndex + 1}</span>
+                <span class="status-label" style="font-weight: 600; color: #667eea;">Aufteilung Kompressor-Lastklassen${compressorIndex > 0 ? ' - Kompressor ' + (compressorIndex + 1) : ''}</span>
             </div>
                         `;
 
