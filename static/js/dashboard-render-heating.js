@@ -2746,11 +2746,19 @@
             }
 
             // Render all available compressor statistics
-            if (kf.compressorStats0) {
+            // Prefer load statistics (heating.compressors.X.statistics.load) which contain the load classes
+            // Fall back to regular statistics (heating.compressors.X.statistics) if load stats not available
+            if (kf.compressorStatsLoad0) {
+                console.log('📊 Compressor 0 Load Statistics:', kf.compressorStatsLoad0.value);
+                info += renderCompressorStats(kf.compressorStatsLoad0, 0);
+            } else if (kf.compressorStats0) {
                 console.log('📊 Compressor 0 Statistics:', kf.compressorStats0.value);
                 info += renderCompressorStats(kf.compressorStats0, 0);
             }
-            if (kf.compressorStats1) {
+            if (kf.compressorStatsLoad1) {
+                console.log('📊 Compressor 1 Load Statistics:', kf.compressorStatsLoad1.value);
+                info += renderCompressorStats(kf.compressorStatsLoad1, 1);
+            } else if (kf.compressorStats1) {
                 console.log('📊 Compressor 1 Statistics:', kf.compressorStats1.value);
                 info += renderCompressorStats(kf.compressorStats1, 1);
             }
