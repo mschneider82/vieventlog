@@ -1,0 +1,98 @@
+name: PR Build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run GoReleaser (Snapshot)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux AMD64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieventlog-linux-amd64
+          path: dist/desktop_linux_amd64_v1/vieventlog
+          retention-days: 7
+
+      - name: Upload Linux ARM64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieventlog-linux-arm64
+          path: dist/desktop_linux_arm64/vieventlog
+          retention-days: 7
+
+      - name: Upload Windows AMD64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieventlog-windows-amd64
+          path: dist/desktop_windows_amd64_v1/vieventlog.exe
+          retention-days: 7
+
+      - name: Upload macOS AMD64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieventlog-macos-amd64
+          path: dist/desktop_darwin_amd64_v1/vieventlog
+          retention-days: 7
+
+      - name: Upload macOS ARM64 Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vieventlog-macos-arm64
+          path: dist/desktop_darwin_arm64/vieventlog
+          retention-days: 7
+
+      - name: Comment PR with download links
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.runId;
+            const repo = context.repo;
+
+            const comment = `## 🔨 Build erfolgreich!
+
+            Die Test-Binaries können heruntergeladen werden:
+
+            - [Linux AMD64](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})
+            - [Linux ARM64](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})
+            - [Windows AMD64](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})
+            - [macOS AMD64](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})
+            - [macOS ARM64](https://github.com/${repo.owner}/${repo.repo}/actions/runs/${runId})
+
+            ### Docker Image
+            \`\`\`bash
+            docker pull ghcr.io/${repo.owner}/${repo.repo}:pr-${context.issue.number}
+            \`\`\`
+
+            Die Artifacts sind 7 Tage verfügbar.`;
+
+            github.rest.issues.createComment({
+              ...repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
