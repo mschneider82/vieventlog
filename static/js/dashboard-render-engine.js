@@ -524,6 +524,8 @@
                 // Compressor statistics (load classes)
                 compressorStats0: find(['heating.compressors.0.statistics']),
                 compressorStats1: find(['heating.compressors.1.statistics']),
+                compressorStatsLoad0: find(['heating.compressors.0.statistics.load']),
+                compressorStatsLoad1: find(['heating.compressors.1.statistics.load']),
 
                 // SmartClimate / Zigbee device features
                 // Device generic
