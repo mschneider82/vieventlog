@@ -135,6 +135,9 @@ async function loadTemperatureData(silent = false) {
         // Build API URL
         let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
+        let symbolshow = false;
+        let nullconnect = true;
+
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
             const startDate = new Date(customTemperatureDate + 'T00:00:00');
@@ -144,6 +147,11 @@ async function loadTemperatureData(silent = false) {
             // Use hours-based time range
             const hours = parseTimeRange(currentTimeRange);
             apiUrl += `&hours=${hours}`;
+
+            if(hours < 12){
+                symbolshow = true;
+                nullconnect = false;
+            }
         }
 
         // Fetch data from API with gateway and device filter
@@ -166,7 +174,7 @@ async function loadTemperatureData(silent = false) {
         renderFilters();
 
         // Render chart
-        renderTemperatureChart(result.data);
+        renderTemperatureChart(result.data, symbolshow, nullconnect);
 
     } catch (error) {
         console.error('Error loading temperature data:', error);
@@ -328,7 +336,7 @@ function toggleField(field) {
 }
 
 // Render ECharts temperature chart
-function renderTemperatureChart(data) {
+function renderTemperatureChart(data, symbolshow, nullconnect) {
     if (!temperatureChart || data.length === 0) return;
 
     // Prepare series data - timestamps are ISO-8601 strings
@@ -444,8 +452,8 @@ function renderTemperatureChart(data) {
             yAxisIndex: config.yAxisIndex,
             itemStyle: { color: config.color },
             lineStyle: { color: config.color, width: 2 },
-            showSymbol: false,
-            connectNulls: true  // Connect points across null values
+            showSymbol: symbolshow,
+            connectNulls: nullconnect  // Connect points across null values
         });
 
         legend.push(fieldNames[field] || field);
