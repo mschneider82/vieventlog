@@ -498,6 +498,8 @@
                 secondaryHeatGeneratorStatus: find(['heating.secondaryHeatGenerator.status']),
                 fanRing: findNested('heating.heater.fanRing', 'active'),
                 condensatePan: findNested('heating.heater.condensatePan', 'active'),
+                expansionValve_0: find(['heating.sensors.valve.0.expansion.target']),
+                expansionValve_1: find(['heating.sensors.valve.1.expansion.target']),
 
                 // Hybrid Pro Control features
                 hybridElectricityPriceLow: find(['heating.secondaryHeatGenerator.electricity.price.low']),
