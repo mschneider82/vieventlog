@@ -406,7 +406,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.outside":
 		snapshot.OutsideTemp = getFloatValue(feature.Properties)
 
-	// dashboard: returnTemp: find(['heating.sensors.temperature.return']), Ruecklauf IDU/ODU
+	// dashboard: returnTemp: find(['heating.sensors.temperature.return']), Rücklauf IDU/ODU
 	case "heating.sensors.temperature.return":
 		snapshot.ReturnTemp = getFloatValue(feature.Properties)
 
@@ -414,24 +414,55 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.supply":
 		snapshot.SupplyTemp = getFloatValue(feature.Properties)
 
+	// Heating circuits 0-3: Store in both legacy fields (backward compat) and new explicit fields
 	// dashboard: supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']), Gemeinsame Vorlauftemperatur IDU (auch Vorlauf 1. Heizkreis)
 	case "heating.circuits.0.sensors.temperature.supply":
-		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
+		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)         // DEPRECATED: Legacy (use HeatingCircuit0SupplyTemp)
+		snapshot.HeatingCircuit0SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
+	case "heating.circuits.1.sensors.temperature.supply":
+		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)       // DEPRECATED: Legacy (use HeatingCircuit1SupplyTemp)
+		snapshot.HeatingCircuit1SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 1
+	case "heating.circuits.2.sensors.temperature.supply":
+		snapshot.HeatingCircuit2SupplyTemp = getFloatValue(feature.Properties)
+	case "heating.circuits.3.sensors.temperature.supply":
+		snapshot.HeatingCircuit3SupplyTemp = getFloatValue(feature.Properties)
+	case "heating.circuits.0.sensors.temperature.return":
+		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)         // DEPRECATED: Legacy (use HeatingCircuit0ReturnTemp)
+		snapshot.HeatingCircuit0ReturnTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
+	case "heating.circuits.1.sensors.temperature.return":
+		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)       // DEPRECATED: Legacy (use HeatingCircuit1ReturnTemp)
+		snapshot.HeatingCircuit1ReturnTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 1
+	case "heating.circuits.2.sensors.temperature.return":
+		snapshot.HeatingCircuit2ReturnTemp = getFloatValue(feature.Properties)
+	case "heating.circuits.3.sensors.temperature.return":
+		snapshot.HeatingCircuit3ReturnTemp = getFloatValue(feature.Properties)
 
-	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
-	case "heating.secondaryCircuit.sensors.temperature.supply":
-		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
-
+	// Heat pump circuits: Store in both legacy fields (as fallback) and new explicit fields
 	// dashboard: primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']), Lufteintrittstemperatur
-	// NOTE: Confusing mapping due to existing database fields (see types.go / db.go)
-	// This actually represents air intake temperature for heat pumps
 	case "heating.primaryCircuit.sensors.temperature.supply":
-		// Map to SecondaryReturnTemp due to legacy database field naming
-		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
+		if snapshot.PrimarySupplyTemp == nil {
+			snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
+		}
+		snapshot.HPPrimaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Preferred: Air intake temperature
 
 	// dashboard: primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']), Rücklauf ODU Primärkreis
 	case "heating.primaryCircuit.sensors.temperature.return":
-		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+		if snapshot.PrimaryReturnTemp == nil {
+			snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
+		}
+		snapshot.HPPrimaryCircuitReturnTemp = getFloatValue(feature.Properties) // Preferred: HP primary circuit return
+
+	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
+	case "heating.secondaryCircuit.sensors.temperature.supply":
+		if snapshot.SecondarySupplyTemp == nil {
+			snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
+		}
+		snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Preferred: HP secondary circuit supply
+	case "heating.secondaryCircuit.sensors.temperature.return":
+		if snapshot.SecondaryReturnTemp == nil {
+			snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
+		}
+		snapshot.HPSecondaryCircuitReturnTemp = getFloatValue(feature.Properties) // Preferred: HP secondary circuit return
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.dhw.sensors.temperature.hotWaterStorage.middle":

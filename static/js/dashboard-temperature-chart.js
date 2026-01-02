@@ -221,11 +221,30 @@ function updateAvailableFields(data) {
         if (deviceSetting && deviceSetting.hasHotWaterBuffer !== null && deviceSetting.hasHotWaterBuffer !== undefined) {
             hasHotWaterBuffer = deviceSetting.hasHotWaterBuffer;
         }
-        // Default: Only main temperature fields (Außen, Primär-Vorlauf, Rücklauf, Warmwasser, Puffer)
-        let defaultFields = ['outside_temp', 'primary_supply_temp', 'return_temp', 'dhw_temp', 'buffer_temp'];
-        // with buffer main temperature fields (Außen, Sekundär-Vorlauf, Rücklauf, Warmwasser, Puffer)
+
+        // Default: Prefer new explicit fields over legacy fields
+        let defaultFields, fallbackFields;
         if (hasHotWaterBuffer) {
-            defaultFields = ['outside_temp', 'secondary_supply_temp', 'return_temp', 'dhw_temp', 'buffer_temp'];
+            // With buffer: Show WP secondary circuit (common for heat pumps with buffer)
+            defaultFields = [
+                'outside_temp',
+                'hp_secondary_circuit_supply_temp',  // WP secondary circuit supply
+                'hp_secondary_circuit_return_temp',  // WP secondary circuit return
+                'return_temp',                       // Common return (after circuits)
+                'dhw_temp',
+                'buffer_temp'
+            ];
+            fallbackFields = ['secondary_supply_temp'];  // Legacy fallback for WP secondary
+        } else {
+            // Without buffer: Show heating circuit 0 (common supply temperature)
+            defaultFields = [
+                'outside_temp',
+                'heating_circuit_0_supply_temp',     // Heating circuit 0 supply
+                'return_temp',                       // Common return (after circuits)
+                'dhw_temp',
+                'buffer_temp'
+            ];
+            fallbackFields = ['primary_supply_temp'];  // Legacy fallback for heating circuit
         }
 
         defaultFields.forEach(field => {
@@ -233,6 +252,15 @@ function updateAvailableFields(data) {
                 selectedFields.add(field);
             }
         });
+
+        // Only add legacy fallbacks if corresponding new fields weren't added
+        if (!selectedFields.has('hp_secondary_circuit_supply_temp') && !selectedFields.has('heating_circuit_0_supply_temp')) {
+            fallbackFields.forEach(field => {
+                if (availableDataFields.has(field)) {
+                    selectedFields.add(field);
+                }
+            });
+        }
     }
 }
 
@@ -242,20 +270,42 @@ function renderFilters() {
     if (!filtersContainer) return;
 
     const fieldLabels = {
-        // Temperatures (Info: Primär-Vorlauf ist der gem. Vorlauf; Sekundär-Return enthält Lufteintrittstemp)
+        // Basic temperatures
         'outside_temp': '🌡️ Außentemperatur',
-        'return_temp': '↩️ Rücklauftemperatur',
-        'supply_temp': '↗️ Vorlauftemperatur',
-        'primary_supply_temp': '↗️ Vorlauftemperatur (IDU)',
-        'secondary_supply_temp': '↗️ Sekundär-Vorlauf (ODU)',
-        'primary_return_temp': '↩️ Primär-Rücklauf',
-        'secondary_return_temp': '🌡️ Lufteintrittstemperatur',
+        'calculated_outside_temp': '🌡️ Außentemp. (berechnet)',
+
+        // Heat pump circuits (ODU)
+        'hp_primary_circuit_supply_temp': '🔄 WP Primärkreis-Vorlauf (Lufteintritt)',
+        'hp_primary_circuit_return_temp': '🔄 WP Primärkreis-Rücklauf',
+        'hp_secondary_circuit_supply_temp': '🔄 WP Sekundärkreis-Vorlauf',
+        'hp_secondary_circuit_return_temp': '🔄 WP Sekundärkreis-Rücklauf',
+
+        // Heating circuits (IDU)
+        'heating_circuit_0_supply_temp': '🏠 Heizkreis 0 Vorlauf',
+        'heating_circuit_0_return_temp': '🏠 Heizkreis 0 Rücklauf',
+        'heating_circuit_1_supply_temp': '🏠 Heizkreis 1 Vorlauf',
+        'heating_circuit_1_return_temp': '🏠 Heizkreis 1 Rücklauf',
+        'heating_circuit_2_supply_temp': '🏠 Heizkreis 2 Vorlauf',
+        'heating_circuit_2_return_temp': '🏠 Heizkreis 2 Rücklauf',
+        'heating_circuit_3_supply_temp': '🏠 Heizkreis 3 Vorlauf',
+        'heating_circuit_3_return_temp': '🏠 Heizkreis 3 Rücklauf',
+
+        // Common return temperature (system-wide)
+        'return_temp': '↩️ Gemeinsamer Rücklauf',
+
+        // DHW and storage
         'dhw_temp': '🚿 Warmwasser',
         'dhw_cylinder_middle_temp': '🚿 WW Mitte',
         'boiler_temp': '🔥 Kessel',
         'buffer_temp': '📦 Puffer',
         'buffer_temp_top': '📦 Puffer (oben)',
-        'calculated_outside_temp': '🌡️ Außentemp. (ged.)',
+
+        // DEPRECATED: Legacy fields (kept for backward compatibility)
+        'supply_temp': '↗️ Vorlauftemperatur (Legacy)',
+        'primary_supply_temp': '↗️ Vorlauf IDU (Legacy)',
+        'secondary_supply_temp': '↗️ Sekundär-Vorlauf ODU (Legacy)',
+        'primary_return_temp': '↩️ Primär-Rücklauf (Legacy)',
+        'secondary_return_temp': '↩️ Sekundär-Rücklauf (Legacy)',
 
         // Compressor
         'compressor_active': '⚙️ Kompressor aktiv',
@@ -286,9 +336,16 @@ function renderFilters() {
     };
 
     const categories = {
-        'Temperaturen': ['outside_temp', 'calculated_outside_temp', 'primary_supply_temp', 'secondary_supply_temp',
-                        'return_temp', 'primary_return_temp', 'secondary_return_temp', 'dhw_temp', 'dhw_cylinder_middle_temp', 'boiler_temp',
+        'Temperaturen': ['outside_temp', 'calculated_outside_temp', 'dhw_temp', 'dhw_cylinder_middle_temp', 'boiler_temp',
                         'buffer_temp', 'buffer_temp_top'],
+        'Kreise': ['supply_temp', 'return_temp',
+                   'hp_primary_circuit_supply_temp', 'hp_primary_circuit_return_temp',
+                   'hp_secondary_circuit_supply_temp', 'hp_secondary_circuit_return_temp',
+                   'heating_circuit_0_supply_temp', 'heating_circuit_1_supply_temp',
+                   'heating_circuit_2_supply_temp', 'heating_circuit_3_supply_temp',
+                   'heating_circuit_0_return_temp', 'heating_circuit_1_return_temp',
+                   'heating_circuit_2_return_temp', 'heating_circuit_3_return_temp',
+                   'primary_supply_temp', 'secondary_supply_temp', 'primary_return_temp', 'secondary_return_temp'],
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
                       'compressor_hours', 'compressor_power'],
@@ -360,11 +417,12 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         // Temperatures (main axis)
         'outside_temp': { type: 'line', yAxisIndex: 0, color: '#4285f4', smooth: true },
         'calculated_outside_temp': { type: 'line', yAxisIndex: 0, color: '#6fa8dc', smooth: true },
-        'primary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ea4335', smooth: true },
-        'secondary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ff6f00', smooth: true },
+        'primary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ea4335', smooth: true, opacity: 0.5 },
+        'secondary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ff6f00', smooth: true, opacity: 0.5 },
         'return_temp': { type: 'line', yAxisIndex: 0, color: '#34a853', smooth: true },
-        'primary_return_temp': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true },
-        'secondary_return_temp': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true },
+        'primary_return_temp': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true, opacity: 0.5 },
+        'secondary_return_temp': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true, opacity: 0.5 },
+        'supply_temp': { type: 'line', yAxisIndex: 0, color: '#999999', smooth: true, opacity: 0.5 },
         'dhw_temp': { type: 'line', yAxisIndex: 0, color: '#fbbc04', smooth: true },
         'dhw_cylinder_middle_temp': { type: 'line', yAxisIndex: 0, color: '#fdd663', smooth: true },
         'boiler_temp': { type: 'line', yAxisIndex: 0, color: '#ff5722', smooth: true },
@@ -374,6 +432,20 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_motor_temp': { type: 'line', yAxisIndex: 0, color: '#8d6e63', smooth: true },
         'compressor_inlet_temp': { type: 'line', yAxisIndex: 0, color: '#0288d1', smooth: true },
         'compressor_outlet_temp': { type: 'line', yAxisIndex: 0, color: '#d32f2f', smooth: true },
+        // Heat pump circuits
+        'hp_primary_circuit_supply_temp': { type: 'line', yAxisIndex: 0, color: '#e74c3c', smooth: true },
+        'hp_primary_circuit_return_temp': { type: 'line', yAxisIndex: 0, color: '#f39c12', smooth: true },
+        'hp_secondary_circuit_supply_temp': { type: 'line', yAxisIndex: 0, color: '#9b59b6', smooth: true },
+        'hp_secondary_circuit_return_temp': { type: 'line', yAxisIndex: 0, color: '#3498db', smooth: true },
+        // Heating circuits
+        'heating_circuit_0_supply_temp': { type: 'line', yAxisIndex: 0, color: '#e67e22', smooth: true },
+        'heating_circuit_1_supply_temp': { type: 'line', yAxisIndex: 0, color: '#16a085', smooth: true },
+        'heating_circuit_2_supply_temp': { type: 'line', yAxisIndex: 0, color: '#2980b9', smooth: true },
+        'heating_circuit_3_supply_temp': { type: 'line', yAxisIndex: 0, color: '#8e44ad', smooth: true },
+        'heating_circuit_0_return_temp': { type: 'line', yAxisIndex: 0, color: '#d35400', smooth: true },
+        'heating_circuit_1_return_temp': { type: 'line', yAxisIndex: 0, color: '#138d75', smooth: true },
+        'heating_circuit_2_return_temp': { type: 'line', yAxisIndex: 0, color: '#1f618d', smooth: true },
+        'heating_circuit_3_return_temp': { type: 'line', yAxisIndex: 0, color: '#6c3483', smooth: true },
 
         // Boolean states (secondary axis)
         'compressor_active': { type: 'line', yAxisIndex: 1, color: '#f4b400', step: 'end' },
@@ -394,18 +466,42 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
     };
 
     const fieldNames = {
+        // Basic temperatures
         'outside_temp': 'Außentemp.',
         'calculated_outside_temp': 'Außentemp. (ged.)',
-        'primary_supply_temp': 'Vorlauf IDU',
-        'secondary_supply_temp': 'Sekundär-Vorlauf ODU',
-        'return_temp': 'Rücklauf',
-        'primary_return_temp': 'Primär-Rücklauf',
-        'secondary_return_temp': 'Lufteintrittstemperatur',
+
+        // Heat pump circuits
+        'hp_primary_circuit_supply_temp': 'WP Primär VL',
+        'hp_primary_circuit_return_temp': 'WP Primär RL',
+        'hp_secondary_circuit_supply_temp': 'WP Sekundär VL',
+        'hp_secondary_circuit_return_temp': 'WP Sekundär RL',
+
+        // Heating circuits
+        'heating_circuit_0_supply_temp': 'HK0 VL',
+        'heating_circuit_0_return_temp': 'HK0 RL',
+        'heating_circuit_1_supply_temp': 'HK1 VL',
+        'heating_circuit_1_return_temp': 'HK1 RL',
+        'heating_circuit_2_supply_temp': 'HK2 VL',
+        'heating_circuit_2_return_temp': 'HK2 RL',
+        'heating_circuit_3_supply_temp': 'HK3 VL',
+        'heating_circuit_3_return_temp': 'HK3 RL',
+
+        // Common return
+        'return_temp': 'Gemeins. RL',
+
+        // DHW and storage
         'dhw_temp': 'Warmwasser',
         'dhw_cylinder_middle_temp': 'WW Mitte',
         'boiler_temp': 'Kessel',
         'buffer_temp': 'Puffer',
         'buffer_temp_top': 'Puffer (oben)',
+
+        // DEPRECATED: Legacy fields
+        'supply_temp': 'Vorlauf (L)',
+        'primary_supply_temp': 'Vorlauf IDU (L)',
+        'secondary_supply_temp': 'Sek.-Vorlauf ODU (L)',
+        'primary_return_temp': 'Primär-RL (L)',
+        'secondary_return_temp': 'Sek.-RL (L)',
         'compressor_active': 'Kompressor',
         'compressor_speed': 'Drehzahl',
         'compressor_current': 'Strom',
