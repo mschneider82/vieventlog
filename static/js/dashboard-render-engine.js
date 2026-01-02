@@ -471,6 +471,7 @@
 
                 // Burner (gas heating - Vitodens)
                 burnerModulation: find(['heating.burners.0.modulation']),
+                gasConsumption: find(['heating.gas.consumption.heating']),
 
                 // Additional sensors
                 volumetricFlow: find(['heating.sensors.volumetricFlow.allengra']),
