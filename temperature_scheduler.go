@@ -418,15 +418,6 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.circuits.0.sensors.temperature.supply":
 		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
 
-		// Bidirectional fallback between SupplyTemp and PrimarySupplyTemp
-		// This ensures both fields are populated for maximum compatibility
-		if snapshot.PrimarySupplyTemp != nil && snapshot.SupplyTemp == nil {
-			snapshot.SupplyTemp = snapshot.PrimarySupplyTemp
-		}
-		if snapshot.PrimarySupplyTemp == nil && snapshot.SupplyTemp != nil {
-			snapshot.PrimarySupplyTemp = snapshot.SupplyTemp
-		}
-
 	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
 	case "heating.secondaryCircuit.sensors.temperature.supply":
 		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
@@ -662,9 +653,10 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if hasHotWaterBuffer {
 		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
-		// which maps to our SecondarySupplyTemp
+		// which maps to our SecondarySupplyTemp + ReturnTemp
 		if snapshot.SecondarySupplyTemp != nil {
 			supplyTemp = snapshot.SecondarySupplyTemp
+			returnTemp = snapshot.ReturnTemp
 		}
 	} else {
 		// Ohne HW-Puffer: Heizkreis Spreizung (see dashboard_render_engine)
@@ -672,12 +664,12 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		// which maps to our PrimarySupplyTemp + ReturnTemp
 		if snapshot.PrimarySupplyTemp != nil {
 			supplyTemp = snapshot.PrimarySupplyTemp
+			returnTemp = snapshot.ReturnTemp
+		} else if snapshot.SupplyTemp != nil {
+			// Fallback for maximum compatibility
+			supplyTemp = snapshot.SupplyTemp
+			returnTemp = snapshot.ReturnTemp
 		}
-	}
-
-	// returnTemp always same for both cases
-	if snapshot.ReturnTemp != nil {
-		returnTemp = snapshot.ReturnTemp
 	}
 
 	// Calculate thermal power if we have all required values (only if not already set from fallback)
