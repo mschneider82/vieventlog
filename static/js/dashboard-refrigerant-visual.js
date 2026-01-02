@@ -205,8 +205,8 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${values.compressorOutletTemp !== null ? `<div class="value-label" style="top: 93.94%; left: 38.84%;" title="Kompressor Auslasstemperatur">${formatValue(values.compressorOutletTemp, '°C')}</div>` : ''}
                     ${values.compressorOilTemp !== null ? `<div class="value-label" style="top: 52.62%; left: 32.35%;" title="Kompressor Öltemperatur">${formatValue(values.compressorOilTemp, '°C')}</div>` : ''}
                     ${values.compressorPressure !== null ? `<div class="value-label" style="top: 69.70%; left: 56.43%;" title="Kompressor Einlassdruck">${formatValue(values.compressorPressure, 'bar')}</div>` : ''}
-                    ${values.valve_0 !== null ? <div class="value-label" style="top: 17.36%; left: 58%;" title="Ventil">${formatValue(values.valve_0, '%')}</div> : ''}
-                    ${values.valve_1 !== null ? <div class="value-label" style="top: 37.20%; left: 33%;" title="Ventil">${formatValue(values.valve_1, '%')}</div> : ''}
+                    ${values.valve_0 !== null ? `<div class="value-label" style="top: 17.36%; left: 58%;" title="Ventil">${formatValue(values.valve_0, '%')}</div>` : ''}
+                    ${values.valve_1 !== null ? `<div class="value-label" style="top: 37.20%; left: 33%;" title="Ventil">${formatValue(values.valve_1, '%')}</div>` : ''}
 
 
                     ${values.condensorTemp !== null ? `<div class="value-label" style="top: 17.36%; left: 66.47%;" title="Verflüssiger">${formatValue(values.condensorTemp, '°C')}</div>` : ''}
