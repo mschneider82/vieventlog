@@ -273,8 +273,8 @@ type TemperatureSnapshot struct {
 	// Temperature sensors
 	// Basic temperature sensors
 	OutsideTemp           *float64 `json:"outside_temp,omitempty"`
-	ReturnTemp            *float64 `json:"return_temp,omitempty"` // Return temperature (common for all systems)
-	SupplyTemp            *float64 `json:"supply_temp,omitempty"` // DEPRECATED: Use HeatingCircuit0SupplyTemp for heating.sensors.temperature.supply
+	ReturnTemp            *float64 `json:"return_temp,omitempty"`           // Return temperature (common for all systems)
+	SupplyTemp            *float64 `json:"supply_temp,omitempty"`           // DEPRECATED: Use HeatingCircuit0SupplyTemp for heating.sensors.temperature.supply
 	CalculatedOutsideTemp *float64 `json:"calculated_outside_temp,omitempty"`
 
 	// DEPRECATED: Legacy temperature fields (kept for backward compatibility)
@@ -333,12 +333,6 @@ type TemperatureSnapshot struct {
 	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`
 	ThermalPower   *float64 `json:"thermal_power,omitempty"`
 	COP            *float64 `json:"cop,omitempty"`
-
-	// Temperature spreads (deltaT) for each heating circuit
-	HeatingCircuit0DeltaT *float64 `json:"heating_circuit_0_delta_t,omitempty"` // Supply-Return spread for circuit 0
-	HeatingCircuit1DeltaT *float64 `json:"heating_circuit_1_delta_t,omitempty"` // Supply-Return spread for circuit 1
-	HeatingCircuit2DeltaT *float64 `json:"heating_circuit_2_delta_t,omitempty"` // Supply-Return spread for circuit 2
-	HeatingCircuit3DeltaT *float64 `json:"heating_circuit_3_delta_t,omitempty"` // Supply-Return spread for circuit 3
 
 	// Operating state
 	FourWayValve                 *string  `json:"four_way_valve,omitempty"`
