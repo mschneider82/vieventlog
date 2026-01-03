@@ -516,7 +516,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CompressorActive = getBoolValue(feature.Properties)
 	case "heating.compressors.0.speed.current":
 		snapshot.CompressorSpeed = getFloatValue(feature.Properties)
-	case "heating.inverters.0.sensors.power.current":  //"heating.compressors.0.sensors.current":
+	case "heating.inverters.0.sensors.power.current": //"heating.compressors.0.sensors.current":
 		snapshot.CompressorCurrent = getFloatValue(feature.Properties)
 	case "heating.compressors.0.sensors.pressure.inlet":
 		snapshot.CompressorPressure = getFloatValue(feature.Properties)
@@ -684,9 +684,9 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if hasHotWaterBuffer {
 		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
-		// which maps to our HPSecondarySupplyTemp + ReturnTemp
-		if snapshot.HPSecondarySupplyTemp != nil {
-			supplyTemp = snapshot.HPSecondarySupplyTemp
+		// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
+		if snapshot.HPSecondaryCircuitSupplyTemp != nil {
+			supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	} else {
@@ -716,27 +716,26 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 				deltaT = *supplyTemp - *returnTemp
 			}
 		}
-		
-		
-// save deltaT for each circuit to database
-/*		
-		snapshot.deltaT = deltaT
-		if snapshot.HeatingCircuit1SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit1SupplyTemp
-			deltaT1 := *supplyTemp - *returnTemp
-			snapshot.deltaT_1 = deltaT1
-   		}
-		if snapshot.HeatingCircuit2SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit2SupplyTemp
-			deltaT2 := *supplyTemp - *returnTemp
-			snapshot.deltaT_2 = deltaT2
-   		}
-		if snapshot.HeatingCircuit3SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit3SupplyTemp
-			deltaT3 := *supplyTemp - *returnTemp
-			snapshot.deltaT_2 = deltaT3
- 	  }
-*/		
+
+		// Calculate deltaT for each heating circuit individually
+		// This allows tracking temperature spreads per circuit
+		if snapshot.HeatingCircuit0SupplyTemp != nil && snapshot.ReturnTemp != nil {
+			deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
+			snapshot.HeatingCircuit0DeltaT = &deltaT0
+		}
+		if snapshot.HeatingCircuit1SupplyTemp != nil && snapshot.ReturnTemp != nil {
+			deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *snapshot.ReturnTemp
+			snapshot.HeatingCircuit1DeltaT = &deltaT1
+		}
+		if snapshot.HeatingCircuit2SupplyTemp != nil && snapshot.ReturnTemp != nil {
+			deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *snapshot.ReturnTemp
+			snapshot.HeatingCircuit2DeltaT = &deltaT2
+		}
+		if snapshot.HeatingCircuit3SupplyTemp != nil && snapshot.ReturnTemp != nil {
+			deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *snapshot.ReturnTemp
+			snapshot.HeatingCircuit3DeltaT = &deltaT3
+		}
+
 		// Only calculate if deltaT is positive and meaningful (>0°C)
 		if deltaT > 0 {
 			// Use the same formula as dashboard (dashboard-render-heating.js line 356-369)
