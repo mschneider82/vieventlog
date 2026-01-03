@@ -559,6 +559,28 @@ func runSchemaMigrations() error {
 		log.Println("Migration 4 completed: Added hp_* and heating_circuit_* fields")
 	}
 
+	// Migration 5: Add per-circuit deltaT fields (added 2026-01-03)
+	// Adds heating_circuit_0-3_delta_t fields to track temperature spreads for each circuit independently
+	if !migrationApplied("add_per_circuit_delta_t") {
+		log.Println("Running migration 5: Adding per-circuit deltaT fields")
+
+		// Add heating circuit 0-3 deltaT fields
+		for i := 0; i <= 3; i++ {
+			colName := fmt.Sprintf("heating_circuit_%d_delta_t", i)
+			if !columnExists("temperature_snapshots", colName) {
+				_, err := eventDB.Exec(fmt.Sprintf("ALTER TABLE temperature_snapshots ADD COLUMN %s REAL", colName))
+				if err != nil {
+					return fmt.Errorf("migration 5 failed (%s): %v", colName, err)
+				}
+			}
+		}
+
+		if err := recordMigration(5, "add_per_circuit_delta_t", "Add per-circuit deltaT (temperature spread) fields"); err != nil {
+			return fmt.Errorf("failed to record migration 5: %v", err)
+		}
+		log.Println("Migration 5 completed: Added heating_circuit_*_delta_t fields")
+	}
+
 	return nil
 }
 
