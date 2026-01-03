@@ -736,7 +736,7 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			deltaT3 := *supplyTemp - *returnTemp
 			snapshot.deltaT_2 = deltaT3
  	  }
-		
+*/		
 		// Only calculate if deltaT is positive and meaningful (>0°C)
 		if deltaT > 0 {
 			// Use the same formula as dashboard (dashboard-render-heating.js line 356-369)
