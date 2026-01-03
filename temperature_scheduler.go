@@ -426,43 +426,15 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.HeatingCircuit2SupplyTemp = getFloatValue(feature.Properties)
 	case "heating.circuits.3.sensors.temperature.supply":
 		snapshot.HeatingCircuit3SupplyTemp = getFloatValue(feature.Properties)
-	case "heating.circuits.0.sensors.temperature.return":
-		//snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)         // DEPRECATED: Legacy (use HeatingCircuit0ReturnTemp)
-		snapshot.HeatingCircuit0ReturnTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
-	case "heating.circuits.1.sensors.temperature.return":
-		//snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)       // DEPRECATED: Legacy (use HeatingCircuit1ReturnTemp)
-		snapshot.HeatingCircuit1ReturnTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 1
-	case "heating.circuits.2.sensors.temperature.return":
-		snapshot.HeatingCircuit2ReturnTemp = getFloatValue(feature.Properties)
-	case "heating.circuits.3.sensors.temperature.return":
-		snapshot.HeatingCircuit3ReturnTemp = getFloatValue(feature.Properties)
 
-	// Heat pump circuits: Store in both legacy fields (as fallback) and new explicit fields
+	// Heat pump circuits: Only supply temperatures exist (no per-circuit return sensors)
 	// dashboard: primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']), Lufteintrittstemperatur
 	case "heating.primaryCircuit.sensors.temperature.supply":
-		//if snapshot.PrimarySupplyTemp == nil {
-		//	snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
-		//}
-		snapshot.HPPrimaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Preferred: Air intake temperature
-
-	// dashboard: primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']), Rücklauf ODU Primärkreis
-	case "heating.primaryCircuit.sensors.temperature.return":
-		//if snapshot.PrimaryReturnTemp == nil {
-		//	snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
-		//}
-		snapshot.HPPrimaryCircuitReturnTemp = getFloatValue(feature.Properties) // Preferred: HP primary circuit return
+		snapshot.HPPrimaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Air intake temperature (HP primary circuit)
 
 	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
 	case "heating.secondaryCircuit.sensors.temperature.supply":
-		//if snapshot.SecondarySupplyTemp == nil {
-		//	snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
-		//}
-		snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Preferred: HP secondary circuit supply
-	case "heating.secondaryCircuit.sensors.temperature.return":
-		//if snapshot.SecondaryReturnTemp == nil {
-		//	snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties) // DEPRECATED: Legacy fallback
-		//}
-		snapshot.HPSecondaryCircuitReturnTemp = getFloatValue(feature.Properties) // Preferred: HP secondary circuit return
+		snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // HP secondary circuit supply
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.dhw.sensors.temperature.hotWaterStorage.middle":
@@ -516,7 +488,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CompressorActive = getBoolValue(feature.Properties)
 	case "heating.compressors.0.speed.current":
 		snapshot.CompressorSpeed = getFloatValue(feature.Properties)
-	case "heating.inverters.0.sensors.power.current":  //"heating.compressors.0.sensors.current":
+	case "heating.inverters.0.sensors.power.current": //"heating.compressors.0.sensors.current":
 		snapshot.CompressorCurrent = getFloatValue(feature.Properties)
 	case "heating.compressors.0.sensors.pressure.inlet":
 		snapshot.CompressorPressure = getFloatValue(feature.Properties)
@@ -684,9 +656,9 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if hasHotWaterBuffer {
 		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
-		// which maps to our HPSecondarySupplyTemp + ReturnTemp
-		if snapshot.HPSecondarySupplyTemp != nil {
-			supplyTemp = snapshot.HPSecondarySupplyTemp
+		// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
+		if snapshot.HPSecondaryCircuitSupplyTemp != nil {
+			supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	} else {
@@ -716,27 +688,29 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 				deltaT = *supplyTemp - *returnTemp
 			}
 		}
-		
-		
-// save deltaT for each circuit to database
-/*		
-		snapshot.deltaT = deltaT
-		if snapshot.HeatingCircuit1SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit1SupplyTemp
-			deltaT1 := *supplyTemp - *returnTemp
-			snapshot.deltaT_1 = deltaT1
-   		}
-		if snapshot.HeatingCircuit2SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit2SupplyTemp
-			deltaT2 := *supplyTemp - *returnTemp
-			snapshot.deltaT_2 = deltaT2
-   		}
-		if snapshot.HeatingCircuit3SupplyTemp != nil  && 
-			supplyTemp = snapshot.HeatingCircuit3SupplyTemp
-			deltaT3 := *supplyTemp - *returnTemp
-			snapshot.deltaT_2 = deltaT3
- 	  }
-*/		
+
+		// Calculate deltaT for each heating circuit individually
+		// NOTE: All circuits share the same return sensor, so these represent
+		// the temperature spread from each circuit's supply to the shared return
+		if snapshot.ReturnTemp != nil {
+			if snapshot.HeatingCircuit0SupplyTemp != nil {
+				deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit0DeltaT = &deltaT0
+			}
+			if snapshot.HeatingCircuit1SupplyTemp != nil {
+				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit1DeltaT = &deltaT1
+			}
+			if snapshot.HeatingCircuit2SupplyTemp != nil {
+				deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit2DeltaT = &deltaT2
+			}
+			if snapshot.HeatingCircuit3SupplyTemp != nil {
+				deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit3DeltaT = &deltaT3
+			}
+		}
+
 		// Only calculate if deltaT is positive and meaningful (>0°C)
 		if deltaT > 0 {
 			// Use the same formula as dashboard (dashboard-render-heating.js line 356-369)
