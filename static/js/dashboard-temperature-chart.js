@@ -274,23 +274,23 @@ function renderFilters() {
         'outside_temp': '🌡️ Außentemperatur',
         'calculated_outside_temp': '🌡️ Außentemp. (berechnet)',
 
-        // Heat pump circuits (ODU)
+        // Heat pump circuits (ODU) - only supply temps exist
         'hp_primary_circuit_supply_temp': '🔄 WP Primärkreis-Vorlauf (Lufteintritt)',
-        'hp_primary_circuit_return_temp': '🔄 WP Primärkreis-Rücklauf',
         'hp_secondary_circuit_supply_temp': '🔄 WP Sekundärkreis-Vorlauf',
-        'hp_secondary_circuit_return_temp': '🔄 WP Sekundärkreis-Rücklauf',
 
-        // Heating circuits (IDU)
+        // Heating circuits (IDU) - only supply temps exist
         'heating_circuit_0_supply_temp': '🏠 Heizkreis 0 Vorlauf',
-        'heating_circuit_0_return_temp': '🏠 Heizkreis 0 Rücklauf',
         'heating_circuit_1_supply_temp': '🏠 Heizkreis 1 Vorlauf',
-        'heating_circuit_1_return_temp': '🏠 Heizkreis 1 Rücklauf',
         'heating_circuit_2_supply_temp': '🏠 Heizkreis 2 Vorlauf',
-        'heating_circuit_2_return_temp': '🏠 Heizkreis 2 Rücklauf',
         'heating_circuit_3_supply_temp': '🏠 Heizkreis 3 Vorlauf',
-        'heating_circuit_3_return_temp': '🏠 Heizkreis 3 Rücklauf',
 
-        // Common return temperature (system-wide)
+        // Temperature spreads (deltaT) per circuit
+        'heating_circuit_0_delta_t': '📊 Heizkreis 0 Spreizung (ΔT)',
+        'heating_circuit_1_delta_t': '📊 Heizkreis 1 Spreizung (ΔT)',
+        'heating_circuit_2_delta_t': '📊 Heizkreis 2 Spreizung (ΔT)',
+        'heating_circuit_3_delta_t': '📊 Heizkreis 3 Spreizung (ΔT)',
+
+        // Common return temperature (system-wide, shared by all circuits)
         'return_temp': '↩️ Gemeinsamer Rücklauf',
 
         // DHW and storage
@@ -339,13 +339,12 @@ function renderFilters() {
         'Temperaturen': ['outside_temp', 'calculated_outside_temp', 'dhw_temp', 'dhw_cylinder_middle_temp', 'boiler_temp',
                         'buffer_temp', 'buffer_temp_top'],
         'Kreise': ['supply_temp', 'return_temp',
-                   'hp_primary_circuit_supply_temp', 'hp_primary_circuit_return_temp',
-                   'hp_secondary_circuit_supply_temp', 'hp_secondary_circuit_return_temp',
+                   'hp_primary_circuit_supply_temp', 'hp_secondary_circuit_supply_temp',
                    'heating_circuit_0_supply_temp', 'heating_circuit_1_supply_temp',
                    'heating_circuit_2_supply_temp', 'heating_circuit_3_supply_temp',
-                   'heating_circuit_0_return_temp', 'heating_circuit_1_return_temp',
-                   'heating_circuit_2_return_temp', 'heating_circuit_3_return_temp',
                    'primary_supply_temp', 'secondary_supply_temp', 'primary_return_temp', 'secondary_return_temp'],
+        'Spreizung (ΔT)': ['heating_circuit_0_delta_t', 'heating_circuit_1_delta_t',
+                           'heating_circuit_2_delta_t', 'heating_circuit_3_delta_t'],
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
                       'compressor_hours', 'compressor_power'],
@@ -434,18 +433,17 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_outlet_temp': { type: 'line', yAxisIndex: 0, color: '#d32f2f', smooth: true },
         // Heat pump circuits
         'hp_primary_circuit_supply_temp': { type: 'line', yAxisIndex: 0, color: '#e74c3c', smooth: true },
-        'hp_primary_circuit_return_temp': { type: 'line', yAxisIndex: 0, color: '#f39c12', smooth: true },
         'hp_secondary_circuit_supply_temp': { type: 'line', yAxisIndex: 0, color: '#9b59b6', smooth: true },
-        'hp_secondary_circuit_return_temp': { type: 'line', yAxisIndex: 0, color: '#3498db', smooth: true },
         // Heating circuits
         'heating_circuit_0_supply_temp': { type: 'line', yAxisIndex: 0, color: '#e67e22', smooth: true },
         'heating_circuit_1_supply_temp': { type: 'line', yAxisIndex: 0, color: '#16a085', smooth: true },
         'heating_circuit_2_supply_temp': { type: 'line', yAxisIndex: 0, color: '#2980b9', smooth: true },
         'heating_circuit_3_supply_temp': { type: 'line', yAxisIndex: 0, color: '#8e44ad', smooth: true },
-        'heating_circuit_0_return_temp': { type: 'line', yAxisIndex: 0, color: '#d35400', smooth: true },
-        'heating_circuit_1_return_temp': { type: 'line', yAxisIndex: 0, color: '#138d75', smooth: true },
-        'heating_circuit_2_return_temp': { type: 'line', yAxisIndex: 0, color: '#1f618d', smooth: true },
-        'heating_circuit_3_return_temp': { type: 'line', yAxisIndex: 0, color: '#6c3483', smooth: true },
+        // Temperature spreads (deltaT)
+        'heating_circuit_0_delta_t': { type: 'line', yAxisIndex: 0, color: '#f39c12', smooth: true, lineStyle: { type: 'dashed' } },
+        'heating_circuit_1_delta_t': { type: 'line', yAxisIndex: 0, color: '#1abc9c', smooth: true, lineStyle: { type: 'dashed' } },
+        'heating_circuit_2_delta_t': { type: 'line', yAxisIndex: 0, color: '#3498db', smooth: true, lineStyle: { type: 'dashed' } },
+        'heating_circuit_3_delta_t': { type: 'line', yAxisIndex: 0, color: '#9b59b6', smooth: true, lineStyle: { type: 'dashed' } },
 
         // Boolean states (secondary axis)
         'compressor_active': { type: 'line', yAxisIndex: 1, color: '#f4b400', step: 'end' },
@@ -472,19 +470,19 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
 
         // Heat pump circuits
         'hp_primary_circuit_supply_temp': 'WP Primär VL',
-        'hp_primary_circuit_return_temp': 'WP Primär RL',
         'hp_secondary_circuit_supply_temp': 'WP Sekundär VL',
-        'hp_secondary_circuit_return_temp': 'WP Sekundär RL',
 
         // Heating circuits
         'heating_circuit_0_supply_temp': 'HK0 VL',
-        'heating_circuit_0_return_temp': 'HK0 RL',
         'heating_circuit_1_supply_temp': 'HK1 VL',
-        'heating_circuit_1_return_temp': 'HK1 RL',
         'heating_circuit_2_supply_temp': 'HK2 VL',
-        'heating_circuit_2_return_temp': 'HK2 RL',
         'heating_circuit_3_supply_temp': 'HK3 VL',
-        'heating_circuit_3_return_temp': 'HK3 RL',
+
+        // Temperature spreads (deltaT)
+        'heating_circuit_0_delta_t': 'HK0 ΔT',
+        'heating_circuit_1_delta_t': 'HK1 ΔT',
+        'heating_circuit_2_delta_t': 'HK2 ΔT',
+        'heating_circuit_3_delta_t': 'HK3 ΔT',
 
         // Common return
         'return_temp': 'Gemeins. RL',
