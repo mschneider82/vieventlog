@@ -716,8 +716,26 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 				deltaT = *supplyTemp - *returnTemp
 			}
 		}
-
-// save deltaT to database
+		
+		
+// save deltaT for each circuit to database
+/*		
+		snapshot.deltaT = deltaT
+		if snapshot.HeatingCircuit1SupplyTemp != nil  && 
+			supplyTemp = snapshot.HeatingCircuit1SupplyTemp
+			deltaT1 := *supplyTemp - *returnTemp
+			snapshot.deltaT_1 = deltaT1
+   		}
+		if snapshot.HeatingCircuit2SupplyTemp != nil  && 
+			supplyTemp = snapshot.HeatingCircuit2SupplyTemp
+			deltaT2 := *supplyTemp - *returnTemp
+			snapshot.deltaT_2 = deltaT2
+   		}
+		if snapshot.HeatingCircuit3SupplyTemp != nil  && 
+			supplyTemp = snapshot.HeatingCircuit3SupplyTemp
+			deltaT3 := *supplyTemp - *returnTemp
+			snapshot.deltaT_2 = deltaT3
+ 	  }
 		
 		// Only calculate if deltaT is positive and meaningful (>0°C)
 		if deltaT > 0 {
