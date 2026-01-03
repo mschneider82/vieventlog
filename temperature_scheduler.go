@@ -541,7 +541,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CirculationPumpActive = getPumpStatus(feature.Properties)
 	case "heating.dhw.pumps.circulation":
 		snapshot.DHWPumpActive = getPumpStatus(feature.Properties)
-	case "heating.pumps.primary":
+	case "heating.boiler.pumps.internal": 
 		snapshot.InternalPumpActive = getPumpStatus(feature.Properties)
 
 	// Flow/Energy
@@ -689,14 +689,12 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			}
 		}
 
+		snapshot.HeatingCircuit0DeltaT = &deltaT // use the calculated value
+
 		// Calculate deltaT for each heating circuit individually
 		// NOTE: All circuits share the same return sensor, so these represent
 		// the temperature spread from each circuit's supply to the shared return
 		if snapshot.ReturnTemp != nil {
-			if snapshot.HeatingCircuit0SupplyTemp != nil {
-				deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
-				snapshot.HeatingCircuit0DeltaT = &deltaT0
-			}
 			if snapshot.HeatingCircuit1SupplyTemp != nil {
 				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *snapshot.ReturnTemp
 				snapshot.HeatingCircuit1DeltaT = &deltaT1
