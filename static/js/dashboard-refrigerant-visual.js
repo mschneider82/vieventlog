@@ -23,10 +23,13 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                             (keyFeatures.compressorSpeed?.value && keyFeatures.compressorSpeed.value > 0);
 
     // Select base image (active or inactive)
-    const baseImage = compressorActive ?
+    let baseImage = compressorActive ?
         '/static/img/vitocal/Kaeltekreislauf%20ein.jpg' :
         '/static/img/vitocal/Kaeltekreislauf%20aus.jpg';
-
+    if (keyFeatures?.primfourWayValve  &&  keyFeatures.primaryfourWayValve.value === true ) {
+        baseImage = '/static/img/vitocal/Kaeltekreislauf%20tau.jpg';
+    }
+    
     // Determine component states
     const fanActive = (keyFeatures.fan0?.value && keyFeatures.fan0.value > 0) ||
                      (keyFeatures.fan1?.value && keyFeatures.fan1.value > 0);
