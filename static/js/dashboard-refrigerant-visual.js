@@ -34,11 +34,22 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
     const fanActive = (keyFeatures.fan0?.value && keyFeatures.fan0.value > 0) ||
                      (keyFeatures.fan1?.value && keyFeatures.fan1.value > 0);
 
-    // Check if DHW is active (heating domestic hot water)
-    const dhwActive = keyFeatures.dhwStatus?.value === 'on' ||
-                      keyFeatures.dhwStatus?.value === 'active' ||
-                      (keyFeatures.dhwTemp?.value && keyFeatures.dhwTarget?.value &&
-                       keyFeatures.dhwTemp.value < keyFeatures.dhwTarget.value);
+    // Check if DHW exists or is in intended temperature range or is active (heating domestic hot water)
+	let dhw_exists = false;
+	let dhw_image ="";    
+    if ( keyFeatures.dhwStatus?.value === 'off' || keyFeatures.dhwStatus?.value === 'inactive'){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20aus.png"; // dhw is off 
+	}
+	if ( keyFeatures.dhwTemp?.value && keyFeatures.dhwTarget?.value && keyFeatures.dhwHysteresisSwitchOn &&
+                       keyFeatures.dhwTemp.value > (keyFeatures.dhwTarget.value - keyFeatures.dhwHysteresisSwitchOn.value)){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20temp.png"; // dhw has intended temp
+	}
+    if ( keyFeatures.dhwStatus?.value === 'on' || keyFeatures.dhwStatus?.value === 'active'){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20ein.png"; // dhw is heating
+	}
 
     // Check if heating circuit is active
     const heatingActive = keyFeatures.operatingMode?.value === 'heating' ||
@@ -179,8 +190,10 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
 
                     <!-- Component overlays with status images -->
                     <!-- DHW Storage -->
-                    <img src="/static/img/vitocal/Warmwasserspeicher%20${dhwActive ? 'ein' : 'aus'}.png"
+					${dhw_exists ? `
+						<img src="${dhw_image}"
                          alt="Warmwasserspeicher" class="component-overlay dhw-storage-overlay">
+                    ` : ` `}
 
                     <!-- Heating Storage -->
                     <img src="/static/img/vitocal/Heizwasserspeicher%20${heatingActive ? 'ein' : 'aus'}.png"
