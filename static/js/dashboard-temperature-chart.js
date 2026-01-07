@@ -285,7 +285,7 @@ function renderFilters() {
         'heating_circuit_3_supply_temp': '🏠 Heizkreis 3 Vorlauf',
 
         // Temperature spreads (deltaT) per circuit
-        'heating_circuit_0_delta_t': '📊 Heizkreis 0 Spreizung (ΔT)',
+        'heating_circuit_0_delta_t': '📊 Spreizung (ΔT)',
         'heating_circuit_1_delta_t': '📊 Heizkreis 1 Spreizung (ΔT)',
         'heating_circuit_2_delta_t': '📊 Heizkreis 2 Spreizung (ΔT)',
         'heating_circuit_3_delta_t': '📊 Heizkreis 3 Spreizung (ΔT)',
@@ -350,7 +350,7 @@ function renderFilters() {
                       'compressor_hours', 'compressor_power'],
         'Pumpen': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
-        'Betrieb': ['four_way_valve', 'burner_modulation', 'secondary_heat_generator_status']
+        'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
     };
 
     let html = '<div class="filter-categories">';
@@ -479,7 +479,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'heating_circuit_3_supply_temp': 'HK3 VL',
 
         // Temperature spreads (deltaT)
-        'heating_circuit_0_delta_t': 'HK0 ΔT',
+        'heating_circuit_0_delta_t': 'ΔT',
         'heating_circuit_1_delta_t': 'HK1 ΔT',
         'heating_circuit_2_delta_t': 'HK2 ΔT',
         'heating_circuit_3_delta_t': 'HK3 ΔT',

@@ -1009,7 +1009,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		referenceDate = time.Now()
+		referenceDate = time.Now().In(DefaultLocation)
 	}
 
 	var stats *ConsumptionStats
@@ -1019,7 +1019,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 	// Calculate time range based on period
 	switch period {
 	case "today":
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location())
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation)
 		endTime := startTime.Add(24 * time.Hour)
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
@@ -1031,7 +1031,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 	case "yesterday":
 		yesterday := referenceDate.AddDate(0, 0, -1)
-		startTime := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, yesterday.Location())
+		startTime := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, DefaultLocation)
 		endTime := startTime.Add(24 * time.Hour)
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
@@ -1042,8 +1042,8 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 	case "week":
 		// Last 7 days
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location()).AddDate(0, 0, -6)
-		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, referenceDate.Location())
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -6)
+		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
 			stats.Period = "week"
@@ -1054,7 +1054,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 	case "month":
 		// Current month
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), 1, 0, 0, 0, 0, referenceDate.Location())
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), 1, 0, 0, 0, 0, DefaultLocation)
 		endTime := startTime.AddDate(0, 1, 0).Add(-1 * time.Second) // Last second of the month
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
@@ -1066,7 +1066,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 	case "year":
 		// Current year
-		startTime := time.Date(referenceDate.Year(), 1, 1, 0, 0, 0, 0, referenceDate.Location())
+		startTime := time.Date(referenceDate.Year(), 1, 1, 0, 0, 0, 0, DefaultLocation)
 		endTime := startTime.AddDate(1, 0, 0).Add(-1 * time.Second) // Last second of the year
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
@@ -1078,8 +1078,8 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 	case "last30days":
 		// Last 30 days
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, referenceDate.Location()).AddDate(0, 0, -29)
-		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, referenceDate.Location())
+		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -29)
+		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
 		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 		if err == nil {
 			stats.Period = "last30days"

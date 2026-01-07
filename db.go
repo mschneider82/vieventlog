@@ -1360,7 +1360,7 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	fallbackInterval := settings.SampleInterval
 
 	// Start of day (00:00:00) to end of day (23:59:59)
-	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
 	endTime := startTime.Add(24 * time.Hour)
 
 	query := `
@@ -1413,7 +1413,8 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 			continue
 		}
 
-		hourTime, err := time.Parse("2006-01-02 15:04:05", hourStr)
+		// Parse timestamp in DefaultLocation (Europe/Berlin) to preserve local time
+		hourTime, err := time.ParseInLocation("2006-01-02 15:04:05", hourStr, DefaultLocation)
 		if err != nil {
 			log.Printf("Warning: failed to parse hour timestamp: %v", err)
 			continue
