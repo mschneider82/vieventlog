@@ -6,7 +6,25 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
+
+// DefaultLocation is the timezone used for all time operations
+// Defaults to Europe/Berlin as most installations are in Germany
+var DefaultLocation *time.Location
+
+func init() {
+	// Try to load Europe/Berlin timezone
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		// Fallback: Create fixed offset for CET/CEST (UTC+1/UTC+2)
+		// This works even without tzdata in Docker containers
+		log.Printf("Warning: Could not load Europe/Berlin timezone, using fixed UTC+1 offset: %v", err)
+		DefaultLocation = time.FixedZone("CET", 1*60*60) // UTC+1
+	} else {
+		DefaultLocation = loc
+	}
+}
 
 // getEnv gets an environment variable with a default value
 func getEnv(key, defaultValue string) string {
