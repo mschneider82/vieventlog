@@ -471,7 +471,7 @@
 
                 // Burner (gas heating - Vitodens)
                 burnerModulation: find(['heating.burners.0.modulation']),
-                gasConsumption: find(['heating.gas.consumption.heating']),
+//RS  doesn't fit data structure             gasConsumption: find(['heating.gas.consumption.heating']),
 
                 // Additional sensors
                 volumetricFlow: find(['heating.sensors.volumetricFlow.allengra']),
@@ -552,6 +552,15 @@
 
                 // Consumption/Production Statistics (Arrays with history)
                 // With includeDeviceFeatures=true, these features have day/week/month/year arrays
+//RS
+/*  prepare for new code 
+                gasConsumptionHeating: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.gas.consumption.heating');
+                    return f || null;
+                })(),
+*/                    
+                    
                 powerConsumptionDhw: (() => {
                     if (!features.rawFeatures) return null;
                     const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.dhw');
