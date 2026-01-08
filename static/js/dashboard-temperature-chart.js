@@ -649,6 +649,15 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
 				nameTextStyle: {color: "#ffffff"},
 				axisLabel: {color: "#ffffff"},
                 position: 'right',
+//RS
+                // Minimum and maximum variations according to the value of incoming
+                // Add 20% padding below and 10% above for better readability
+                min: function(value){
+                    return Math.floor(value.min - 0.2 * Math.abs(value.min));
+                },
+                max: function(value){
+                    return Math.ceil(1.1 * value.max);
+                },
                 offset: 60
             }
         ],
