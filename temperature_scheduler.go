@@ -505,7 +505,11 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		if props, ok := feature.Properties["hours"].(map[string]interface{}); ok {
 			snapshot.CompressorHours = getFloatValue(props)
 		}
-	case "heating.inverters.0.sensors.power.output":
+//RS for future use
+		// Extract starts from nested structure
+//		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
+		
+		case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
 		snapshot.CompressorPower = getFloatValue(feature.Properties)
 	case "heating.compressors.0.power.consumption.current":
@@ -541,7 +545,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CirculationPumpActive = getPumpStatus(feature.Properties)
 	case "heating.dhw.pumps.circulation":
 		snapshot.DHWPumpActive = getPumpStatus(feature.Properties)
-	case "heating.pumps.primary":
+	case "heating.boiler.pumps.internal":  // changed to use vaild keyword "heating.pumps.primary":
 		snapshot.InternalPumpActive = getPumpStatus(feature.Properties)
 
 	// Flow/Energy
@@ -549,10 +553,14 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.VolumetricFlow = getFloatValue(feature.Properties)
 
 	// Operating state
-	case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
-		snapshot.FourWayValve = getStringValue(feature.Properties)
+
+//remove, will not be used because string content
+	//case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
+	//	snapshot.FourWayValve = getStringValue(feature.Properties)
 	case "heating.burners.0.modulation":
 		snapshot.BurnerModulation = getFloatValue(feature.Properties)
+
+// info: this feature migth have no properties/no information
 	case "heating.secondaryHeatGenerator.status":
 		snapshot.SecondaryHeatGeneratorStatus = getStringValue(feature.Properties)
 	}
