@@ -23,19 +23,39 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                             (keyFeatures.compressorSpeed?.value && keyFeatures.compressorSpeed.value > 0);
 
     // Select base image (active or inactive)
-    const baseImage = compressorActive ?
-        '/static/img/vitocal/Kaeltekreislauf%20ein.jpg' :
-        '/static/img/vitocal/Kaeltekreislauf%20aus.jpg';
+    let baseImage = compressorActive ?
+        '/static/img/vitocal/Kaeltekreislauf%20ein.jpg' : '/static/img/vitocal/Kaeltekreislauf%20aus.jpg';
+	if (compressorActive && keyFeatures?.fourWayValve && 
+		(keyFeatures.fourWayValve.value === 'climatCircuitTwoDefrost' || keyFeatures.fourWayValve.value === 'defrost')) {
+        baseImage = '/static/img/vitocal/Kaeltekreislauf%20abtau.jpg';
+    }
 
     // Determine component states
     const fanActive = (keyFeatures.fan0?.value && keyFeatures.fan0.value > 0) ||
                      (keyFeatures.fan1?.value && keyFeatures.fan1.value > 0);
 
     // Check if DHW is active (heating domestic hot water)
-    const dhwActive = keyFeatures.dhwStatus?.value === 'on' ||
-                      keyFeatures.dhwStatus?.value === 'active' ||
-                      (keyFeatures.dhwTemp?.value && keyFeatures.dhwTarget?.value &&
-                       keyFeatures.dhwTemp.value < keyFeatures.dhwTarget.value);
+	let dhw_exists = false;
+	let dhw_image =  ""; // no dhw 
+    // Check if DHW exists or on intended temperature or is active (heating domestic hot water)
+	if (keyFeatures.dhwStatus?.value === 'off' || keyFeatures.dhwStatus?.value === 'inactive'){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20aus.png"; // dhw is off 
+	} else{
+	  if (keyFeatures.dhwTemp?.value && keyFeatures.dhwTarget?.value){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20temp.png"; // dhw has intended temp
+		if ( keyFeatures?.dhwHysteresisSwitchOn?.value ){
+			if (keyFeatures.dhwTemp.value <= (keyFeatures.dhwTarget.value - keyFeatures.dhwHysteresisSwitchOn.value)){
+				dhw_image = "/static/img/vitocal/Warmwasserspeicher_cold.png"; // dhw has low temp
+			}
+		}
+	  } 
+	}
+    if (keyFeatures.dhwStatus?.value === 'on' || keyFeatures.dhwStatus?.value === 'active'){
+		dhw_exists = true;
+		dhw_image = "/static/img/vitocal/Warmwasserspeicher%20ein.png"; // dhw is heating
+	}
 
     // Check if heating circuit is active
     const heatingActive = keyFeatures.operatingMode?.value === 'heating' ||
