@@ -25,7 +25,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
     // Select base image (active or inactive)
     let baseImage = compressorActive ?
         '/static/img/vitocal/Kaeltekreislauf%20ein.jpg' : '/static/img/vitocal/Kaeltekreislauf%20aus.jpg';
-	if (keyFeatures?.fourWayValve && 
+	if (compressorActive && keyFeatures?.fourWayValve && 
 		(keyFeatures.fourWayValve.value === 'climatCircuitTwoDefrost' || keyFeatures.fourWayValve.value === 'defrost')) {
         baseImage = '/static/img/vitocal/Kaeltekreislauf%20abtau.jpg';
     }
