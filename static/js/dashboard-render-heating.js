@@ -2006,18 +2006,19 @@
             const maxDays = Math.min(dayArray.length, 8);
             let dayTabsHtml = '', dayContentHtml = '';
 
+            // Don't show current day (day 0) if data is stale (older than 4 hours)
+            const STALE_DATA_THRESHOLD_MS = 4 * 3600 * 1000; // 4 hours in milliseconds
             let firstday = 0;
             const dayValueReadAt = kf.gasConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
-            if(dayValueReadAt != 0){
-                const anyTime = new Date(dayValueReadAt).getTime();
-                const currentTime = new Date().getTime();
-                if( (currentTime - anyTime) > 4*3600*1000 ){  // more than 4 hours old
-                    firstday = 1;                       // don't show day '0'
+
+            if (dayValueReadAt != 0) {
+                const dataAge = Date.now() - new Date(dayValueReadAt).getTime();
+                if (dataAge > STALE_DATA_THRESHOLD_MS) {
+                    firstday = 1; // Skip day 0 if data is too old
                 }
             }
-			let label = "Gasverbrauch";
+
             for (let i = firstday; i < maxDays; i++) {
-//RS
                 const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'day', i);
                 if (gasHeating === null) continue;
                 const totalGas = (gasHeating || 0);
@@ -2101,7 +2102,7 @@
         
             return `
                 <div class="card">
-                    <div class="card-header"><h2>⚡ ${label}</h2></div>
+                    <div class="card-header"><h2>⚡ Gasverbrauch</h2></div>
                     <div class="stat-tabs stat-tabs-main">${mainTabsHtml}</div>
                     <div id="gas-period-day" class="stat-period-content" style="display: block;">
                         <div class="stat-tabs stat-tabs-scrollable">${dayTabsHtml}</div>
