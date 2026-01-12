@@ -102,6 +102,27 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to create events table: %v", err)
 	}
 
+
+//RS in the following section changed to start with a complete database
+/*
+remove:
+		primary_return_temp REAL,
+		secondary_return_temp REAL,
+		four_way_valve TEXT,
+		
+added:
+		HPPrimaryCircuitSupplyTemp REAL,
+		HPSecondaryCircuitSupplyTemp REAL,
+		HeatingCircuit0SupplyTemp REAL,
+		HeatingCircuit1SupplyTemp REAL,
+		HeatingCircuit2SupplyTemp REAL,
+		HeatingCircuit3SupplyTemp REAL,
+		HeatingCircuit0DeltaT REAL,
+		HeatingCircuit1DeltaT REAL,
+		HeatingCircuit2DeltaT REAL,
+		HeatingCircuit3DeltaT REAL,
+		compressor_starts REAL,		
+*/
 	// Create temperature_snapshots table
 	createTempTableSQL := `
 	CREATE TABLE IF NOT EXISTS temperature_snapshots (
@@ -117,14 +138,22 @@ func InitEventDatabase(dbPath string) error {
 		supply_temp REAL,
 		primary_supply_temp REAL,
 		secondary_supply_temp REAL,
-		primary_return_temp REAL,
-		secondary_return_temp REAL,
 		dhw_temp REAL,
 		dhw_cylinder_middle_temp REAL,
 		boiler_temp REAL,
 		buffer_temp REAL,
 		buffer_temp_top REAL,
 		calculated_outside_temp REAL,
+		HPPrimaryCircuitSupplyTemp REAL,
+		HPSecondaryCircuitSupplyTemp REAL,
+		HeatingCircuit0SupplyTemp REAL,
+		HeatingCircuit1SupplyTemp REAL,
+		HeatingCircuit2SupplyTemp REAL,
+		HeatingCircuit3SupplyTemp REAL,
+		HeatingCircuit0DeltaT REAL,
+		HeatingCircuit1DeltaT REAL,
+		HeatingCircuit2DeltaT REAL,
+		HeatingCircuit3DeltaT REAL,				 
 		compressor_active INTEGER,
 		compressor_speed REAL,
 		compressor_current REAL,
@@ -134,6 +163,7 @@ func InitEventDatabase(dbPath string) error {
 		compressor_inlet_temp REAL,
 		compressor_outlet_temp REAL,
 		compressor_hours REAL,
+		compressor_starts REAL,						 
 		compressor_power REAL,
 		circulation_pump_active INTEGER,
 		dhw_pump_active INTEGER,
@@ -141,7 +171,6 @@ func InitEventDatabase(dbPath string) error {
 		volumetric_flow REAL,
 		thermal_power REAL,
 		cop REAL,
-		four_way_valve TEXT,
 		burner_modulation REAL,
 		secondary_heat_generator_status TEXT
 	);
@@ -236,6 +265,9 @@ func recordMigration(id int, name, description string) error {
 
 // runSchemaMigrations applies schema changes to existing databases
 func runSchemaMigrations() error {
+
+	log.Println("Checking migrations ---------------------")
+	
 	// Migration 1: Add dhw_cylinder_middle_temp column (added 2025-12-12)
 	if !migrationApplied("add_dhw_cylinder_middle_temp") {
 		log.Println("Running migration 1: Adding dhw_cylinder_middle_temp column")
@@ -560,7 +592,54 @@ func runSchemaMigrations() error {
 		}
 		log.Println("Migration 5 completed: Added heating_circuit_*_delta_t fields")
 	}
+	
+	// Migration 6: Add compressor_starts field, remove unsused fields
+	// Adds compressor_starts
+	if !migrationApplied("add_compressor_starts") {
+		log.Println("Running migration 6: Adding compressor_starts field")
 
+		// Add compressor_starts field
+		if !columnExists("temperature_snapshots","compressor_starts") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN compressor_starts REAL")
+			if err != nil {
+				return fmt.Errorf("migration 6failed (compressor_starts): %v", err)
+			}
+		}
+
+		if err := recordMigration(6, "add_compressor_starts", "Add compressor_starts field"); err != nil {
+			return fmt.Errorf("failed to record migration 6: %v", err)
+		}
+		log.Println("Migration 6 : Added field  compressor_starts")
+		
+
+		// Delete 4/3 way valve has never been used, contains strings not feasible in grafics
+		if columnExists("temperature_snapshots","four_way_valve") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN four_way_valve")
+			if err != nil {
+				return fmt.Errorf("migration 6 failed (four_way_valve): %v", err)
+			}
+			log.Println("Migration 6 : delete field  four_way_valve")
+		}
+		// Delete primary_return_temp; has never been used
+		if columnExists("temperature_snapshots","primary_return_temp") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN primary_return_temp")
+			if err != nil {
+				return fmt.Errorf("migration 6 failed (primary_return_temp): %v", err)
+			}
+			log.Println("Migration 6 : delete field  primary_return_temp")
+
+		}
+		// Delete secondary_return_temp; has never been used
+		if columnExists("temperature_snapshots","secondary_return_temp") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN secondary_return_temp")
+			if err != nil {
+				return fmt.Errorf("migration 6 failed (secondary_return_temp): %v", err)
+			}
+			log.Println("Migration 6 : delete field  secondary_return_temp")
+
+		}
+    }
+	
 	return nil
 }
 
@@ -903,18 +982,23 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
 			sample_interval,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
-			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
+			dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
 			hp_primary_circuit_supply_temp, hp_secondary_circuit_supply_temp,
 			heating_circuit_0_supply_temp, heating_circuit_1_supply_temp, heating_circuit_2_supply_temp, heating_circuit_3_supply_temp,
 			compressor_active, compressor_speed, compressor_current, compressor_pressure,
 			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
-			compressor_hours, compressor_power,
+			compressor_hours, compressor_starts, compressor_power,
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			burner_modulation, secondary_heat_generator_status
+		) VALUES (
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+		?, ?, ?, ?,	?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -930,8 +1014,6 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.SupplyTemp,
 		snapshot.PrimarySupplyTemp,
 		snapshot.SecondarySupplyTemp,
-		snapshot.PrimaryReturnTemp,
-		snapshot.SecondaryReturnTemp,
 		snapshot.DHWTemp,
 		snapshot.DHWCylinderMiddleTemp,
 		snapshot.BoilerTemp,
@@ -953,6 +1035,7 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.CompressorInletTemp,
 		snapshot.CompressorOutletTemp,
 		snapshot.CompressorHours,
+		snapshot.CompressorStarts,							
 		snapshot.CompressorPower,
 		circulationPumpActiveInt,
 		dhwPumpActiveInt,
@@ -964,7 +1047,6 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.HeatingCircuit1DeltaT,
 		snapshot.HeatingCircuit2DeltaT,
 		snapshot.HeatingCircuit3DeltaT,
-		snapshot.FourWayValve,
 		snapshot.BurnerModulation,
 		snapshot.SecondaryHeatGeneratorStatus,
 	)
@@ -990,17 +1072,17 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 		SELECT
 			timestamp, installation_id, gateway_id, device_id, account_id, account_name,
 			outside_temp, return_temp, supply_temp, primary_supply_temp, secondary_supply_temp,
-			primary_return_temp, secondary_return_temp, dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
+			dhw_temp, dhw_cylinder_middle_temp, boiler_temp, buffer_temp,
 			buffer_temp_top, calculated_outside_temp,
 			hp_primary_circuit_supply_temp, hp_secondary_circuit_supply_temp,
 			heating_circuit_0_supply_temp, heating_circuit_1_supply_temp, heating_circuit_2_supply_temp, heating_circuit_3_supply_temp,
 			compressor_active, compressor_speed, compressor_current, compressor_pressure,
 			compressor_oil_temp, compressor_motor_temp, compressor_inlet_temp, compressor_outlet_temp,
-			compressor_hours, compressor_power,
+			compressor_hours, compressor_starts, compressor_power,
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status
+			burner_modulation, secondary_heat_generator_status
 		FROM temperature_snapshots
 		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ?
 	`
@@ -1049,8 +1131,6 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.SupplyTemp,
 			&snapshot.PrimarySupplyTemp,
 			&snapshot.SecondarySupplyTemp,
-			&snapshot.PrimaryReturnTemp,
-			&snapshot.SecondaryReturnTemp,
 			&snapshot.DHWTemp,
 			&snapshot.DHWCylinderMiddleTemp,
 			&snapshot.BoilerTemp,
@@ -1072,6 +1152,7 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.CompressorInletTemp,
 			&snapshot.CompressorOutletTemp,
 			&snapshot.CompressorHours,
+			&snapshot.CompressorStarts,
 			&snapshot.CompressorPower,
 			&circulationPumpActiveInt,
 			&dhwPumpActiveInt,
@@ -1083,7 +1164,6 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.HeatingCircuit1DeltaT,
 			&snapshot.HeatingCircuit2DeltaT,
 			&snapshot.HeatingCircuit3DeltaT,
-			&snapshot.FourWayValve,
 			&snapshot.BurnerModulation,
 			&snapshot.SecondaryHeatGeneratorStatus,
 		)
