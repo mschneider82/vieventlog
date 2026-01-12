@@ -700,9 +700,12 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		// NOTE: All circuits share the same return sensor, so these represent
 		// the temperature spread from each circuit's supply to the shared return
 		if snapshot.ReturnTemp != nil {
-			if hasHotWaterBuffer { // if buffer use value from calculation above
+			// For systems with buffer tanks, use the deltaT calculated above (supply - return spread)
+			// which is more representative of the actual heat transfer through the buffer system
+			if hasHotWaterBuffer && supplyTemp != nil {
 				snapshot.HeatingCircuit0DeltaT = &deltaT
-			}else{
+			} else {
+				// For systems without buffer, calculate deltaT from circuit 0 supply to shared return
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
 					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
 					snapshot.HeatingCircuit0DeltaT = &deltaT0

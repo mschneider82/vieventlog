@@ -283,7 +283,8 @@ type TemperatureSnapshot struct {
 	// NOTE: These are no longer populated - only kept for reading old data
 	PrimarySupplyTemp   *float64 `json:"primary_supply_temp,omitempty"`   // DEPRECATED: Was used for HeatingCircuit0SupplyTemp (heating.circuits.0.sensors.temperature.supply)
 	SecondarySupplyTemp *float64 `json:"secondary_supply_temp,omitempty"` // DEPRECATED: Was used for HeatingCircuit1SupplyTemp or HPSecondaryCircuitSupplyTemp
-//RS next two may be removed
+	// DEPRECATED: These fields are no longer used but kept for backward compatibility with existing databases
+	// They can be removed in a future major version once all databases have been migrated
 	PrimaryReturnTemp   *float64 `json:"primary_return_temp,omitempty"`   // DEPRECATED: Was used for shared ReturnTemp
 	SecondaryReturnTemp *float64 `json:"secondary_return_temp,omitempty"` // DEPRECATED: Was used for shared ReturnTemp
 
@@ -344,7 +345,7 @@ type TemperatureSnapshot struct {
 	HeatingCircuit3DeltaT *float64 `json:"heating_circuit_3_delta_t,omitempty"` // Circuit 3 supply minus shared return
 
 	// Operating state
-//RS FourWayValve may be removed
+	// DEPRECATED: FourWayValve was never properly utilized and can be removed in a future major version
 	FourWayValve                 *string  `json:"four_way_valve,omitempty"`
 	BurnerModulation             *float64 `json:"burner_modulation,omitempty"`
 	SecondaryHeatGeneratorStatus *string  `json:"secondary_heat_generator_status,omitempty"`

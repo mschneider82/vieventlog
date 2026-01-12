@@ -593,52 +593,42 @@ func runSchemaMigrations() error {
 		log.Println("Migration 5 completed: Added heating_circuit_*_delta_t fields")
 	}
 	
-	// Migration 6: Add compressor_starts field, remove unsused fields
-	// Adds compressor_starts
+	// Migration 6: Add compressor_starts field, remove unused fields
+	// Adds compressor_starts and removes deprecated columns that were never properly used
 	if !migrationApplied("add_compressor_starts") {
-		log.Println("Running migration 6: Adding compressor_starts field")
+		log.Println("Running migration 6: Adding compressor_starts and removing unused fields")
 
 		// Add compressor_starts field
-		if !columnExists("temperature_snapshots","compressor_starts") {
+		if !columnExists("temperature_snapshots", "compressor_starts") {
 			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN compressor_starts REAL")
 			if err != nil {
-				return fmt.Errorf("migration 6failed (compressor_starts): %v", err)
+				return fmt.Errorf("migration 6 failed (compressor_starts): %v", err)
+			}
+			log.Println("Migration 6: Added field compressor_starts")
+		}
+
+		// Remove unused columns (requires SQLite >= 3.35.0)
+		// These columns were never properly used and can be safely removed
+		columnsToRemove := []string{"four_way_valve", "primary_return_temp", "secondary_return_temp"}
+
+		for _, col := range columnsToRemove {
+			if columnExists("temperature_snapshots", col) {
+				_, err := eventDB.Exec(fmt.Sprintf("ALTER TABLE temperature_snapshots DROP COLUMN %s", col))
+				if err != nil {
+					// Log warning but don't fail migration - DROP COLUMN requires SQLite >= 3.35.0
+					log.Printf("Migration 6 warning: Could not drop column %s (requires SQLite >= 3.35.0): %v", col, err)
+					log.Printf("Column %s will remain in database but is no longer used", col)
+				} else {
+					log.Printf("Migration 6: Removed unused column %s", col)
+				}
 			}
 		}
 
-		if err := recordMigration(6, "add_compressor_starts", "Add compressor_starts field"); err != nil {
+		if err := recordMigration(6, "add_compressor_starts", "Add compressor_starts field and remove unused columns (four_way_valve, primary_return_temp, secondary_return_temp)"); err != nil {
 			return fmt.Errorf("failed to record migration 6: %v", err)
 		}
-		log.Println("Migration 6 : Added field  compressor_starts")
-		
-
-		// Delete 4/3 way valve has never been used, contains strings not feasible in grafics
-		if columnExists("temperature_snapshots","four_way_valve") {
-			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN four_way_valve")
-			if err != nil {
-				return fmt.Errorf("migration 6 failed (four_way_valve): %v", err)
-			}
-			log.Println("Migration 6 : delete field  four_way_valve")
-		}
-		// Delete primary_return_temp; has never been used
-		if columnExists("temperature_snapshots","primary_return_temp") {
-			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN primary_return_temp")
-			if err != nil {
-				return fmt.Errorf("migration 6 failed (primary_return_temp): %v", err)
-			}
-			log.Println("Migration 6 : delete field  primary_return_temp")
-
-		}
-		// Delete secondary_return_temp; has never been used
-		if columnExists("temperature_snapshots","secondary_return_temp") {
-			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots DROP COLUMN secondary_return_temp")
-			if err != nil {
-				return fmt.Errorf("migration 6 failed (secondary_return_temp): %v", err)
-			}
-			log.Println("Migration 6 : delete field  secondary_return_temp")
-
-		}
-    }
+		log.Println("Migration 6 completed")
+	}
 	
 	return nil
 }
