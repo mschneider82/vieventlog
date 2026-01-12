@@ -196,8 +196,10 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
 
                     <!-- Component overlays with status images -->
                     <!-- DHW Storage -->
-                    <img src="/static/img/vitocal/Warmwasserspeicher%20${dhwActive ? 'ein' : 'aus'}.png"
+                    ${dhw_exists ? `
+                    <img src="${dhw_image}"
                          alt="Warmwasserspeicher" class="component-overlay dhw-storage-overlay">
+                    ` : ''}
 
                     <!-- Heating Storage -->
                     <img src="/static/img/vitocal/Heizwasserspeicher%20${heatingActive ? 'ein' : 'aus'}.png"
