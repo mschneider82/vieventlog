@@ -229,10 +229,12 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'hp_secondary_circuit_supply_temp',  // WP secondary circuit supply
-                'hp_secondary_circuit_return_temp',  // WP secondary circuit return
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
-                'buffer_temp'
+                'buffer_temp',
+                'primary_supply_temp',               //️ Vorlauf IDU (Legacy)
+                'secondary_supply_temp'              // Sekundär-Vorlauf ODU (Legacy)			  
             ];
             fallbackFields = ['secondary_supply_temp'];  // Legacy fallback for WP secondary
         } else {
@@ -240,9 +242,12 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'heating_circuit_0_supply_temp',     // Heating circuit 0 supply
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
-                'buffer_temp'
+                'buffer_temp',
+                'primary_supply_temp',               //️ Vorlauf IDU (Legacy)
+                'secondary_supply_temp'              // Sekundär-Vorlauf ODU (Legacy)
             ];
             fallbackFields = ['primary_supply_temp'];  // Legacy fallback for heating circuit
         }
@@ -304,8 +309,6 @@ function renderFilters() {
         'supply_temp': '↗️ Vorlauftemperatur (Legacy)',
         'primary_supply_temp': '↗️ Vorlauf IDU (Legacy)',
         'secondary_supply_temp': '↗️ Sekundär-Vorlauf ODU (Legacy)',
-        'primary_return_temp': '↩️ Primär-Rücklauf (Legacy)',
-        'secondary_return_temp': '↩️ Sekundär-Rücklauf (Legacy)',
 
         // Compressor
         'compressor_active': '⚙️ Kompressor aktiv',
@@ -317,6 +320,7 @@ function renderFilters() {
         'compressor_inlet_temp': '❄️ Eintritt-Temp.',
         'compressor_outlet_temp': '♨️ Austritt-Temp.',
         'compressor_hours': '⏱️ Betriebsstunden',
+        'compressor_starts': '️↩️ Anzahl Starts',                                                       
         'compressor_power': '⚡ Leistungsaufnahme',
 
         // Pumps
@@ -330,7 +334,6 @@ function renderFilters() {
         'cop': '📊 moment. Arbeitszahl (AZ)',
 
         // Operating state
-        'four_way_valve': '🔀 4-Wege-Ventil',
         'burner_modulation': '🔥 Brenner Modulation',
         'secondary_heat_generator_status': '🔥 Zusatzheizung'
     };
@@ -344,10 +347,10 @@ function renderFilters() {
                    'heating_circuit_2_supply_temp', 'heating_circuit_3_supply_temp',
                    'heating_circuit_0_delta_t', 'heating_circuit_1_delta_t',
                    'heating_circuit_2_delta_t', 'heating_circuit_3_delta_t',
-                   'primary_supply_temp', 'secondary_supply_temp', 'primary_return_temp', 'secondary_return_temp'],
+                   'primary_supply_temp', 'secondary_supply_temp'],
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
-                      'compressor_hours', 'compressor_power'],
+                      'compressor_hours', 'compressor_starts', 'compressor_power'],
         'Pumpen': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
         'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
@@ -419,8 +422,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'primary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ea4335', smooth: true, opacity: 0.5 },
         'secondary_supply_temp': { type: 'line', yAxisIndex: 0, color: '#ff6f00', smooth: true, opacity: 0.5 },
         'return_temp': { type: 'line', yAxisIndex: 0, color: '#34a853', smooth: true },
-        'primary_return_temp': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true, opacity: 0.5 },
-        'secondary_return_temp': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true, opacity: 0.5 },
+
         'supply_temp': { type: 'line', yAxisIndex: 0, color: '#999999', smooth: true, opacity: 0.5 },
         'dhw_temp': { type: 'line', yAxisIndex: 0, color: '#fbbc04', smooth: true },
         'dhw_cylinder_middle_temp': { type: 'line', yAxisIndex: 0, color: '#fdd663', smooth: true },
@@ -456,6 +458,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_current': { type: 'line', yAxisIndex: 2, color: '#3f51b5', smooth: true },
         'compressor_pressure': { type: 'line', yAxisIndex: 2, color: '#00bcd4', smooth: true },
         'compressor_hours': { type: 'line', yAxisIndex: 2, color: '#607d8b', smooth: true },
+        'compressor_starts': { type: 'line', yAxisIndex: 2, color: '#7cb342', smooth: true },      
         'compressor_power': { type: 'line', yAxisIndex: 2, color: '#e91e63', smooth: true },
         'volumetric_flow': { type: 'line', yAxisIndex: 2, color: '#2196f3', smooth: true },
         'thermal_power': { type: 'line', yAxisIndex: 2, color: '#ff5722', smooth: true },
@@ -498,8 +501,6 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'supply_temp': 'Vorlauf (L)',
         'primary_supply_temp': 'Vorlauf IDU (L)',
         'secondary_supply_temp': 'Sek.-Vorlauf ODU (L)',
-        'primary_return_temp': 'Primär-RL (L)',
-        'secondary_return_temp': 'Sek.-RL (L)',
         'compressor_active': 'Kompressor',
         'compressor_speed': 'Drehzahl',
         'compressor_current': 'Strom',
@@ -509,6 +510,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_inlet_temp': 'Eintritt-Temp.',
         'compressor_outlet_temp': 'Austritt-Temp.',
         'compressor_hours': 'Betriebsstunden',
+        'compressor_starts': 'Starts',
         'compressor_power': 'Leistung',
         'circulation_pump_active': 'Umwälzpumpe',
         'dhw_pump_active': 'WW-Pumpe',
@@ -649,14 +651,15 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
 				nameTextStyle: {color: "#ffffff"},
 				axisLabel: {color: "#ffffff"},
                 position: 'right',
-//RS
                 // Minimum and maximum variations according to the value of incoming
-                // Add 20% padding below and 10% above for better readability
+                // Add padding below and above based on data range for better readability
                 min: function(value){
-                    return Math.floor(value.min - 0.2 * Math.abs(value.min));
+					if (value.min < 100.0)	return Math.floor(value.min - 0.1 * Math.abs(value.min));
+					return Math.floor(value.min - 0.005 * Math.abs(value.min));
                 },
                 max: function(value){
-                    return Math.ceil(1.1 * value.max);
+					if (value.min < 100.0) return Math.ceil(1.1 * value.max);
+					return Math.ceil(1.005 * value.max);
                 },
                 offset: 60
             }
