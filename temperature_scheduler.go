@@ -406,7 +406,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.outside":
 		snapshot.OutsideTemp = getFloatValue(feature.Properties)
 
-	// dashboard: returnTemp: find(['heating.sensors.temperature.return']), Ruecklauf IDU/ODU
+	// dashboard: returnTemp: find(['heating.sensors.temperature.return']), Rücklauf IDU/ODU
 	case "heating.sensors.temperature.return":
 		snapshot.ReturnTemp = getFloatValue(feature.Properties)
 
@@ -414,24 +414,27 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.supply":
 		snapshot.SupplyTemp = getFloatValue(feature.Properties)
 
+	// Heating circuits 0-3: Store in both legacy fields (backward compat) and new explicit fields
 	// dashboard: supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']), Gemeinsame Vorlauftemperatur IDU (auch Vorlauf 1. Heizkreis)
 	case "heating.circuits.0.sensors.temperature.supply":
-		snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)
+		//snapshot.PrimarySupplyTemp = getFloatValue(feature.Properties)         // DEPRECATED: Legacy (use HeatingCircuit0SupplyTemp)
+		snapshot.HeatingCircuit0SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
+	case "heating.circuits.1.sensors.temperature.supply":
+		//snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)       // DEPRECATED: Legacy (use HeatingCircuit1SupplyTemp)
+		snapshot.HeatingCircuit1SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 1
+	case "heating.circuits.2.sensors.temperature.supply":
+		snapshot.HeatingCircuit2SupplyTemp = getFloatValue(feature.Properties)
+	case "heating.circuits.3.sensors.temperature.supply":
+		snapshot.HeatingCircuit3SupplyTemp = getFloatValue(feature.Properties)
+
+	// Heat pump circuits: Only supply temperatures exist (no per-circuit return sensors)
+	// dashboard: primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']), Lufteintrittstemperatur
+	case "heating.primaryCircuit.sensors.temperature.supply":
+		snapshot.HPPrimaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Air intake temperature (HP primary circuit)
 
 	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
 	case "heating.secondaryCircuit.sensors.temperature.supply":
-		snapshot.SecondarySupplyTemp = getFloatValue(feature.Properties)
-
-	// dashboard: primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']), Lufteintrittstemperatur
-	// NOTE: Confusing mapping due to existing database fields (see types.go / db.go)
-	// This actually represents air intake temperature for heat pumps
-	case "heating.primaryCircuit.sensors.temperature.supply":
-		// Map to SecondaryReturnTemp due to legacy database field naming
-		snapshot.SecondaryReturnTemp = getFloatValue(feature.Properties)
-
-	// dashboard: primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']), Rücklauf ODU Primärkreis
-	case "heating.primaryCircuit.sensors.temperature.return":
-		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties)
+		snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // HP secondary circuit supply
 	case "heating.dhw.sensors.temperature.hotWaterStorage":
 		snapshot.DHWTemp = getFloatValue(feature.Properties)
 	case "heating.dhw.sensors.temperature.hotWaterStorage.middle":
@@ -485,7 +488,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CompressorActive = getBoolValue(feature.Properties)
 	case "heating.compressors.0.speed.current":
 		snapshot.CompressorSpeed = getFloatValue(feature.Properties)
-	case "heating.compressors.0.sensors.current":
+	case "heating.inverters.0.sensors.power.current": //"heating.compressors.0.sensors.current":
 		snapshot.CompressorCurrent = getFloatValue(feature.Properties)
 	case "heating.compressors.0.sensors.pressure.inlet":
 		snapshot.CompressorPressure = getFloatValue(feature.Properties)
@@ -502,7 +505,11 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		if props, ok := feature.Properties["hours"].(map[string]interface{}); ok {
 			snapshot.CompressorHours = getFloatValue(props)
 		}
-	case "heating.inverters.0.sensors.power.output":
+//RS for future use
+		// Extract starts from nested structure
+//		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
+		
+		case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
 		snapshot.CompressorPower = getFloatValue(feature.Properties)
 	case "heating.compressors.0.power.consumption.current":
@@ -538,7 +545,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CirculationPumpActive = getPumpStatus(feature.Properties)
 	case "heating.dhw.pumps.circulation":
 		snapshot.DHWPumpActive = getPumpStatus(feature.Properties)
-	case "heating.pumps.primary":
+	case "heating.boiler.pumps.internal":  // changed to use vaild keyword "heating.pumps.primary":
 		snapshot.InternalPumpActive = getPumpStatus(feature.Properties)
 
 	// Flow/Energy
@@ -546,10 +553,14 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.VolumetricFlow = getFloatValue(feature.Properties)
 
 	// Operating state
-	case "heating.compressors.0.refrigerant.fourWayValve":
-		snapshot.FourWayValve = getStringValue(feature.Properties)
+
+//remove, will not be used because string content
+	//case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
+	//	snapshot.FourWayValve = getStringValue(feature.Properties)
 	case "heating.burners.0.modulation":
 		snapshot.BurnerModulation = getFloatValue(feature.Properties)
+
+// info: this feature migth have no properties/no information
 	case "heating.secondaryHeatGenerator.status":
 		snapshot.SecondaryHeatGeneratorStatus = getStringValue(feature.Properties)
 	}
@@ -653,17 +664,17 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if hasHotWaterBuffer {
 		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
-		// which maps to our SecondarySupplyTemp + ReturnTemp
-		if snapshot.SecondarySupplyTemp != nil {
-			supplyTemp = snapshot.SecondarySupplyTemp
+		// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
+		if snapshot.HPSecondaryCircuitSupplyTemp != nil {
+			supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	} else {
 		// Ohne HW-Puffer: Heizkreis Spreizung (see dashboard_render_engine)
 		// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
-		// which maps to our PrimarySupplyTemp + ReturnTemp
-		if snapshot.PrimarySupplyTemp != nil {
-			supplyTemp = snapshot.PrimarySupplyTemp
+		// which maps to our HeatingCircuit0SupplyTemp + ReturnTemp
+		if snapshot.HeatingCircuit0SupplyTemp != nil {
+			supplyTemp = snapshot.HeatingCircuit0SupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		} else if snapshot.SupplyTemp != nil {
 			// Fallback for maximum compatibility
@@ -683,6 +694,28 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			if deltaT < 0 || *snapshot.BoilerTemp > *supplyTemp {
 				supplyTemp = snapshot.BoilerTemp
 				deltaT = *supplyTemp - *returnTemp
+			}
+		}
+
+		// Calculate deltaT for each heating circuit individually
+		// NOTE: All circuits share the same return sensor, so these represent
+		// the temperature spread from each circuit's supply to the shared return
+		if snapshot.ReturnTemp != nil {
+			if snapshot.HeatingCircuit0SupplyTemp != nil {
+				deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit0DeltaT = &deltaT0
+			}
+			if snapshot.HeatingCircuit1SupplyTemp != nil {
+				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit1DeltaT = &deltaT1
+			}
+			if snapshot.HeatingCircuit2SupplyTemp != nil {
+				deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit2DeltaT = &deltaT2
+			}
+			if snapshot.HeatingCircuit3SupplyTemp != nil {
+				deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *snapshot.ReturnTemp
+				snapshot.HeatingCircuit3DeltaT = &deltaT3
 			}
 		}
 

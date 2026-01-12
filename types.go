@@ -271,19 +271,45 @@ type TemperatureSnapshot struct {
 	SampleInterval int       `json:"sample_interval"` // Sample interval in minutes when this snapshot was taken
 
 	// Temperature sensors
+	// Basic temperature sensors
 	OutsideTemp           *float64 `json:"outside_temp,omitempty"`
-	ReturnTemp            *float64 `json:"return_temp,omitempty"`
-	SupplyTemp            *float64 `json:"supply_temp,omitempty"`
-	PrimarySupplyTemp     *float64 `json:"primary_supply_temp,omitempty"`
-	SecondarySupplyTemp   *float64 `json:"secondary_supply_temp,omitempty"`
-	PrimaryReturnTemp     *float64 `json:"primary_return_temp,omitempty"`
-	SecondaryReturnTemp   *float64 `json:"secondary_return_temp,omitempty"`
+	ReturnTemp            *float64 `json:"return_temp,omitempty"` // Return temperature (common for all systems)
+	SupplyTemp            *float64 `json:"supply_temp,omitempty"` // DEPRECATED: Use HeatingCircuit0SupplyTemp for heating.sensors.temperature.supply
+	CalculatedOutsideTemp *float64 `json:"calculated_outside_temp,omitempty"`
+
+	// DEPRECATED: Legacy temperature fields (kept for backward compatibility)
+	// These fields use ambiguous naming that doesn't clearly map to API features.
+	// Prefer using the explicit hp_* and heating_circuit_* fields instead.
+	// NOTE: These are no longer populated - only kept for reading old data
+	PrimarySupplyTemp   *float64 `json:"primary_supply_temp,omitempty"`   // DEPRECATED: Was used for HeatingCircuit0SupplyTemp (heating.circuits.0.sensors.temperature.supply)
+	SecondarySupplyTemp *float64 `json:"secondary_supply_temp,omitempty"` // DEPRECATED: Was used for HeatingCircuit1SupplyTemp or HPSecondaryCircuitSupplyTemp
+	PrimaryReturnTemp   *float64 `json:"primary_return_temp,omitempty"`   // DEPRECATED: Was used for shared ReturnTemp
+	SecondaryReturnTemp *float64 `json:"secondary_return_temp,omitempty"` // DEPRECATED: Was used for shared ReturnTemp
+
+	// Heat pump circuit temperatures (from heating.primaryCircuit / heating.secondaryCircuit)
+	// These represent the actual heat pump's refrigerant circuits (outdoor unit)
+	// NOTE: Only SUPPLY temperatures exist in API - there are NO per-circuit return sensors!
+	// All circuits share the single heating.sensors.temperature.return sensor (ReturnTemp field)
+	HPPrimaryCircuitSupplyTemp   *float64 `json:"hp_primary_circuit_supply_temp,omitempty"`   // Air intake temperature (heating.primaryCircuit.sensors.temperature.supply)
+	HPSecondaryCircuitSupplyTemp *float64 `json:"hp_secondary_circuit_supply_temp,omitempty"` // HP secondary supply (heating.secondaryCircuit.sensors.temperature.supply)
+
+	// Heating circuit temperatures (from heating.circuits.0-3)
+	// These represent the building's heating circuits (indoor distribution)
+	// NOTE: Only SUPPLY temperatures exist - return uses shared ReturnTemp field
+	// NOTE: circuits.1-3 may not exist on all systems (only circuit.0 is common)
+	HeatingCircuit0SupplyTemp *float64 `json:"heating_circuit_0_supply_temp,omitempty"` // Common supply temperature (heating.circuits.0.sensors.temperature.supply)
+	HeatingCircuit1SupplyTemp *float64 `json:"heating_circuit_1_supply_temp,omitempty"` // Heating circuit 1 supply (heating.circuits.1.sensors.temperature.supply)
+	HeatingCircuit2SupplyTemp *float64 `json:"heating_circuit_2_supply_temp,omitempty"` // Heating circuit 2 supply (heating.circuits.2.sensors.temperature.supply)
+	HeatingCircuit3SupplyTemp *float64 `json:"heating_circuit_3_supply_temp,omitempty"` // Heating circuit 3 supply (heating.circuits.3.sensors.temperature.supply)
+
+	// DHW (Domestic Hot Water) sensors
 	DHWTemp               *float64 `json:"dhw_temp,omitempty"`
 	DHWCylinderMiddleTemp *float64 `json:"dhw_cylinder_middle_temp,omitempty"`
-	BoilerTemp            *float64 `json:"boiler_temp,omitempty"`
-	BufferTemp            *float64 `json:"buffer_temp,omitempty"`
-	BufferTempTop         *float64 `json:"buffer_temp_top,omitempty"`
-	CalculatedOutsideTemp *float64 `json:"calculated_outside_temp,omitempty"`
+
+	// Boiler and buffer sensors
+	BoilerTemp    *float64 `json:"boiler_temp,omitempty"`
+	BufferTemp    *float64 `json:"buffer_temp,omitempty"`
+	BufferTempTop *float64 `json:"buffer_temp_top,omitempty"`
 
 	// Compressor data
 	CompressorActive     *bool    `json:"compressor_active,omitempty"`
@@ -306,6 +332,14 @@ type TemperatureSnapshot struct {
 	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`
 	ThermalPower   *float64 `json:"thermal_power,omitempty"`
 	COP            *float64 `json:"cop,omitempty"`
+
+	// Temperature spreads (deltaT) for each heating circuit
+	// NOTE: All circuits share the same return sensor (ReturnTemp), so these deltaT values
+	// represent supply-return spread but the return is a mixture of all circuits
+	HeatingCircuit0DeltaT *float64 `json:"heating_circuit_0_delta_t,omitempty"` // Circuit 0 supply minus shared return
+	HeatingCircuit1DeltaT *float64 `json:"heating_circuit_1_delta_t,omitempty"` // Circuit 1 supply minus shared return
+	HeatingCircuit2DeltaT *float64 `json:"heating_circuit_2_delta_t,omitempty"` // Circuit 2 supply minus shared return
+	HeatingCircuit3DeltaT *float64 `json:"heating_circuit_3_delta_t,omitempty"` // Circuit 3 supply minus shared return
 
 	// Operating state
 	FourWayValve                 *string  `json:"four_way_valve,omitempty"`
