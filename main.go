@@ -99,6 +99,21 @@ func canBind(host string, port int) bool {
 	return true
 }
 
+// getDefaultDatabasePath returns the default database path
+// Priority: VICARE_CONFIG_DIR env var > /config (if exists) > current directory
+func getDefaultDatabasePath() string {
+	configDir := os.Getenv("VICARE_CONFIG_DIR")
+	if configDir == "" {
+		// Check if /config exists (Docker), otherwise use current directory
+		if _, err := os.Stat("/config"); err == nil {
+			configDir = "/config"
+		} else {
+			configDir = "."
+		}
+	}
+	return fmt.Sprintf("%s/viessmann_events.db", configDir)
+}
+
 func main() {
 	// Create application-wide context for graceful shutdown coordination
 	_, cancel := context.WithCancel(context.Background())
@@ -109,6 +124,16 @@ func main() {
 
 	// Try to load credentials from keyring first
 	loadStoredCredentials()
+
+	// Initialize database early to ensure settings tables exist
+	// This allows users to enable features (event archive, temperature logging) for the first time
+	dbPath := getDefaultDatabasePath()
+	if err := InitEventDatabase(dbPath); err != nil {
+		log.Printf("Warning: Failed to initialize database at startup: %v", err)
+		log.Printf("Features requiring database will not be available")
+	} else {
+		log.Printf("Database initialized at: %s", dbPath)
+	}
 
 	// Setup HTTP handlers
 	http.HandleFunc("/", indexHandler)
