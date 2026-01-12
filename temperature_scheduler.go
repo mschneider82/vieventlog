@@ -505,9 +505,8 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		if props, ok := feature.Properties["hours"].(map[string]interface{}); ok {
 			snapshot.CompressorHours = getFloatValue(props)
 		}
-//RS for future use
 		// Extract starts from nested structure
-//		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
+		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
 		
 		case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
@@ -545,7 +544,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		snapshot.CirculationPumpActive = getPumpStatus(feature.Properties)
 	case "heating.dhw.pumps.circulation":
 		snapshot.DHWPumpActive = getPumpStatus(feature.Properties)
-	case "heating.boiler.pumps.internal":  // changed to use vaild keyword								
+	case "heating.boiler.pumps.internal":  // changed to use vaild keyword
 		snapshot.InternalPumpActive = getPumpStatus(feature.Properties)
 
 	// Flow/Energy
@@ -703,7 +702,7 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		if snapshot.ReturnTemp != nil {
 			if hasHotWaterBuffer { // if buffer use value from calculation above
 				snapshot.HeatingCircuit0DeltaT = &deltaT
-			}else{										
+			}else{
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
 					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
 					snapshot.HeatingCircuit0DeltaT = &deltaT0
