@@ -9,17 +9,27 @@ import (
 	"time"
 )
 
+// respondWithError sends a JSON error response
+func respondWithError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"error":   message,
+	})
+}
+
 // handleTemperatureLogSettings handles GET /api/temperature-log/settings
 func handleTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	settings, err := GetTemperatureLogSettings()
 	if err != nil {
 		log.Printf("Error getting temperature log settings: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to get settings: %v", err), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get settings: %v", err))
 		return
 	}
 
@@ -30,24 +40,24 @@ func handleTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 // handleSetTemperatureLogSettings handles POST /api/temperature-log/settings/set
 func handleSetTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	var settings TemperatureLogSettings
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate settings
 	if settings.SampleInterval < 1 || settings.SampleInterval > 1440 {
-		http.Error(w, "Sample interval must be between 1 and 1440 minutes", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Sample interval must be between 1 and 1440 minutes")
 		return
 	}
 
 	if settings.RetentionDays < 1 || settings.RetentionDays > 3650 {
-		http.Error(w, "Retention days must be between 1 and 3650", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Retention days must be between 1 and 3650")
 		return
 	}
 
@@ -60,7 +70,7 @@ func handleSetTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 	err := SetTemperatureLogSettings(&settings)
 	if err != nil {
 		log.Printf("Error saving temperature log settings: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to save settings: %v", err), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save settings: %v", err))
 		return
 	}
 
@@ -69,7 +79,7 @@ func handleSetTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 		err = RestartTemperatureScheduler()
 		if err != nil {
 			log.Printf("Error restarting temperature scheduler: %v", err)
-			http.Error(w, fmt.Sprintf("Settings saved but failed to restart scheduler: %v", err), http.StatusInternalServerError)
+			respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Settings saved but failed to restart scheduler: %v", err))
 			return
 		}
 	} else {
@@ -86,14 +96,14 @@ func handleSetTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 // handleTemperatureLogStats handles GET /api/temperature-log/stats
 func handleTemperatureLogStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	settings, err := GetTemperatureLogSettings()
 	if err != nil {
 		log.Printf("Error getting temperature log settings: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to get settings: %v", err), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get settings: %v", err))
 		return
 	}
 
@@ -126,14 +136,14 @@ func handleTemperatureLogStats(w http.ResponseWriter, r *http.Request) {
 // handleTemperatureLogData handles GET /api/temperature-log/data
 func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	// Get query parameters
 	installationID := r.URL.Query().Get("installationId")
 	if installationID == "" {
-		http.Error(w, "installationId parameter is required", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "installationId parameter is required")
 		return
 	}
 
@@ -150,7 +160,7 @@ func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 	if hoursParam != "" {
 		hours, err := strconv.Atoi(hoursParam)
 		if err != nil || hours < 1 || hours > 8760 { // Max 1 year
-			http.Error(w, "Invalid hours parameter (must be 1-8760)", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Invalid hours parameter (must be 1-8760)")
 			return
 		}
 		endTime = time.Now().UTC()
@@ -163,7 +173,7 @@ func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 		if startTimeStr != "" {
 			startTime, err = time.Parse(time.RFC3339, startTimeStr)
 			if err != nil {
-				http.Error(w, "Invalid startTime format (use RFC3339)", http.StatusBadRequest)
+				respondWithError(w, http.StatusBadRequest, "Invalid startTime format (use RFC3339)")
 				return
 			}
 		} else {
@@ -174,7 +184,7 @@ func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 		if endTimeStr != "" {
 			endTime, err = time.Parse(time.RFC3339, endTimeStr)
 			if err != nil {
-				http.Error(w, "Invalid endTime format (use RFC3339)", http.StatusBadRequest)
+				respondWithError(w, http.StatusBadRequest, "Invalid endTime format (use RFC3339)")
 				return
 			}
 		} else {
@@ -197,7 +207,7 @@ func handleTemperatureLogData(w http.ResponseWriter, r *http.Request) {
 	snapshots, err := GetTemperatureSnapshots(installationID, gatewayID, deviceID, startTime, endTime, limit)
 	if err != nil {
 		log.Printf("Error fetching temperature snapshots: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to fetch data: %v", err), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch data: %v", err))
 		return
 	}
 
