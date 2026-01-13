@@ -26,9 +26,10 @@ RUN CGO_ENABLED=0 go build -tags nokeyring \
 # Runtime stage - minimal image
 FROM debian:bookworm-slim
 
-# Install ca-certificates for HTTPS API calls and tzdata for timezone support
+# Install ca-certificates for HTTPS API calls
+# Note: tzdata no longer needed - embedded via time/tzdata import
 RUN apt-get update && \
-    apt-get install -y ca-certificates tzdata && \
+    apt-get install -y ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Set default timezone to Europe/Berlin (can be overridden with TZ env var)
