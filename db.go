@@ -1387,7 +1387,7 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 
 	query := `
 		SELECT
-			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
+			strftime('%Y-%m-%d %H:00:00', timestamp, 'localtime') as hour,
 			-- Calculate total energy by summing (power * interval) for each sample
 			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
 			SUM(COALESCE(case when compressor_power > 0 then thermal_power
@@ -1488,7 +1488,7 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 
 	query := `
 		SELECT
-			DATE(timestamp) as day,
+			DATE(timestamp, 'localtime') as day,
 			-- Calculate total energy by summing (power * interval) for each sample
 			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
 			SUM(COALESCE(case when compressor_power > 0 then thermal_power
@@ -1507,8 +1507,8 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 		WHERE installation_id = ?
 			AND gateway_id = ?
 			AND device_id = ?
-			AND DATE(timestamp) >= DATE(?)
-			AND DATE(timestamp) <= DATE(?)
+			AND DATE(timestamp, 'localtime') >= DATE(?)
+			AND DATE(timestamp, 'localtime') <= DATE(?)
 		GROUP BY day
 		ORDER BY day ASC
 	`
