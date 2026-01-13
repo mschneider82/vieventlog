@@ -687,11 +687,11 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	if snapshot.ThermalPower == nil && snapshot.VolumetricFlow != nil && supplyTemp != nil && returnTemp != nil {
 		deltaT := *supplyTemp - *returnTemp
 
-		// Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ wäre,
-		// verwende BoilerTemp statt supplyTemp. Bei manchen Anlagentypen liefert
+		// Fallback für 250-A und ähnliche Anlagen: Bei manchen Anlagentypen liefert
 		// die API die "gemeinsame Vorlauftemperatur" statt der höchsten Temperatur.
+		// Verwende BoilerTemp wenn diese höher ist als supplyTemp.
 		if snapshot.BoilerTemp != nil {
-			if deltaT < 0 || *snapshot.BoilerTemp > *supplyTemp {
+			if *snapshot.BoilerTemp > *supplyTemp {
 				supplyTemp = snapshot.BoilerTemp
 				deltaT = *supplyTemp - *returnTemp
 			}
