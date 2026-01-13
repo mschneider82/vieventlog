@@ -48,10 +48,14 @@ func InitEventDatabase(dbPath string) error {
 		return fmt.Errorf("failed to open database: %v", err)
 	}
 
-	// Enable WAL mode for better concurrency (allows simultaneous reads and writes)
+	// Try to enable WAL mode for better concurrency (allows simultaneous reads and writes)
+	// On Windows, WAL mode can fail with "out of memory" errors even when sufficient memory exists
+	// This is often due to file permissions or antivirus interference - fall back to DELETE mode
 	_, err = eventDB.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
-		return fmt.Errorf("failed to enable WAL mode: %v", err)
+		log.Printf("Warning: Could not enable WAL mode (falling back to DELETE mode): %v", err)
+		log.Printf("This is common on Windows and does not affect functionality")
+		// Continue with default DELETE mode instead of failing
 	}
 
 	// Set busy timeout to 5 seconds to handle lock contention gracefully
