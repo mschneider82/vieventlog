@@ -1383,7 +1383,6 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 
 	// Start of day (00:00:00) to end of day (23:59:59)
 	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
-	endTime := startTime.Add(24 * time.Hour)
 
 	query := `
 		SELECT
@@ -1406,15 +1405,14 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 		WHERE installation_id = ?
 			AND gateway_id = ?
 			AND device_id = ?
-			AND timestamp >= ?
-			AND timestamp < ?
+			AND DATE(timestamp, 'localtime') = DATE(?)
 		GROUP BY hour
 		ORDER BY hour ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		startTime.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
 	}
