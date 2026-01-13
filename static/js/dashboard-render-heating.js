@@ -2750,9 +2750,10 @@
             if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant && !kf.scop && !kf.compressorStats) return '';
 
             let info = '';
-
+			let deviceVariant = '';
             // Basic device info
             if (kf.deviceVariant) {
+				deviceVariant = kf.deviceVariant.value;
                 info += `
                     <div class="status-item">
                         <span class="status-label">Modell</span>
@@ -2780,14 +2781,21 @@
             }
 
             if (kf.deviceWiFi) {
-                const wifiStrength = kf.deviceWiFi.value.strength.value - 20.0;
-                info += `
-                    <div class="status-item">
-                        <span class="status-label">WiFi Pegel</span>
-                        <span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
-                    </div>
-                `;
-            }
+                let wifiStrength = kf.deviceWiFi.value.strength.value
+				// assume very low wifi strength that wiFi is not activated, don't show wifi 
+				if(wifiStrength > -115 ) {
+					// adjust wifi level on Vitocal devices
+					if (deviceVariant.includes ("Vitocal")) {
+						wifiStrength = wifiStrength - 20.0;
+					}
+                	info += `
+                    	<div class="status-item">
+                        	<span class="status-label">WiFi Pegel</span>
+                        	<span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
+                    	</div>
+                	`;
+            	}
+			}
 
             // JAZ / COP / SCOP / SPF values (Coefficient of Performance)
             if (kf.copTotal || kf.copHeating || kf.copDhw || kf.copCooling || kf.scop || kf.scopHeating || kf.scopDhw || kf.seerCooling) {
