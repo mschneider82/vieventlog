@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	_ "time/tzdata" // Embed timezone database for systems without tzdata
 )
 
 //go:embed templates/*
