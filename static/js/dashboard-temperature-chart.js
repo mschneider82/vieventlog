@@ -317,6 +317,7 @@ function renderFilters() {
         'compressor_inlet_temp': '❄️ Eintritt-Temp.',
         'compressor_outlet_temp': '♨️ Austritt-Temp.',
         'compressor_hours': '⏱️ Betriebsstunden',
+        'compressor_starts': '️🔧 Anzahl Starts',
         'compressor_power': '⚡ Leistungsaufnahme',
 
         // Pumps
@@ -347,7 +348,7 @@ function renderFilters() {
                    'primary_supply_temp', 'secondary_supply_temp', 'primary_return_temp', 'secondary_return_temp'],
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
-                      'compressor_hours', 'compressor_power'],
+                      'compressor_hours', 'compressor_starts', 'compressor_power'],
         'Pumpen': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
         'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
@@ -456,6 +457,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_current': { type: 'line', yAxisIndex: 2, color: '#3f51b5', smooth: true },
         'compressor_pressure': { type: 'line', yAxisIndex: 2, color: '#00bcd4', smooth: true },
         'compressor_hours': { type: 'line', yAxisIndex: 2, color: '#607d8b', smooth: true },
+        'compressor_starts': { type: 'line', yAxisIndex: 2, color: '#7cb342', smooth: true },
         'compressor_power': { type: 'line', yAxisIndex: 2, color: '#e91e63', smooth: true },
         'volumetric_flow': { type: 'line', yAxisIndex: 2, color: '#2196f3', smooth: true },
         'thermal_power': { type: 'line', yAxisIndex: 2, color: '#ff5722', smooth: true },
@@ -509,6 +511,7 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
         'compressor_inlet_temp': 'Eintritt-Temp.',
         'compressor_outlet_temp': 'Austritt-Temp.',
         'compressor_hours': 'Betriebsstunden',
+        'compressor_starts': 'Starts',
         'compressor_power': 'Leistung',
         'circulation_pump_active': 'Umwälzpumpe',
         'dhw_pump_active': 'WW-Pumpe',
@@ -649,14 +652,16 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
 				nameTextStyle: {color: "#ffffff"},
 				axisLabel: {color: "#ffffff"},
                 position: 'right',
-//RS
-                // Minimum and maximum variations according to the value of incoming
-                // Add 20% padding below and 10% above for better readability
-                min: function(value){
-                    return Math.floor(value.min - 0.2 * Math.abs(value.min));
+                // Dynamic Y-axis scaling based on value range
+                // For small values (<100, e.g. temperatures, flow): 10% padding below, 10% above
+                // For large values (>=100, e.g. compressor hours, starts): 0.5% padding to reduce empty space
+                min: function(value) {
+                    if (value.min < 100.0) return Math.floor(value.min - 0.1 * Math.abs(value.min));
+                    return Math.floor(value.min - 0.005 * Math.abs(value.min));
                 },
                 max: function(value){
-                    return Math.ceil(1.1 * value.max);
+					if (value.min < 100.0) return Math.ceil(1.1 * value.max);
+					return Math.ceil(1.005 * value.max);
                 },
                 offset: 60
             }
