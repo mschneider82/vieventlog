@@ -505,9 +505,8 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		if props, ok := feature.Properties["hours"].(map[string]interface{}); ok {
 			snapshot.CompressorHours = getFloatValue(props)
 		}
-//RS for future use
 		// Extract starts from nested structure
-//		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
+		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
 		
 		case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
