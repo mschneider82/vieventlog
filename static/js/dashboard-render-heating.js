@@ -1776,7 +1776,7 @@
 
             // Check what data is available
 //RS
-            const hasGasConsumptionArrays = kf.gasConsumptionHeating;
+            const hasGasConsumptionArrays = kf.gasConsumptionHeating || kf.gasConsumptionDhw;
             const hasPowerConsumptionArrays = kf.powerConsumptionDhw || kf.powerConsumptionHeating;
             const hasHeatProductionArrays = kf.heatProductionDhw && kf.heatProductionHeating;
             const hasHeatProductionSummary = kf.heatProductionSummaryDhw || kf.heatProductionSummaryHeating;
@@ -1993,22 +1993,22 @@
                 const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
                 return `KW ${week}`;
             };
-        
+
             const getDayLabel = (index) => {
                 const now = new Date();
                 const d = new Date(now.getTime() - (index * 24 * 60 * 60 * 1000));
                 return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
             };
-        
+
             let mainTabsHtml = `
                 <button class="stat-tab active" onclick="switchStatPeriod(event, 'gas-period-day')">Tag</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'gas-period-week')">Woche</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'gas-period-month')">Monat</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'gas-period-year')">Jahr</button>
             `;
-        
+
             // Build days
-            const dayArray = kf.gasConsumptionHeating?.properties?.day?.value || [];
+            const dayArray = kf.gasConsumptionDhw?.properties?.day?.value || kf.gasConsumptionHeating?.properties?.day?.value || [];
             const maxDays = Math.min(dayArray.length, 8);
             let dayTabsHtml = '', dayContentHtml = '';
 
@@ -2021,93 +2021,100 @@
                     firstday = 1;                       // don't show day '0'
                 }
             }
-			let label = "Gasverbrauch";
             for (let i = firstday; i < maxDays; i++) {
-//RS
+                const gasDhw = getArrayValue(kf.gasConsumptionDhw, 'day', i);
                 const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'day', i);
-                if (gasHeating === null) continue;
-                const totalGas = (gasHeating || 0);
+                if (gasDhw === null && gasHeating === null) continue;
+
+                const totalGas = (gasDhw || 0) + (gasHeating || 0);
                 dayTabsHtml += `<button class="stat-tab ${i === firstday ? 'active' : ''}" onclick="switchStatTab(event, 'gas-day-${i}')">${getDayLabel(i)}</button>`;
                 dayContentHtml += `
                     <div id="gas-day-${i}" class="stat-tab-content" style="${i === firstday ? 'display: block;' : 'display: none;'}">
                         <div class="stat-grid">
+                            ${gasDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(gasDhw)} m³</span></div>` : ''}
                             ${gasHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(gasHeating)} m³</span></div>` : ''}
                             ${totalGas > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalGas)} m³</span></div>` : ''}
                         </div>
                     </div>
                 `;
             }
-        
+
             // Build weeks
-            const weekArray = kf.gasConsumptionHeating?.properties?.week?.value || [];
+            const weekArray = kf.gasConsumptionDhw?.properties?.week?.value || kf.gasConsumptionHeating?.properties?.week?.value || [];
             const maxWeeks = Math.min(weekArray.length, 6);
             let weekTabsHtml = '', weekContentHtml = '';
-        
+
             for (let i = 0; i < maxWeeks; i++) {
+                const gasDhw = getArrayValue(kf.gasConsumptionDhw, 'week', i);
                 const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'week', i);
-                if (gasHeating === null) continue;
-        
-                const totalGas = (gasHeating || 0);
+                if (gasDhw === null && gasHeating === null) continue;
+
+                const totalGas = (gasDhw || 0) + (gasHeating || 0);
                 weekTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'gas-week-${i}')">${getWeekLabel(i)}</button>`;
                 weekContentHtml += `
                     <div id="gas-week-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
                         <div class="stat-grid">
+                            ${gasDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(gasDhw)} m³</span></div>` : ''}
                             ${gasHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(gasHeating)} m³</span></div>` : ''}
                             ${totalGas > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalGas)} m³</span></div>` : ''}
                         </div>
                     </div>
                 `;
             }
-        
+
             // Build months
-            const monthArray = kf.gasConsumptionHeating?.properties?.month?.value || [];
+            const monthArray = kf.gasConsumptionDhw?.properties?.month?.value || kf.gasConsumptionHeating?.properties?.month?.value || [];
             const maxMonths = Math.min(monthArray.length, 13);
             let monthTabsHtml = '', monthContentHtml = '';
-        
+
             for (let i = 0; i < maxMonths; i++) {
+                const gasDhw = getArrayValue(kf.gasConsumptionDhw, 'month', i);
                 const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'month', i);
-                if (gasHeating === null) continue;
-        
-                const totalGas = (gasHeating || 0);
+                if (gasDhw === null && gasHeating === null) continue;
+
+                const totalGas = (gasDhw || 0) + (gasHeating || 0);
                 monthTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'gas-month-${i}')">${getMonthName(i)}</button>`;
                 monthContentHtml += `
                     <div id="gas-month-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
                         <div class="stat-grid">
-                            ${gasHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(gasHeating)} m³</span></div>` : ''}
-                            ${totalGas > 0 && gasHeating !== null  ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalGas)} m³</span></div>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
-        
-            // Build years
-            const yearArray = kf.gasConsumptionHeating?.properties?.year?.value || [];
-            const maxYears = Math.min(yearArray.length, 2);
-            let yearTabsHtml = '', yearContentHtml = '';
-        
-            for (let i = 0; i < maxYears; i++) {
-                const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'year', i);
-                if (gasHeating === null) continue;
-        
-                const now = new Date();
-                const yearLabel = now.getFullYear() - i;
-                const totalGas = (gasHeating || 0);
-                yearTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'gas-year-${i}')">${yearLabel}</button>`;
-                yearContentHtml += `
-                    <div id="gas-year-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
-                        <div class="stat-grid">
+                            ${gasDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(gasDhw)} m³</span></div>` : ''}
                             ${gasHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(gasHeating)} m³</span></div>` : ''}
                             ${totalGas > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalGas)} m³</span></div>` : ''}
                         </div>
                     </div>
                 `;
             }
-        
+
+            // Build years
+            const yearArray = kf.gasConsumptionDhw?.properties?.year?.value || kf.gasConsumptionHeating?.properties?.year?.value || [];
+            const maxYears = Math.min(yearArray.length, 2);
+            let yearTabsHtml = '', yearContentHtml = '';
+
+            for (let i = 0; i < maxYears; i++) {
+                const gasDhw = getArrayValue(kf.gasConsumptionDhw, 'year', i);
+                const gasHeating = getArrayValue(kf.gasConsumptionHeating, 'year', i);
+                if (gasDhw === null && gasHeating === null) continue;
+
+                const now = new Date();
+                const yearLabel = now.getFullYear() - i;
+                const totalGas = (gasDhw || 0) + (gasHeating || 0);
+                yearTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'gas-year-${i}')">${yearLabel}</button>`;
+                yearContentHtml += `
+                    <div id="gas-year-${i}" class="stat-tab-content" style="${i === 0 ? 'display: block;' : 'display: none;'}">
+                        <div class="stat-grid">
+                            ${gasDhw !== null ? `<div class="stat-item stat-power"><span class="stat-label">💧 Warmwasser</span><span class="stat-value">${formatNum(gasDhw)} m³</span></div>` : ''}
+                            ${gasHeating !== null ? `<div class="stat-item stat-power"><span class="stat-label">🔥 Heizen</span><span class="stat-value">${formatNum(gasHeating)} m³</span></div>` : ''}
+                            ${totalGas > 0 ? `<div class="stat-item stat-total"><span class="stat-label">Gesamt</span><span class="stat-value">${formatNum(totalGas)} m³</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
             if (!dayTabsHtml && !weekTabsHtml && !monthTabsHtml && !yearTabsHtml) return '';
-        
+
             return `
                 <div class="card">
-                    <div class="card-header"><h2>🔥 ${label}</h2></div>
+                    <div class="card-header"><h2>🔥 Gasverbrauch</h2></div>
                     <div class="stat-tabs stat-tabs-main">${mainTabsHtml}</div>
                     <div id="gas-period-day" class="stat-period-content" style="display: block;">
                         <div class="stat-tabs stat-tabs-scrollable">${dayTabsHtml}</div>
