@@ -552,13 +552,25 @@
 
                 // Consumption/Production Statistics (Arrays with history)
                 // With includeDeviceFeatures=true, these features have day/week/month/year arrays
-//RS  prepare for new code 
+
+                //  Vitodens gas consumption
                 gasConsumptionHeating: (() => {
                     if (!features.rawFeatures) return null;
                     const f = features.rawFeatures.find(f => f.feature === 'heating.gas.consumption.heating');
                     return f || null;
                 })(),
-                    
+                gasConsumptionDhw: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.gas.consumption.dhw');
+                    return f || null;
+                })(),
+                gasConsumptionTotal: (() => {
+                    if (!features.rawFeatures) return null;
+                    const f = features.rawFeatures.find(f => f.feature === 'heating.gas.consumption.total');
+                    return f || null;
+                })(),
+
+                //  power consumption
                 powerConsumptionDhw: (() => {
                     if (!features.rawFeatures) return null;
                     const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.dhw');
@@ -574,6 +586,8 @@
                     const f = features.rawFeatures.find(f => f.feature === 'heating.power.consumption.total');
                     return f || null;
                 })(),
+                
+                // heat production
                 heatProductionDhw: (() => {
                     if (!features.rawFeatures) return null;
                     const f = features.rawFeatures.find(f => f.feature === 'heating.heat.production.dhw');
