@@ -2013,7 +2013,8 @@
             let dayTabsHtml = '', dayContentHtml = '';
 
             let firstday = 0;
-            const dayValueReadAt = kf.gasConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
+            const dayValueReadAt = kf.gasConsumptionDhw?.properties?.dayValueReadAt?.value ||
+                                   kf.gasConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
             if(dayValueReadAt != 0){
                 const anyTime = new Date(dayValueReadAt).getTime();
                 const currentTime = new Date().getTime();
