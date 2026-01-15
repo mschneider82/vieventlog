@@ -8,6 +8,11 @@ let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
 
+//RS
+let nullconnect = false;
+let symbolshow = false;
+let smoothdata = true;
+
 // Initialize temperature chart section
 async function initTemperatureChart() {
     // First check if temperature logging is enabled
@@ -57,6 +62,7 @@ async function initTemperatureChart() {
                         <button class="time-btn" data-range="72h">72h</button>
                         <button class="time-btn" data-range="7d">7d</button>
                         <button class="time-btn" data-range="30d">30d</button>
+                        <button class="time-btn" data-range="90d">90d</button>
                         <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
@@ -69,7 +75,29 @@ async function initTemperatureChart() {
             </div>
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
-
+//RS
+        // toggle buttons Showsymbols, Connnect Nulls
+        let html = '<div style="display: inline-block; cursor: pointer;  font-size: 0.9rem;">';
+		let checked = symbolshow ? 'checked' : '';
+        html += `
+            <input type="checkbox" id="symbol" value="symbol" ${checked} onchange="toggleField('symbol')">
+            <label for="symbol">Punkte &nbsp&nbsp </label>
+        `;
+		checked = nullconnect ? 'checked' : '';
+        html += `
+            <input type="checkbox" id="ptscon" value="ptscon" ${checked} onchange="toggleField('ptscon')">
+            <label for="ptscon">verbinden &nbsp&nbsp </label>
+        `;
+		checked = smoothdata ? 'checked' : '';
+        html += `
+            <input type="checkbox" id="datasmooth" value="datasmooth" ${checked} onchange="toggleField('datasmooth')">
+            <label for="datasmooth">smooth</label>
+        `;
+        
+        html += `</div>`;
+        
+        chartSection.innerHTML += html;
+		
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
 
@@ -85,6 +113,21 @@ async function initTemperatureChart() {
             });
         });
 
+//RS
+        // Add event listeners toggle buttons
+        const setsymbol = chartSection.querySelector('#symbol');
+        setsymbol.addEventListener('click', (e) => {
+            symbolshow = setsymbol.checked;
+        });
+        const setptscon = chartSection.querySelector('#ptscon');
+        setptscon.addEventListener('click', (e) => {
+            nullconnect = setptscon.checked;
+        });
+        const setdatasmooth = chartSection.querySelector('#datasmooth');
+        setdatasmooth.addEventListener('click', (e) => {
+            smoothdata = setdatasmooth.checked;
+        });
+		
         // Add event listener for date picker
         const datePicker = chartSection.querySelector('#temperatureCustomDatePicker');
         if (datePicker) {
@@ -135,8 +178,6 @@ async function loadTemperatureData(silent = false) {
         // Build API URL
         let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
-        let symbolshow = false;
-        let nullconnect = true;
 
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
@@ -148,10 +189,6 @@ async function loadTemperatureData(silent = false) {
             const hours = parseTimeRange(currentTimeRange);
             apiUrl += `&hours=${hours}`;
 
-            if(hours < 12){
-                symbolshow = true;
-                nullconnect = false;
-            }
         }
 
         // Fetch data from API with gateway and device filter
@@ -174,7 +211,7 @@ async function loadTemperatureData(silent = false) {
         renderFilters();
 
         // Render chart
-        renderTemperatureChart(result.data, symbolshow, nullconnect);
+        renderTemperatureChart(result.data);
 
     } catch (error) {
         console.error('Error loading temperature data:', error);
@@ -229,7 +266,7 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'hp_secondary_circuit_supply_temp',  // WP secondary circuit supply
-                'hp_secondary_circuit_return_temp',  // WP secondary circuit return
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
                 'buffer_temp'
@@ -240,6 +277,7 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'heating_circuit_0_supply_temp',     // Heating circuit 0 supply
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
                 'buffer_temp'
@@ -393,7 +431,7 @@ function toggleField(field) {
 }
 
 // Render ECharts temperature chart
-function renderTemperatureChart(data, symbolshow, nullconnect) {
+function renderTemperatureChart(data) {
     if (!temperatureChart || data.length === 0) return;
 
     // Prepare series data - timestamps are ISO-8601 strings
@@ -544,7 +582,8 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
             name: fieldNames[field] || field,
             type: config.type,
             data: seriesData,
-            smooth: config.smooth || false,
+//            smooth: config.smooth || false,
+            smooth: smoothdata,
             step: config.step || false,
             yAxisIndex: config.yAxisIndex,
             itemStyle: { color: config.color },
