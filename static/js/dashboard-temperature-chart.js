@@ -7,11 +7,12 @@ let currentTimeRange = '24h';
 let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
+let cachedTemperatureData = null;  // Store current data for re-rendering
 
-//RS
-let nullconnect = false;
-let symbolshow = false;
-let smoothdata = true;
+// User preferences for chart display (previously auto-determined based on time range)
+let nullconnect = false;  // Connect points across null values
+let symbolshow = false;   // Show data points as symbols
+let smoothdata = true;    // Apply smoothing to line charts
 
 // Initialize temperature chart section
 async function initTemperatureChart() {
@@ -75,29 +76,26 @@ async function initTemperatureChart() {
             </div>
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
-//RS
-        // toggle buttons Showsymbols, Connnect Nulls
-        let html = '<div style="display: inline-block; cursor: pointer;  font-size: 0.9rem;">';
-		let checked = symbolshow ? 'checked' : '';
-        html += `
-            <input type="checkbox" id="symbol" value="symbol" ${checked} onchange="toggleField('symbol')">
-            <label for="symbol">Punkte &nbsp&nbsp </label>
+
+        // Add chart display options (show symbols, connect nulls, smoothing)
+        const displayOptionsHtml = `
+            <div class="chart-display-options" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
+                <label class="display-option">
+                    <input type="checkbox" id="symbolToggle" ${symbolshow ? 'checked' : ''}>
+                    <span>Punkte anzeigen</span>
+                </label>
+                <label class="display-option">
+                    <input type="checkbox" id="connectToggle" ${nullconnect ? 'checked' : ''}>
+                    <span>Nullwerte verbinden</span>
+                </label>
+                <label class="display-option">
+                    <input type="checkbox" id="smoothToggle" ${smoothdata ? 'checked' : ''}>
+                    <span>Glättung aktivieren</span>
+                </label>
+            </div>
         `;
-		checked = nullconnect ? 'checked' : '';
-        html += `
-            <input type="checkbox" id="ptscon" value="ptscon" ${checked} onchange="toggleField('ptscon')">
-            <label for="ptscon">verbinden &nbsp&nbsp </label>
-        `;
-		checked = smoothdata ? 'checked' : '';
-        html += `
-            <input type="checkbox" id="datasmooth" value="datasmooth" ${checked} onchange="toggleField('datasmooth')">
-            <label for="datasmooth">smooth</label>
-        `;
-        
-        html += `</div>`;
-        
-        chartSection.innerHTML += html;
-		
+        chartSection.innerHTML += displayOptionsHtml;
+
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
 
@@ -113,19 +111,32 @@ async function initTemperatureChart() {
             });
         });
 
-//RS
-        // Add event listeners toggle buttons
-        const setsymbol = chartSection.querySelector('#symbol');
-        setsymbol.addEventListener('click', (e) => {
-            symbolshow = setsymbol.checked;
+        // Add event listeners for display option toggles
+        const symbolToggle = chartSection.querySelector('#symbolToggle');
+        symbolToggle.addEventListener('change', (e) => {
+            symbolshow = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
         });
-        const setptscon = chartSection.querySelector('#ptscon');
-        setptscon.addEventListener('click', (e) => {
-            nullconnect = setptscon.checked;
+
+        const connectToggle = chartSection.querySelector('#connectToggle');
+        connectToggle.addEventListener('change', (e) => {
+            nullconnect = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
         });
-        const setdatasmooth = chartSection.querySelector('#datasmooth');
-        setdatasmooth.addEventListener('click', (e) => {
-            smoothdata = setdatasmooth.checked;
+
+        const smoothToggle = chartSection.querySelector('#smoothToggle');
+        smoothToggle.addEventListener('change', (e) => {
+            smoothdata = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
         });
 		
         // Add event listener for date picker
@@ -205,6 +216,9 @@ async function loadTemperatureData(silent = false) {
             }
             return;
         }
+
+        // Cache data for re-rendering when display options change
+        cachedTemperatureData = result.data;
 
         // Update available fields and filters
         updateAvailableFields(result.data);
@@ -582,14 +596,13 @@ function renderTemperatureChart(data) {
             name: fieldNames[field] || field,
             type: config.type,
             data: seriesData,
-//            smooth: config.smooth || false,
             smooth: smoothdata,
             step: config.step || false,
             yAxisIndex: config.yAxisIndex,
             itemStyle: { color: config.color },
             lineStyle: { color: config.color, width: 2 },
             showSymbol: symbolshow,
-            connectNulls: nullconnect  // Connect points across null values
+            connectNulls: nullconnect
         });
 
         legend.push(fieldNames[field] || field);
@@ -846,6 +859,29 @@ chartStyles.textContent = `
 .filter-checkbox input {
     margin-right: 8px;
     cursor: pointer;
+}
+
+.chart-display-options {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.display-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #c0c0d0;
+}
+
+.display-option input {
+    margin-right: 6px;
+    cursor: pointer;
+}
+
+.display-option span {
+    user-select: none;
 }
 
 .filters-loading {
