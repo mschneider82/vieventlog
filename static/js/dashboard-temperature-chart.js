@@ -7,6 +7,12 @@ let currentTimeRange = '24h';
 let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
+let cachedTemperatureData = null;  // Store current data for re-rendering
+
+// User preferences for chart display (previously auto-determined based on time range)
+let nullconnect = false;  // Connect points across null values
+let symbolshow = false;   // Show data points as symbols
+let smoothdata = true;    // Apply smoothing to line charts
 
 // Initialize temperature chart section
 async function initTemperatureChart() {
@@ -57,6 +63,7 @@ async function initTemperatureChart() {
                         <button class="time-btn" data-range="72h">72h</button>
                         <button class="time-btn" data-range="7d">7d</button>
                         <button class="time-btn" data-range="30d">30d</button>
+                        <button class="time-btn" data-range="90d">90d</button>
                         <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
@@ -69,6 +76,25 @@ async function initTemperatureChart() {
             </div>
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
+
+        // Add chart display options (show symbols, connect nulls, smoothing)
+        const displayOptionsHtml = `
+            <div class="chart-display-options" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
+                <label class="display-option">
+                    <input type="checkbox" id="symbolToggle" ${symbolshow ? 'checked' : ''}>
+                    <span>Punkte anzeigen</span>
+                </label>
+                <label class="display-option">
+                    <input type="checkbox" id="connectToggle" ${nullconnect ? 'checked' : ''}>
+                    <span>Nullwerte verbinden</span>
+                </label>
+                <label class="display-option">
+                    <input type="checkbox" id="smoothToggle" ${smoothdata ? 'checked' : ''}>
+                    <span>Glättung aktivieren</span>
+                </label>
+            </div>
+        `;
+        chartSection.innerHTML += displayOptionsHtml;
 
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
@@ -85,6 +111,34 @@ async function initTemperatureChart() {
             });
         });
 
+        // Add event listeners for display option toggles
+        const symbolToggle = chartSection.querySelector('#symbolToggle');
+        symbolToggle.addEventListener('change', (e) => {
+            symbolshow = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
+        });
+
+        const connectToggle = chartSection.querySelector('#connectToggle');
+        connectToggle.addEventListener('change', (e) => {
+            nullconnect = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
+        });
+
+        const smoothToggle = chartSection.querySelector('#smoothToggle');
+        smoothToggle.addEventListener('change', (e) => {
+            smoothdata = e.target.checked;
+            // Re-render chart with current data if available
+            if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+                renderTemperatureChart(cachedTemperatureData);
+            }
+        });
+		
         // Add event listener for date picker
         const datePicker = chartSection.querySelector('#temperatureCustomDatePicker');
         if (datePicker) {
@@ -135,8 +189,6 @@ async function loadTemperatureData(silent = false) {
         // Build API URL
         let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
-        let symbolshow = false;
-        let nullconnect = true;
 
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
@@ -148,10 +200,6 @@ async function loadTemperatureData(silent = false) {
             const hours = parseTimeRange(currentTimeRange);
             apiUrl += `&hours=${hours}`;
 
-            if(hours < 12){
-                symbolshow = true;
-                nullconnect = false;
-            }
         }
 
         // Fetch data from API with gateway and device filter
@@ -169,12 +217,15 @@ async function loadTemperatureData(silent = false) {
             return;
         }
 
+        // Cache data for re-rendering when display options change
+        cachedTemperatureData = result.data;
+
         // Update available fields and filters
         updateAvailableFields(result.data);
         renderFilters();
 
         // Render chart
-        renderTemperatureChart(result.data, symbolshow, nullconnect);
+        renderTemperatureChart(result.data);
 
     } catch (error) {
         console.error('Error loading temperature data:', error);
@@ -229,7 +280,7 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'hp_secondary_circuit_supply_temp',  // WP secondary circuit supply
-                'hp_secondary_circuit_return_temp',  // WP secondary circuit return
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
                 'buffer_temp'
@@ -240,6 +291,7 @@ function updateAvailableFields(data) {
             defaultFields = [
                 'outside_temp',
                 'heating_circuit_0_supply_temp',     // Heating circuit 0 supply
+                'heating_circuit_0_delta_t',
                 'return_temp',                       // Common return (after circuits)
                 'dhw_temp',
                 'buffer_temp'
@@ -393,7 +445,7 @@ function toggleField(field) {
 }
 
 // Render ECharts temperature chart
-function renderTemperatureChart(data, symbolshow, nullconnect) {
+function renderTemperatureChart(data) {
     if (!temperatureChart || data.length === 0) return;
 
     // Prepare series data - timestamps are ISO-8601 strings
@@ -544,13 +596,13 @@ function renderTemperatureChart(data, symbolshow, nullconnect) {
             name: fieldNames[field] || field,
             type: config.type,
             data: seriesData,
-            smooth: config.smooth || false,
+            smooth: smoothdata,
             step: config.step || false,
             yAxisIndex: config.yAxisIndex,
             itemStyle: { color: config.color },
             lineStyle: { color: config.color, width: 2 },
             showSymbol: symbolshow,
-            connectNulls: nullconnect  // Connect points across null values
+            connectNulls: nullconnect
         });
 
         legend.push(fieldNames[field] || field);
@@ -807,6 +859,29 @@ chartStyles.textContent = `
 .filter-checkbox input {
     margin-right: 8px;
     cursor: pointer;
+}
+
+.chart-display-options {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.display-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #c0c0d0;
+}
+
+.display-option input {
+    margin-right: 6px;
+    cursor: pointer;
+}
+
+.display-option span {
+    user-select: none;
 }
 
 .filters-loading {
