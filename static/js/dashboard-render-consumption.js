@@ -768,9 +768,15 @@ function renderConsumptionBreakdown(stats, period, customDate = null) {
 
     breakdown.forEach(item => {
         const date = new Date(item.timestamp);
-        const timeLabel = (period === 'today' || period === 'yesterday')
-            ? `${date.getHours()}:00 - ${date.getHours() + 1}:00`
-            : `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+        let timeLabel;
+        if (period === 'today' || period === 'yesterday') {
+            const startHour = date.getHours();
+            const endHour = (startHour + 1) % 24; // Wrap 24 to 0
+            const endHourStr = endHour.toString().padStart(2, '0');
+            timeLabel = `${startHour}:00 - ${endHourStr}:00`;
+        } else {
+            timeLabel = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+        }
 
         const hours = Math.floor(item.runtime_hours);
         const minutes = Math.round((item.runtime_hours - hours) * 60);

@@ -1290,7 +1290,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, installationID, gatewayID, deviceID,
-		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query consumption data: %v", err)
 	}
@@ -1381,13 +1381,14 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	}
 	fallbackInterval := settings.SampleInterval
 
-	// Start of day (00:00:00) to end of day (23:59:59)
+	// Start of day (00:00:00 CET/CEST) to end of day (24:00:00 = 00:00:00 next day)
+	// Using DefaultLocation which supports both CET and CEST (Europe/Berlin)
 	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
 	endTime := startTime.Add(24 * time.Hour)
 
 	query := `
 		SELECT
-			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
+			strftime('%Y-%m-%d %H:00:00', timestamp, 'localtime') as hour,
 			-- Calculate total energy by summing (power * interval) for each sample
 			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
 			SUM(COALESCE(case when compressor_power > 0 then thermal_power
@@ -1414,7 +1415,7 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
 	}
@@ -1486,9 +1487,14 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	}
 	fallbackInterval := settings.SampleInterval
 
+	// Normalize to start of day for startDate and end of day for endDate
+	// This ensures we get complete days in local time (CET/CEST)
+	start := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, DefaultLocation)
+	end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, DefaultLocation).Add(24 * time.Hour)
+
 	query := `
 		SELECT
-			DATE(timestamp) as day,
+			DATE(timestamp, 'localtime') as day,
 			-- Calculate total energy by summing (power * interval) for each sample
 			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
 			SUM(COALESCE(case when compressor_power > 0 then thermal_power
@@ -1507,15 +1513,15 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 		WHERE installation_id = ?
 			AND gateway_id = ?
 			AND device_id = ?
-			AND DATE(timestamp) >= DATE(?)
-			AND DATE(timestamp) <= DATE(?)
+			AND timestamp >= ?
+			AND timestamp < ?
 		GROUP BY day
 		ORDER BY day ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
 	}
