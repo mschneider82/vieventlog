@@ -321,6 +321,7 @@ type TemperatureSnapshot struct {
 	CompressorInletTemp  *float64 `json:"compressor_inlet_temp,omitempty"`
 	CompressorOutletTemp *float64 `json:"compressor_outlet_temp,omitempty"`
 	CompressorHours      *float64 `json:"compressor_hours,omitempty"`
+	CompressorStarts     *float64 `json:"compressor_starts,omitempty"`
 	CompressorPower      *float64 `json:"compressor_power,omitempty"`
 
 	// Pump status
