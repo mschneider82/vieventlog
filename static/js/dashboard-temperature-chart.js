@@ -86,7 +86,7 @@ async function initTemperatureChart() {
                 </label>
                 <label class="display-option">
                     <input type="checkbox" id="connectToggle" ${nullconnect ? 'checked' : ''}>
-                    <span>Nullwerte verbinden</span>
+                    <span>Lücken verbinden</span>
                 </label>
                 <label class="display-option">
                     <input type="checkbox" id="smoothToggle" ${smoothdata ? 'checked' : ''}>
