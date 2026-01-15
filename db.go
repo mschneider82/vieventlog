@@ -1290,7 +1290,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, installationID, gatewayID, deviceID,
-		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query consumption data: %v", err)
 	}
