@@ -2758,13 +2758,15 @@
             if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant && !kf.scop && !kf.compressorStats) return '';
 
             let info = '';
-
+            let devVariant = ' ';
+			
             // Basic device info
             if (kf.deviceVariant) {
+                devVariant = kf.deviceVariant.value;
                 info += `
                     <div class="status-item">
                         <span class="status-label">Modell</span>
-                        <span class="status-value">${kf.deviceVariant.value}</span>
+                        <span class="status-value">${devVariant}</span>
                     </div>
                 `;
             }
@@ -2788,13 +2790,18 @@
             }
 
             if (kf.deviceWiFi) {
-                const wifiStrength = kf.deviceWiFi.value.strength.value - 20.0;
-                info += `
-                    <div class="status-item">
-                        <span class="status-label">WiFi Pegel</span>
-                        <span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
-                    </div>
+                let wifiStrength = kf.deviceWiFi.value.strength.value;
+                if (wifiStrength > -115) {
+                    if (devVariant.includes("Vitocal")) {
+                        wifiStrength = wifiStrength - 20.0;
+                    }
+                    info += `
+                        <div class="status-item">
+                            <span class="status-label">WiFi Pegel</span>
+                            <span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
+                        </div>
                 `;
+                }
             }
 
             // JAZ / COP / SCOP / SPF values (Coefficient of Performance)
