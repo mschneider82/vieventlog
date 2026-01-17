@@ -243,6 +243,8 @@ async function initTemperatureChart() {
         // Load initial data
         loadTemperatureData();
 
+		if(temperatureChart !== null ) {chart_datazoom_event();}
+
         // Start auto-refresh (every 10 minutes)
         if (temperatureChartRefreshInterval) {
             clearInterval(temperatureChartRefreshInterval);
@@ -252,6 +254,15 @@ async function initTemperatureChart() {
         }, 600000);
     }
 }
+
+// user used/moved slider, get start/end values
+async function chart_datazoom_event(){
+    temperatureChart.on('dataZoom', function (evt) {
+		x1 = evt.start;
+		x2 = evt.end;
+		step_a=(x2-x1)/2;
+    })
+};
 
 // Load temperature data from API
 async function loadTemperatureData(silent = false) {
