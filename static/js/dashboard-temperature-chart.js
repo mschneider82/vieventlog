@@ -14,6 +14,12 @@ let nullconnect = false;  // Connect points across null values
 let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
 
+// zoom parms
+var x1 = 50;
+var x2 = 100;
+var step_a = 10;
+var step_b = 20;
+
 // Initialize temperature chart section
 async function initTemperatureChart() {
     // First check if temperature logging is enabled
@@ -77,7 +83,7 @@ async function initTemperatureChart() {
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
 
-        // Add chart display options (show symbols, connect nulls, smoothing)
+        // Add chart display options (zoom/move, show symbols, connect nulls, smoothing)
         const displayOptionsHtml = `
             <div class="chart-display-options" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
                 <label class="display-option">
@@ -91,6 +97,36 @@ async function initTemperatureChart() {
                 <label class="display-option">
                     <input type="checkbox" id="smoothToggle" ${smoothdata ? 'checked' : ''}>
                     <span>Glättung aktivieren</span>
+                </label>
+				
+				<label class="display-option">
+                    <button type="button" title="pan links" id="jumpleft">
+                    <span> << </span></button>
+                </label>
+
+   				<label class="display-option">
+                    <button type="button" title="pan links"id="panleft">
+                    <span> < </span> </button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Mitte" id="center" >
+                    <span> >< </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="pan rechts"id="panright">
+                    <span> > </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="pan rechts" id="jumpright" >
+                    <span> >> </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="alles" id="full">
+                    <span> < * > </span></button>
                 </label>
             </div>
         `;
@@ -138,7 +174,43 @@ async function initTemperatureChart() {
                 renderTemperatureChart(cachedTemperatureData);
             }
         });
-		
+// zoom or move within time range
+        const jright = chartSection.querySelector('#jumpright'); // jump right
+        jright.addEventListener('click', (e) => {
+			x2 +=step_b; if (x2 > 100) {x2 = 100; x1 = 100-step_b;} else { x1 += step_b;}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const pright = chartSection.querySelector('#panright'); // pan right
+		pright.addEventListener('click', (e) => {
+			x2 +=step_a; if (x2 > 100) {x2 = 100; x1 = 100-step_b;} else { x1 += step_a;}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pfull = chartSection.querySelector('#full');  // full view
+        pfull.addEventListener('click', (e) => {
+			x1=0; x2=100;
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pcenter = chartSection.querySelector('#center');  // center view
+        pcenter.addEventListener('click', (e) => {
+			x1=50-step_a; x2=50+step_a;
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const pleft = chartSection.querySelector('#panleft');  // pan left
+        pleft.addEventListener('click', (e) => {
+			x1 -=step_a; if (x1 < 0) {x1 = 0; x2 = step_b;} else { x2 -= step_a;}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const jleft = chartSection.querySelector('#jumpleft');  // jump left
+        jleft.addEventListener('click', (e) => {
+			x1 -=step_b; if (x1 < 0) {x1 = 0; x2 = step_b;} else { x2 -= step_b;}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
         // Add event listener for date picker
         const datePicker = chartSection.querySelector('#temperatureCustomDatePicker');
         if (datePicker) {
@@ -167,7 +239,7 @@ async function initTemperatureChart() {
             temperatureChart.dispose();
         }
         temperatureChart = echarts.init(chartContainer);
-
+		
         // Load initial data
         loadTemperatureData();
 
@@ -195,11 +267,18 @@ async function loadTemperatureData(silent = false) {
             const startDate = new Date(customTemperatureDate + 'T00:00:00');
             const endDate = new Date(customTemperatureDate + 'T23:59:59');
             apiUrl += `&startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`;
+// set zoom range
+			x1=0;x2=100;
         } else {
             // Use hours-based time range
-            const hours = parseTimeRange(currentTimeRange);
+            let hours = parseTimeRange(currentTimeRange);
+// set zoom range
+			x1=50;x2=100;
+			if (hours  > 24){step_b=30;step_a=15;}
+			else{step_b=34;step_a=17;}
+			hours = hours*2;  // request double the data in time 
             apiUrl += `&hours=${hours}`;
-
+			
         }
 
         // Fetch data from API with gateway and device filter
@@ -646,7 +725,7 @@ function renderTemperatureChart(data) {
             top: 30,
             type: 'scroll',
             pageButtonPosition: 'start',
-			textStyle: {color: "#ffffff"}            
+			textStyle: {color: "#ffffff"}
         },
         grid: {
             left: '3%',
@@ -709,10 +788,12 @@ function renderTemperatureChart(data) {
                 // For large values (>=100, e.g. compressor hours, starts): 0.5% padding to reduce empty space
                 min: function(value) {
                     if (value.min < 100.0) return Math.floor(value.min - 0.1 * Math.abs(value.min));
+					if (value.min > 1000.0) return value.min;
                     return Math.floor(value.min - 0.005 * Math.abs(value.min));
                 },
                 max: function(value){
-					if (value.min < 100.0) return Math.ceil(1.1 * value.max);
+					if (value.max < 100.0) return Math.ceil(1.1 * value.max);
+					if (value.max > 1000.0) return value.max;
 					return Math.ceil(1.005 * value.max);
                 },
                 offset: 60
@@ -723,8 +804,8 @@ function renderTemperatureChart(data) {
                 type: 'slider',
                 show: true,
                 xAxisIndex: [0],
-                start: 0,
-                end: 100,
+                start: x1,
+                end: x2,
                 bottom: 10
             },
             {
@@ -738,6 +819,10 @@ function renderTemperatureChart(data) {
     };
 
     temperatureChart.setOption(option, true);
+	
+//  update zoom range
+	temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+	
 }
 
 // Show message in chart
