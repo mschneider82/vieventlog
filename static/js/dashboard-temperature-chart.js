@@ -9,7 +9,9 @@ let availableDataFields = new Set();
 let selectedFields = new Set();
 let cachedTemperatureData = null;  // Store current data for re-rendering
 
-// User preferences for chart display (previously auto-determined based on time range)
+var option;  // the chart options
+
+// preset User preferences for chart display
 let nullconnect = false;  // Connect points across null values
 let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
@@ -195,7 +197,7 @@ async function initTemperatureChart() {
 
 		const pcenter = chartSection.querySelector('#center');  // center view
         pcenter.addEventListener('click', (e) => {
-			x1=50-step_a; x2=50+step_a;
+			x1=40; x2=60;
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
@@ -258,10 +260,16 @@ async function initTemperatureChart() {
 // user used/moved slider, get start/end values
 async function chart_datazoom_event(){
     temperatureChart.on('dataZoom', function (evt) {
-		x1 = evt.start;
-		x2 = evt.end;
-		step_a=(x2-x1)/2;
-    })
+		if (typeof evt.start !== 'undefined'){  // button event
+     		x1 = evt.start;
+			x2 = evt.end;
+			step_a=(x2-x1)/2;
+		}
+		else if (typeof evt.batch !== 'undefined'){ // slider/drag event
+			x1 = evt.batch[0].start;
+			x2 = evt.batch[0].end;
+			step_a=(x2-x1)/2;
+		}
 };
 
 // Load temperature data from API
@@ -703,7 +711,8 @@ function renderTemperatureChart(data) {
     const xAxisFormatter = hours <= 24 ? '{HH}:{mm}' : '{MM}-{dd} {HH}:{mm}';
 
     // Chart options
-    const option = {
+//    const option = {
+     option = {
         title: {
             text: '',
             left: 'center'
