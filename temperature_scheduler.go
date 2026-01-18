@@ -71,7 +71,9 @@ func StartTemperatureScheduler() error {
 	}
 
 	// Create ticker with sample interval
-	intervalDuration := time.Duration(settings.SampleInterval) * time.Minute
+	
+	//intervalDuration := time.Duration(settings.SampleInterval) * time.Minute
+	intervalDuration := time.Duration(1) * time.Minute
 	tempSchedulerTicker = time.NewTicker(intervalDuration)
 	tempSchedulerStop = make(chan bool)
 	tempSchedulerRunning = true
@@ -81,12 +83,12 @@ func StartTemperatureScheduler() error {
 	// Start background goroutine
 	go func() {
 		// Run once immediately on startup
-		temperatureLoggingJob()
+		temperatureLoggingJob(settings.SampleInterval)
 
 		for {
 			select {
 			case <-tempSchedulerTicker.C:
-				temperatureLoggingJob()
+				temperatureLoggingJob(settings.SampleInterval)
 			case <-tempSchedulerStop:
 				log.Println("Temperature scheduler stopped")
 				return
@@ -129,7 +131,15 @@ func RestartTemperatureScheduler() error {
 }
 
 // temperatureLoggingJob is the main job that collects temperature snapshots
-func temperatureLoggingJob() {
+func temperatureLoggingJob(SampleInterval int) {
+
+	now:= time.Now()
+	curMinute := now.Minute()
+	log.Printf("Temperature logging %d : %d", curMinute, SampleInterval)
+	if ((SampleInterval % curMinute) > 0){
+	  return
+    } 
+	
 	// Prevent concurrent job execution
 	tempJobMutex.Lock()
 	if tempJobRunning {
@@ -554,8 +564,38 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	// Operating state
 
 //remove, will not be used because string content
-	//case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
-	//	snapshot.FourWayValve = getStringValue(feature.Properties)
+	case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
+	  valve := 10.0
+	  var v_str string = "x"
+	  v_str = *getStringValue(feature.Properties)
+	  /*
+	    'domesticHotWater': 'Warmwasser',
+        'heating': 'Heizen',
+        'cooling': 'Kühlen',
+        'defrost': 'Abtauen',
+        'standby': 'Standby',
+        'off': 'Aus',
+        'climateCircuitOne': 'Heiz-/Kühlkreis 1',
+        'climatCircuitTwoDefrost': 'Integrierter Pufferspeicher'
+	 */
+	  switch v_str  {
+		  case "domesticHotWater":
+			valve = 20.0
+		  case "heating":
+			valve = 40.0
+		  case "defrost":
+			valve = 60.0
+		  case "standby":
+			valve = 30.0
+		  case "off":
+			valve = 50.0
+		  case "climateCircuitOne":
+			valve = 80.0
+		  case "climatCircuitTwoDefrost":
+			valve = 30.0
+		  }
+		snapshot.PrimaryReturnTemp = &valve
+
 	case "heating.burners.0.modulation":
 		snapshot.BurnerModulation = getFloatValue(feature.Properties)
 
