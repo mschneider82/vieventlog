@@ -135,7 +135,7 @@ func temperatureLoggingJob(SampleInterval int) {
 
 	now:= time.Now()
 	curMinute := now.Minute()
-	log.Printf("Temperature logging %d : %d", curMinute, SampleInterval)
+	log.Printf("Temperature logging, current minute %d : sampleinterval %d", curMinute, SampleInterval)
 	if ((curMinute % SampleInterval) > 0){
 	  return
     } 
