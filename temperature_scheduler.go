@@ -98,15 +98,14 @@ func StartTemperatureScheduler() error {
 		// Use select to allow stopping during initial delay
 		select {
 		case <-time.After(initialDelay):
-			// Time to take first snapshot
+			// Create ticker BEFORE running the job to prevent drift from job duration
+			tempSchedulerTicker = time.NewTicker(intervalDuration)
+			// Run first snapshot
 			temperatureLoggingJob()
 		case <-tempSchedulerStop:
 			log.Println("Temperature scheduler stopped during initial delay")
 			return
 		}
-
-		// Create ticker for subsequent snapshots
-		tempSchedulerTicker = time.NewTicker(intervalDuration)
 
 		for {
 			select {
