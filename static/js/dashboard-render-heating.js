@@ -2758,8 +2758,8 @@
             if (!kf.deviceSerial && !kf.deviceType && !kf.deviceVariant && !kf.scop && !kf.compressorStats) return '';
 
             let info = '';
-            let devVariant = ' ';
-			
+            let devVariant = '';
+
             // Basic device info
             if (kf.deviceVariant) {
                 devVariant = kf.deviceVariant.value;
@@ -2791,16 +2791,18 @@
 
             if (kf.deviceWiFi) {
                 let wifiStrength = kf.deviceWiFi.value.strength.value;
+                // Only apply -20 dBm offset for Vitocal devices
+                if (devVariant && devVariant.toLowerCase().includes("vitocal")) {
+                    wifiStrength = wifiStrength - 20.0;
+                }
+                // Filter out invalid values (< -115 dBm is unrealistic for WiFi)
                 if (wifiStrength > -115) {
-                    if (devVariant.includes("Vitocal")) {
-                        wifiStrength = wifiStrength - 20.0;
-                    }
                     info += `
                         <div class="status-item">
                             <span class="status-label">WiFi Pegel</span>
                             <span class="status-value" style="font-family: monospace;">${wifiStrength} dBm</span>
                         </div>
-                `;
+                    `;
                 }
             }
 
