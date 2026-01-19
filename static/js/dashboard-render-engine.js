@@ -252,8 +252,9 @@
                 // Consumption
                 html += renderConsumption(keyFeatures);
 
+// moved to dashboard-render-consumption 
                 // Consumption/Production Statistics
-                html += renderConsumptionStatistics(keyFeatures);
+                // html += renderConsumptionStatistics(keyFeatures);
 
                 // Additional sensors & pumps
                 html += renderAdditionalSensors(keyFeatures);
