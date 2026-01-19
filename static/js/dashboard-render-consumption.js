@@ -92,7 +92,17 @@ async function renderConsumptionTile(deviceInfo, features) {
         </div>
     `;
 
-    // Insert after temperature chart section or at the end
+// Consumption statistics cards (API-data)  moved from dashboard-render-engine
+    // Extract key features
+    const keyFeatures = extractKeyFeatures(features);
+
+    let html='<div  class="card">';
+    // Consumption/Production Statistics
+    html += renderConsumptionStatistics(keyFeatures);
+    html += '</div>';
+    consumptionSection.innerHTML += html;
+
+	// Insert after temperature chart section or at the end
     const tempChartSection = document.getElementById('temperature-chart-section');
     if (tempChartSection && tempChartSection.nextSibling) {
         dashboardContent.insertBefore(consumptionSection, tempChartSection.nextSibling);
