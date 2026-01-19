@@ -14,6 +14,7 @@ var (
 	tempSchedulerMutex   sync.Mutex
 	tempSchedulerStop    chan bool
 	tempSchedulerTicker  *time.Ticker
+	tempSchedulerSync	 bool
 
 	// Job-level mutex to prevent concurrent job execution
 	tempJobMutex   sync.Mutex
@@ -77,6 +78,7 @@ func StartTemperatureScheduler() error {
 	tempSchedulerTicker = time.NewTicker(intervalDuration)
 	tempSchedulerStop = make(chan bool)
 	tempSchedulerRunning = true
+	tempSchedulerSync = true
 
 	log.Printf("Temperature scheduler started with interval: %d minutes", settings.SampleInterval)
 
@@ -88,6 +90,10 @@ func StartTemperatureScheduler() error {
 		for {
 			select {
 			case <-tempSchedulerTicker.C:
+				if( tempSchedulerSync == false){
+					tempSchedulerTicker.Reset(60*time.Second)
+					tempSchedulerSync = true
+				}
 				temperatureLoggingJob(settings.SampleInterval)
 			case <-tempSchedulerStop:
 				log.Println("Temperature scheduler stopped")
@@ -135,9 +141,19 @@ func temperatureLoggingJob(SampleInterval int) {
 
 	now:= time.Now()
 	curMinute := now.Minute()
-	log.Printf("Temperature logging, current minute %d : sampleinterval %d", curMinute, SampleInterval)
+	curSec := now.Second()
+
+	// sync ticker to begin of a minut
+	// return to prevent two snapshots within a minute
+	if (curSec >10){ 
+		intervalDuration := time.Duration(61 - curSec) * time.Second
+		tempSchedulerTicker.Reset(intervalDuration)
+		tempSchedulerSync = false
+		return
+	}
+	// snapshot always at minute 1,2,3...;  2,4,6...;  3,6,9...;  5,10,15...;
 	if ((curMinute % SampleInterval) > 0){
-	  return
+  	  return 
     } 
 	
 	// Prevent concurrent job execution
