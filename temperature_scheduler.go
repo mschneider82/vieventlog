@@ -70,18 +70,43 @@ func StartTemperatureScheduler() error {
 		return err
 	}
 
-	// Create ticker with sample interval
+	// Calculate next aligned minute to start at
+	now := time.Now()
+	nextMinute := now.Truncate(time.Minute).Add(time.Minute)
+
+	// Find next minute that aligns with sample interval
+	// For example, with 3-minute interval: 0, 3, 6, 9, 12, etc.
+	minute := nextMinute.Minute()
+	remainder := minute % settings.SampleInterval
+	if remainder != 0 {
+		// Jump to next aligned minute
+		nextMinute = nextMinute.Add(time.Duration(settings.SampleInterval - remainder) * time.Minute)
+	}
+
+	initialDelay := nextMinute.Sub(now)
 	intervalDuration := time.Duration(settings.SampleInterval) * time.Minute
-	tempSchedulerTicker = time.NewTicker(intervalDuration)
+
 	tempSchedulerStop = make(chan bool)
 	tempSchedulerRunning = true
 
-	log.Printf("Temperature scheduler started with interval: %d minutes", settings.SampleInterval)
+	log.Printf("Temperature scheduler started with %d minute interval", settings.SampleInterval)
+	log.Printf("First snapshot will be taken at %s (in %v)", nextMinute.Format("15:04:05"), initialDelay)
 
 	// Start background goroutine
 	go func() {
-		// Run once immediately on startup
-		temperatureLoggingJob()
+		// Wait until first aligned minute boundary
+		// Use select to allow stopping during initial delay
+		select {
+		case <-time.After(initialDelay):
+			// Time to take first snapshot
+			temperatureLoggingJob()
+		case <-tempSchedulerStop:
+			log.Println("Temperature scheduler stopped during initial delay")
+			return
+		}
+
+		// Create ticker for subsequent snapshots
+		tempSchedulerTicker = time.NewTicker(intervalDuration)
 
 		for {
 			select {
