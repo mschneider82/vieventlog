@@ -15,7 +15,7 @@ let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
 
 // zoom parms
-var x1 = 50;  // zoom precentages
+var x1 = 0;  // zoom percentages (start with full view)
 var x2 = 100;
 var step_a = 10; // step size when panning
 var step_b = 20;
@@ -100,32 +100,32 @@ async function initTemperatureChart() {
                 </label>
 
 				<label class="display-option">
-                    <button type="button" title="Pan links" id="jumpleft">
+                    <button type="button" title="Großer Sprung links" id="jumpleft">
                     <span> << </span></button>
                 </label>
 
    				<label class="display-option">
-                    <button type="button" title="Pan links"id="panleft">
+                    <button type="button" title="Pan links" id="panleft">
                     <span> < </span> </button>
                 </label>
 
 				<label class="display-option">
-                    <button type="button" title="Mitte" id="center" >
+                    <button type="button" title="Zentrieren" id="center" >
                     <span> >< </span></button>
                 </label>
 
 				<label class="display-option">
-                    <button type="button" title="Pan rechts"id="panright">
+                    <button type="button" title="Pan rechts" id="panright">
                     <span> > </span></button>
                 </label>
 
 				<label class="display-option">
-                    <button type="button" title="Pan rechts" id="jumpright" >
+                    <button type="button" title="Großer Sprung rechts" id="jumpright" >
                     <span> >> </span></button>
                 </label>
 
 				<label class="display-option">
-                    <button type="button" title="alles" id="full">
+                    <button type="button" title="Alles anzeigen" id="full">
                     <span> < * > </span></button>
                 </label>
             </div>
@@ -178,13 +178,27 @@ async function initTemperatureChart() {
 		// zoom or move within time range
         const jright = chartSection.querySelector('#jumpright'); // jump right
         jright.addEventListener('click', (e) => {
-			x2 +=step_b; if (x2 > 100) {x2 = 100; x1 = 100-step_b;} else { x1 += step_b;}
+			const windowSize = x2 - x1;
+			x2 += step_b;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_b;
+			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
         const pright = chartSection.querySelector('#panright'); // pan right
 		pright.addEventListener('click', (e) => {
-			x2 +=step_a; if (x2 > 100) {x2 = 100; x1 = 100-step_b;} else { x1 += step_a;}
+			const windowSize = x2 - x1;
+			x2 += step_a;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_a;
+			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
@@ -196,19 +210,33 @@ async function initTemperatureChart() {
 
 		const pcenter = chartSection.querySelector('#center');  // center view
         pcenter.addEventListener('click', (e) => {
-			x1=40; x2=60; step_a=10;
+			x1=40; x2=60;
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
         const pleft = chartSection.querySelector('#panleft');  // pan left
         pleft.addEventListener('click', (e) => {
-			x1 -=step_a; if (x1 < 0) {x1 = 0; x2 = step_b;} else { x2 -= step_a;}
+			const windowSize = x2 - x1;
+			x1 -= step_a;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_a;
+			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
         const jleft = chartSection.querySelector('#jumpleft');  // jump left
         jleft.addEventListener('click', (e) => {
-			x1 -=step_b; if (x1 < 0) {x1 = 0; x2 = step_b;} else { x2 -= step_b;}
+			const windowSize = x2 - x1;
+			x1 -= step_b;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_b;
+			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 		
@@ -264,13 +292,19 @@ async function chart_datazoom_event(){
 		if (typeof evt.start !== 'undefined'){
      		x1 = evt.start;
 			x2 = evt.end;
-			step_a=(x2-x1)/2;
+			// Dynamically adjust step sizes based on current zoom window
+			const windowSize = x2 - x1;
+			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
+			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
 		}
 		// slider/drag event
 		else if (typeof evt.batch !== 'undefined'){
 			x1 = evt.batch[0].start;
 			x2 = evt.batch[0].end;
-			step_a=(x2-x1)/2;
+			// Dynamically adjust step sizes based on current zoom window
+			const windowSize = x2 - x1;
+			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
+			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
 		}
     })
 }
@@ -294,11 +328,37 @@ async function loadTemperatureData(silent = false) {
         } else {
             // Use hours-based time range
             let hours = parseTimeRange(currentTimeRange);
-			// set zoom range
-			x1 = 50; x2=100;
-			if (hours > 24){step_b = 30; step_a = 15;}
-			else{step_b = 34; step_a = 17;}
-			hours = hours*2;  // request twice the data in time 
+
+			// Progressive step sizing based on time range
+			// Longer time ranges get larger steps for easier navigation
+			const days = hours / 24;
+			if (days <= 1) {
+				// 1-24 hours: Small steps
+				step_a = 10;
+				step_b = 20;
+			} else if (days <= 3) {
+				// 2-3 days: Medium-small steps
+				step_a = 12;
+				step_b = 25;
+			} else if (days <= 7) {
+				// 4-7 days: Medium steps
+				step_a = 15;
+				step_b = 30;
+			} else if (days <= 30) {
+				// 8-30 days: Medium-large steps
+				step_a = 20;
+				step_b = 40;
+			} else {
+				// >30 days: Large steps
+				step_a = 25;
+				step_b = 50;
+			}
+
+			// Reset to full view on time range change
+			x1 = 0;
+			x2 = 100;
+
+			hours = hours*2;  // request twice the data in time
             apiUrl += `&hours=${hours}`;
         }
 
