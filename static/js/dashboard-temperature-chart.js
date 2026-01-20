@@ -705,14 +705,17 @@ function renderTemperatureChart(data) {
 				axisLabel: {color: "#ffffff"},
                 position: 'right',
                 // Dynamic Y-axis scaling based on value range
-                // For small values (<100, e.g. temperatures, flow): 10% padding below, 10% above
-                // For large values (>=100, e.g. compressor hours, starts): 0.5% padding to reduce empty space
-                min: function(value) {
+                // For small values (<100, e.g. temperatures, compressor pressure, ...): 10% padding below, 10% above
+                // For large values (>=100, e.g. compressor power, flow): 0.5% padding to reduce empty space
+                // For very large values (>=1000, e.g. compressor hours, starts): no padding
+				min: function(value) {
                     if (value.min < 100.0) return Math.floor(value.min - 0.1 * Math.abs(value.min));
+					if (value.min > 1000.0) return value.min;
                     return Math.floor(value.min - 0.005 * Math.abs(value.min));
                 },
                 max: function(value){
-					if (value.min < 100.0) return Math.ceil(1.1 * value.max);
+					if (value.max < 100.0) return Math.ceil(1.1 * value.max);
+					if (value.max > 1000.0) return value.max;
 					return Math.ceil(1.005 * value.max);
                 },
                 offset: 60
