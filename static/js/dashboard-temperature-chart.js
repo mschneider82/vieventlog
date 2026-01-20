@@ -14,6 +14,12 @@ let nullconnect = false;  // Connect points across null values
 let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
 
+// zoom parms
+var x1 = 0;  // zoom percentages (start with full view)
+var x2 = 100;
+var step_a = 10; // step size when panning
+var step_b = 20;
+
 // Initialize temperature chart section
 async function initTemperatureChart() {
     // First check if temperature logging is enabled
@@ -77,7 +83,7 @@ async function initTemperatureChart() {
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
 
-        // Add chart display options (show symbols, connect nulls, smoothing)
+        // Add chart display options (zoom/move, show symbols, connect nulls, smoothing)
         const displayOptionsHtml = `
             <div class="chart-display-options" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
                 <label class="display-option">
@@ -91,6 +97,36 @@ async function initTemperatureChart() {
                 <label class="display-option">
                     <input type="checkbox" id="smoothToggle" ${smoothdata ? 'checked' : ''}>
                     <span>Glättung aktivieren</span>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Großer Sprung links" id="jumpleft">
+                    <span> << </span></button>
+                </label>
+
+   				<label class="display-option">
+                    <button type="button" title="Pan links" id="panleft">
+                    <span> < </span> </button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Zentrieren" id="center" >
+                    <span> >< </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Pan rechts" id="panright">
+                    <span> > </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Großer Sprung rechts" id="jumpright" >
+                    <span> >> </span></button>
+                </label>
+
+				<label class="display-option">
+                    <button type="button" title="Alles anzeigen" id="full">
+                    <span> < * > </span></button>
                 </label>
             </div>
         `;
@@ -138,6 +174,72 @@ async function initTemperatureChart() {
                 renderTemperatureChart(cachedTemperatureData);
             }
         });
+
+		// zoom or move within time range
+        const jright = chartSection.querySelector('#jumpright'); // jump right
+        jright.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x2 += step_b;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_b;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const pright = chartSection.querySelector('#panright'); // pan right
+		pright.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x2 += step_a;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_a;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pfull = chartSection.querySelector('#full');  // full view
+        pfull.addEventListener('click', (e) => {
+			x1=0; x2=100;
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pcenter = chartSection.querySelector('#center');  // center view
+        pcenter.addEventListener('click', (e) => {
+			x1=40; x2=60;
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const pleft = chartSection.querySelector('#panleft');  // pan left
+        pleft.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x1 -= step_a;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_a;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+        const jleft = chartSection.querySelector('#jumpleft');  // jump left
+        jleft.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x1 -= step_b;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_b;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+		
 		
         // Add event listener for date picker
         const datePicker = chartSection.querySelector('#temperatureCustomDatePicker');
@@ -171,6 +273,8 @@ async function initTemperatureChart() {
         // Load initial data
         loadTemperatureData();
 
+		if(temperatureChart !== null ) {chart_datazoom_event();}
+
         // Start auto-refresh (every 10 minutes)
         if (temperatureChartRefreshInterval) {
             clearInterval(temperatureChartRefreshInterval);
@@ -179,6 +283,30 @@ async function initTemperatureChart() {
             loadTemperatureData(true);
         }, 600000);
     }
+}
+
+// capture datazoom event to act on user activity
+async function chart_datazoom_event(){
+    temperatureChart.on('dataZoom', function (evt) {
+		// button event
+		if (typeof evt.start !== 'undefined'){
+     		x1 = evt.start;
+			x2 = evt.end;
+			// Dynamically adjust step sizes based on current zoom window
+			const windowSize = x2 - x1;
+			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
+			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+		}
+		// slider/drag event
+		else if (typeof evt.batch !== 'undefined'){
+			x1 = evt.batch[0].start;
+			x2 = evt.batch[0].end;
+			// Dynamically adjust step sizes based on current zoom window
+			const windowSize = x2 - x1;
+			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
+			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+		}
+    })
 }
 
 // Load temperature data from API
@@ -195,11 +323,43 @@ async function loadTemperatureData(silent = false) {
             const startDate = new Date(customTemperatureDate + 'T00:00:00');
             const endDate = new Date(customTemperatureDate + 'T23:59:59');
             apiUrl += `&startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`;
+			// set to no zoom 
+			x1 = 0; x2 = 100;
         } else {
             // Use hours-based time range
-            const hours = parseTimeRange(currentTimeRange);
-            apiUrl += `&hours=${hours}`;
+            let hours = parseTimeRange(currentTimeRange);
 
+			// Progressive step sizing based on time range
+			// Longer time ranges get larger steps for easier navigation
+			const days = hours / 24;
+			if (days <= 1) {
+				// 1-24 hours: Small steps
+				step_a = 10;
+				step_b = 20;
+			} else if (days <= 3) {
+				// 2-3 days: Medium-small steps
+				step_a = 12;
+				step_b = 25;
+			} else if (days <= 7) {
+				// 4-7 days: Medium steps
+				step_a = 15;
+				step_b = 30;
+			} else if (days <= 30) {
+				// 8-30 days: Medium-large steps
+				step_a = 20;
+				step_b = 40;
+			} else {
+				// >30 days: Large steps
+				step_a = 25;
+				step_b = 50;
+			}
+
+			// Reset to full view on time range change
+			x1 = 0;
+			x2 = 100;
+
+			hours = hours*2;  // request twice the data in time
+            apiUrl += `&hours=${hours}`;
         }
 
         // Fetch data from API with gateway and device filter
@@ -717,7 +877,7 @@ function renderTemperatureChart(data) {
 					if (value.max < 100.0) return Math.ceil(1.1 * value.max);
 					if (value.max > 1000.0) return value.max;
 					return Math.ceil(1.005 * value.max);
-                },
+				},
                 offset: 60
             }
         ],
@@ -726,8 +886,8 @@ function renderTemperatureChart(data) {
                 type: 'slider',
                 show: true,
                 xAxisIndex: [0],
-                start: 0,
-                end: 100,
+                start: x1,
+                end: x2,
                 bottom: 10
             },
             {
