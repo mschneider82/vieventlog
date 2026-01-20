@@ -408,7 +408,7 @@
                 primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']),
                 primaryReturnTemp: find(['heating.primaryCircuit.sensors.temperature.return']),
                 secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),
-                secondaryReturnTemp: find(['heating.secondaryCircuit.sensors.temperature.return', 'heating.sensors.temperature.return']),
+ // not an API Data Point               secondaryReturnTemp: find(['heating.secondaryCircuit.sensors.temperature.return', 'heating.sensors.temperature.return']),
                 bufferTemp: find(['heating.buffer.sensors.temperature.main', 'heating.bufferCylinder.sensors.temperature.main']),
                 bufferTempTop: find(['heating.buffer.sensors.temperature.top', 'heating.bufferCylinder.sensors.temperature.top']),
                 boilerTemp: find(['heating.boiler.sensors.temperature.commonSupply', 'heating.boiler.temperature.current', 'heating.boiler.temperature']),
