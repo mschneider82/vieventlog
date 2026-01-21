@@ -602,7 +602,7 @@
                             <span class="status-label">aktuelle th. Leistung</span>
                             <span class="status-value">${(() => {
                                 if (compressorHeatingNow == -1) return '--';
-                                return formatNum(compressorHeatingNow, 0) + ' kW';
+                                return formatNum(compressorHeatingNow, 1) + ' kW';
                             })()}</span>
                         </div>
                     ` : ''}
