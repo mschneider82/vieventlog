@@ -556,7 +556,7 @@
                 let compressorHeatingPower = kf.compressorHeatPower && kf.compressorHeatPower.value !== undefined ? kf.compressorHeatPower.value : -1;
                 let compressorHeatingNow = kf.compressorHeatPercentPower && kf.compressorHeatPercentPower.value !== undefined ? kf.compressorHeatPercentPower.value : -1;
                 if ((compressorHeatingPower != -1) && (compressorHeatingNow != -1)) {
-                    compressorHeatingNow = compressorHeatingPower * compressorHeatingNow;
+                    compressorHeatingNow = compressorHeatingPower * (compressorHeatingNow / 100);
                 }
 				
                 content = `
