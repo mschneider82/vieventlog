@@ -30,7 +30,8 @@
             ` : '';
 
             // Check if this is a hybrid system and show Hybrid Pro Control button
-            const isHybrid = kf.secondaryHeatGeneratorStatus !== undefined;
+            // Only consider it a hybrid if the status feature has an actual value (not null/undefined)
+            const isHybrid = kf.secondaryHeatGeneratorStatus?.value != null;
             const hybridProControlButton = isHybrid ? `
                 <button onclick="openHybridProControlModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}', '${deviceInfo.gatewaySerial}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer; background-color: #ff9800; color: white; border: none; border-radius: 4px;">
@@ -2478,8 +2479,8 @@
                 `;
             }
 
-            // Secondary Heater
-            if (kf.secondaryHeater) {
+            // Secondary Heater (only show if it has an actual value)
+            if (kf.secondaryHeater?.value) {
                 const heaterStatus = kf.secondaryHeater.value;
                 const isActive = heaterStatus !== 'off' && heaterStatus !== 'standby';
                 sensors += `
