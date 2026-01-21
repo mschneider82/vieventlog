@@ -447,8 +447,8 @@
                 compressorPressure: find(['heating.compressors.0.sensors.pressure.inlet']),
 
                 // Vitocal 200 A/S  Leistung, aktuelle Leistung in Prozent
-                compressorheatpower: find(['heating.compressors.0.power']),
-                compressorheatpercentpower: find(['heating.compressors.0.sensors.power']),
+                compressorHeatPower: find(['heating.compressors.0.power']),
+                compressorHeatPercentPower: find(['heating.compressors.0.sensors.power']),
 
                 // Fallback features for Oplink devices (current consumption/production)
                 compressorPowerConsumptionCurrent: find(['heating.compressors.0.power.consumption.current']),
