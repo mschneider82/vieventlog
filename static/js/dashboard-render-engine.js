@@ -485,6 +485,12 @@
                 fan0: find(['heating.primaryCircuit.fans.0.current']),
                 fan1: find(['heating.primaryCircuit.fans.1.current']),
 
+                // Heating circuits - circulation pumps
+                circuitPump0: findNested('heating.circuits.0.circulation.pump', 'status'),
+                circuitPump1: findNested('heating.circuits.1.circulation.pump', 'status'),
+                circuitPump2: findNested('heating.circuits.2.circulation.pump', 'status'),
+                circuitPump3: findNested('heating.circuits.3.circulation.pump', 'status'),
+
                 // Efficiency
                 // COP (Coefficient of Performance) features - primary source
                 copTotal: find(['heating.cop.total']),

@@ -814,6 +814,7 @@
             const operatingProgram = find([`${circuitPrefix}.operating.programs.active`]);
             const circuitTemp = find([`${circuitPrefix}.sensors.temperature.supply`]);
             const roomTemp = find([`${circuitPrefix}.sensors.temperature.room`]);
+            const circuitPump = findNested(`${circuitPrefix}.circulation.pump`, 'status');
             const heatingCurveSlope = findNested(`${circuitPrefix}.heating.curve`, 'slope');
             const heatingCurveShift = findNested(`${circuitPrefix}.heating.curve`, 'shift');
             const supplyTempMax = findNested(`${circuitPrefix}.temperature.levels`, 'max');
@@ -1040,6 +1041,18 @@
                     <div class="status-item">
                         <span class="status-label">Raumtemperatur (Ist)</span>
                         <span class="status-value">${formatValue(roomTemp)}</span>
+                    </div>
+                `;
+            }
+
+            // Circulation pump status (only show if feature has status property)
+            if (circuitPump) {
+                const pumpStatus = circuitPump.value;
+                const statusDisplay = pumpStatus === 'on' ? '🔄 Ein' : (pumpStatus === 'off' ? '⚪ Aus' : pumpStatus);
+                html += `
+                    <div class="status-item">
+                        <span class="status-label">Umwälzpumpe</span>
+                        <span class="status-value">${statusDisplay}</span>
                     </div>
                 `;
             }
