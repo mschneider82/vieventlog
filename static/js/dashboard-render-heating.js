@@ -551,6 +551,14 @@
                     }
                 }
 
+
+                //  Vitocal 200 A/S Thermische Leistung
+                let compressorHeatingPower = kf.compressorHeatPower && kf.compressorHeatPower.value !== undefined ? kf.compressorHeatPower.value : -1;
+                let compressorHeatingNow = kf.compressorHeatPercentPower && kf.compressorHeatPercentPower.value !== undefined ? kf.compressorHeatPercentPower.value : -1;
+                if ((compressorHeatingPower != -1) && (compressorHeatingNow != -1)) {
+                    compressorHeatingNow = compressorHeatingPower * compressorHeatingNow;
+                }
+				
                 content = `
                     <div class="status-item">
                         <span class="status-label">Status</span>
@@ -576,7 +584,33 @@
                             })()}</span>
                         </div>
                     ` : ''}
-                    ${kf.compressorCurrent ? `
+
+					${kf.compressorHeatPower ? `
+                        <div class="status-item">
+                            <span class="status-label">therm. Leistung</span>
+                            <span class="status-value">${(() => {
+                                if (!isValidNumericValue(kf.compressorHeatPower)) return '--';
+                                if (!kf.compressorHeatPower.value) return '--';
+                                const powerW = unwrapValue(kf.compressorHeatPower.value);
+                                return formatNum(powerW, 0) + ' kW';
+                            })()}</span>
+                        </div>
+                    ` : ''}
+
+                    ${kf.compressorHeatPercentPower ? `
+                        <div class="status-item">
+                            <span class="status-label">aktuelle th. Leistung</span>
+                            <span class="status-value">${(() => {
+                                if (compressorHeatingNow == -1) return '--';
+                                return formatNum(compressorHeatingNow, 0) + ' kW';
+                            })()}</span>
+                        </div>
+                    ` : ''}
+					
+					
+					
+					
+					${kf.compressorCurrent ? `
                         <div class="status-item">
                             <span class="status-label">Stromaufnahme</span>
                             <span class="status-value">${isValidNumericValue(kf.compressorCurrent) ? formatValue(kf.compressorCurrent) : '--'}</span>
