@@ -15,10 +15,10 @@ let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
 
 // zoom parms
-var x1 = 0;  // zoom percentages (start with full view)
+var x1 = 50;  // zoom percentages (start with 50% = user timeframe selection)
 var x2 = 100;
-var step_a = 10; // step size when panning
-var step_b = 20;
+var step_w = 33.34; // step size when panning
+var step_n = 16.67;  // _n= narrow step _w= wide Step
 
 // Initialize temperature chart section
 async function initTemperatureChart() {
@@ -176,67 +176,69 @@ async function initTemperatureChart() {
         });
 
 		// zoom or move within time range
-        const jright = chartSection.querySelector('#jumpright'); // jump right
-        jright.addEventListener('click', (e) => {
+		// zoom or move within time range
+
+        const jleft = chartSection.querySelector('#jumpleft');  // jump left
+        jleft.addEventListener('click', (e) => {
 			const windowSize = x2 - x1;
-			x2 += step_b;
-			if (x2 > 100) {
-				x2 = 100;
-				x1 = Math.max(0, 100 - windowSize);
+			x1 -= step_w;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
 			} else {
-				x1 += step_b;
+				x2 -= step_w;
 			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+		
+        const pleft = chartSection.querySelector('#panleft');  // pan left
+        pleft.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x1 -= step_n;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_n;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pcenter = chartSection.querySelector('#center');  // center view
+        pcenter.addEventListener('click', (e) => {
+			x1=40; x2=60; step_w=20, step_n=10;
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
         const pright = chartSection.querySelector('#panright'); // pan right
 		pright.addEventListener('click', (e) => {
 			const windowSize = x2 - x1;
-			x2 += step_a;
+			x2 += step_n;
 			if (x2 > 100) {
 				x2 = 100;
 				x1 = Math.max(0, 100 - windowSize);
 			} else {
-				x1 += step_a;
+				x1 += step_n;
 			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
+        const jright = chartSection.querySelector('#jumpright'); // jump right
+        jright.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x2 += step_w;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_w;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+		
 		const pfull = chartSection.querySelector('#full');  // full view
         pfull.addEventListener('click', (e) => {
 			x1=0; x2=100;
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-		const pcenter = chartSection.querySelector('#center');  // center view
-        pcenter.addEventListener('click', (e) => {
-			x1=40; x2=60;
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-        const pleft = chartSection.querySelector('#panleft');  // pan left
-        pleft.addEventListener('click', (e) => {
-			const windowSize = x2 - x1;
-			x1 -= step_a;
-			if (x1 < 0) {
-				x1 = 0;
-				x2 = Math.min(100, windowSize);
-			} else {
-				x2 -= step_a;
-			}
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-        const jleft = chartSection.querySelector('#jumpleft');  // jump left
-        jleft.addEventListener('click', (e) => {
-			const windowSize = x2 - x1;
-			x1 -= step_b;
-			if (x1 < 0) {
-				x1 = 0;
-				x2 = Math.min(100, windowSize);
-			} else {
-				x2 -= step_b;
-			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 		
@@ -292,19 +294,21 @@ async function chart_datazoom_event(){
 		if (typeof evt.start !== 'undefined'){
      		x1 = evt.start;
 			x2 = evt.end;
-			// Dynamically adjust step sizes based on current zoom window
+			// do not modify user or programatic setup; 
+			//force button useable and step to 1/3
 			const windowSize = x2 - x1;
-			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
-			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+			if (windowSize > 95 ) {x1 = 50; step_w = 33.34; step_n = 16.67;}
+																									   
 		}
 		// slider/drag event
 		else if (typeof evt.batch !== 'undefined'){
 			x1 = evt.batch[0].start;
 			x2 = evt.batch[0].end;
-			// Dynamically adjust step sizes based on current zoom window
+			// set steps to user selection; do not clamp
 			const windowSize = x2 - x1;
-			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
-			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+			step_w = windowSize; step_n = windowSize / 2;
+			//force button useable and step to 1/3
+			if (windowSize > 95 ) {x1 = 50; step_w = 33.34; step_n = 16.67;}
 		}
     })
 }
@@ -317,7 +321,6 @@ async function loadTemperatureData(silent = false) {
         // Build API URL
         let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
-
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
             const startDate = new Date(customTemperatureDate + 'T00:00:00');
@@ -328,36 +331,17 @@ async function loadTemperatureData(silent = false) {
         } else {
             // Use hours-based time range
             let hours = parseTimeRange(currentTimeRange);
-
+		
 			// Progressive step sizing based on time range
 			// Longer time ranges get larger steps for easier navigation
-			const days = hours / 24;
-			if (days <= 1) {
-				// 1-24 hours: Small steps
-				step_a = 10;
-				step_b = 20;
-			} else if (days <= 3) {
-				// 2-3 days: Medium-small steps
-				step_a = 12;
-				step_b = 25;
-			} else if (days <= 7) {
-				// 4-7 days: Medium steps
-				step_a = 15;
-				step_b = 30;
-			} else if (days <= 30) {
-				// 8-30 days: Medium-large steps
-				step_a = 20;
-				step_b = 40;
-			} else {
-				// >30 days: Large steps
-				step_a = 25;
-				step_b = 50;
-			}
+			step_w = 33.34; step_n = 16.67;  // default ~ 16h bei 24h (=48h daten)
+			if (hours >= 336){step_w = 15;    step_n = 7.5;}  //  ~ 3,5Tage  bei 7 Tage daten
+			else if (hours > 720) {step_w = 11.67;    step_n = 6;}   //  ~ 7 tage bei 30 Tage daten
 
-			// Reset to full view on time range change
-			x1 = 0;
+			// zoom percentages (start with 50% = user timeframe selection)
+			x1 = 50;
 			x2 = 100;
-
+			
 			hours = hours*2;  // request twice the data in time
             apiUrl += `&hours=${hours}`;
         }
