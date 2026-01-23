@@ -789,6 +789,11 @@
                 'S.131': true,  // Heizwasser-Durchlauferhitzer: Stufe 1 aktiv
                 'S.132': true,  // Heizwasser-Durchlauferhitzer: Stufe 2 aktiv
                 'S.133': true,  // Heizwasser-Durchlauferhitzer: Stufe 3 aktiv
+                // Gateway/Point Events (Einzelevents ohne Zeitspanne)
+                'gateway-online': true,  // Gateway wieder online
+                'gateway-offline': true,  // Gateway offline
+                'feature-changed': true,  // Feature wurde geändert
+                'firmware-update-status': true,  // Firmware-Update Status
                 'other': true
             },
 
@@ -1366,6 +1371,26 @@ ${formatEventBody(event.body)}
                             if (!startTime || !endTime || isNaN(startTime) || isNaN(endTime)) {
                                 return `<div style="padding: 8px;">${name}</div>`;
                             }
+
+                            // Point events (gateway events, etc.) show only timestamp
+                            if (data?.isPointEvent) {
+                                const timestamp = DateTime.fromMillis(startTime).toFormat('dd.MM.yyyy HH:mm:ss');
+                                return `
+                                    <div style="padding: 8px;">
+                                        <div style="font-weight: bold; margin-bottom: 4px;">
+                                            ${data?.icon || '📌'} ${name}
+                                        </div>
+                                        <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">
+                                            ${data?.description || ''}
+                                        </div>
+                                        <div style="font-size: 12px;">
+                                            <strong>Zeitpunkt:</strong> ${timestamp}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+
+                            // Regular events show start, end, and duration
                             const start = DateTime.fromMillis(startTime).toFormat('dd.MM.yyyy HH:mm:ss');
                             const end = DateTime.fromMillis(endTime).toFormat('dd.MM.yyyy HH:mm:ss');
                             const durationStr = formatDurationECharts(duration);
@@ -1690,11 +1715,23 @@ ${formatEventBody(event.body)}
             events.forEach(event => {
                 const laneKey = `${event.installationId}_${event.modelId}_${event.deviceId}`;
                 if (!lanes[laneKey]) {
+                    // Create a friendly name for the device
+                    let deviceName;
+                    if (event.modelId === 'Unknown' && event.deviceId === '0') {
+                        // Gateway-level events (gateway-online, gateway-offline, etc.)
+                        deviceName = 'Gateway';
+                    } else if (event.modelId === 'Unknown') {
+                        deviceName = `Unknown (${event.deviceId})`;
+                    } else {
+                        deviceName = `${event.modelId} (${event.deviceId})`;
+                    }
+
                     lanes[laneKey] = {
-                        name: `${event.modelId} (${event.deviceId})`,
+                        name: deviceName,
                         installationId: event.installationId || 'Unknown',
                         events: [],
-                        hasValveSpans: false
+                        hasValveSpans: false,
+                        pointEvents: []  // For events without active field
                     };
                 }
                 lanes[laneKey].events.push(event);
@@ -1728,8 +1765,21 @@ ${formatEventBody(event.body)}
 
                 sortedEvents.forEach(event => {
                     const code = event.errorCode;
-                    if (!code) return;
                     const eventTime = event.eventTimestamp || event.createdAt;
+                    const eventType = event.eventType;
+
+                    // Handle events without errorCode (e.g., gateway-online/offline, feature-changed)
+                    // These are point events that should be shown as markers
+                    if (!code && eventType && event.active === null) {
+                        lane.pointEvents.push({
+                            eventType: eventType,
+                            timestamp: eventTime,
+                            event: event
+                        });
+                        return; // Skip further processing for point events
+                    }
+
+                    if (!code) return;
 
                     // Handle valve position codes separately
                     if (isValveCode(code)) {
@@ -1957,6 +2007,55 @@ ${formatEventBody(event.body)}
                                 description: eventTypes[span.code]?.description || span.code,
                                 icon: eventTypes[span.code]?.icon || '•',
                                 ongoing: span.ongoing
+                            });
+                        });
+                    }
+
+                    // Add point events (events without active field, shown as markers)
+                    if (lane.pointEvents && lane.pointEvents.length > 0) {
+                        lane.pointEvents.forEach(pointEvent => {
+                            const eventType = pointEvent.eventType;
+                            let eventF_Name = pointEvent.event.featureName;
+							if (eventF_Name === undefined) eventF_Name = eventType;
+                            // Skip if this event type is filtered out
+                            // Point events use eventType as their identifier
+                            if (globalFilters.timelineTypes[eventType] === false) return;
+
+                            const timestamp = new Date(pointEvent.timestamp);
+                            // Show point events as 5-minute markers for visibility
+                            const pointDuration = 5; // minutes
+                            const endTime = new Date(timestamp.getTime() + pointDuration * 60 * 1000);
+
+                            // Define colors and labels for point events
+                            const pointEventConfig = {
+                                'gateway-online': { color: '#10b981', label: 'Gateway Online', icon: '🟢' },
+                                'gateway-offline': { color: '#ef4444', label: 'Gateway Offline', icon: '🔴' },
+                                'feature-changed': { color: '#3b82f6', label: 'Feature Changed', icon: '🔧' },
+                                'firmware-update-status': { color: '#8b5cf6', label: '📦 Firmware Update', icon: '📦' }
+                            };
+
+                            const config = pointEventConfig[eventType] || {
+                                color: '#64748b',
+                                label: eventType,
+                                icon: '📌'
+                            };
+
+                            timelineData.push({
+                                name: config.label,
+                                value: [mainCategoryIndex, timestamp.getTime(), endTime.getTime(), pointDuration],
+                                itemStyle: {
+                                    normal: {
+                                        color: config.color,
+                                        borderColor: '#ffffff',
+                                        borderWidth: 1,
+                                        opacity: 0.8
+                                    }
+                                },
+                                eventType: eventType,
+                                description: eventF_Name,
+                                icon: config.icon,
+                                isPointEvent: true,
+                                z: 5 // Render point events above normal events but below S.125-WARMWATER
                             });
                         });
                     }
