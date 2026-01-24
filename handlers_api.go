@@ -1155,6 +1155,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Return the stats
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"stats":   stats,
