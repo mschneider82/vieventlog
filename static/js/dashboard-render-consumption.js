@@ -47,8 +47,8 @@ async function renderConsumptionTile(deviceInfo, features) {
     consumptionSection.innerHTML = `
         <div class="chart-header">
             <h2>⚡ Verbrauchsstatistiken
-				<span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
-			</h2>
+                <span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
+            </h2>
             <div class="chart-controls">
                 <div class="time-range-selector">
                     <button class="time-btn active" data-period="today">Heute</button>
@@ -58,8 +58,12 @@ async function renderConsumptionTile(deviceInfo, features) {
                     <button class="time-btn" data-period="last30days">30 Tage</button>
                     <button class="time-btn" data-period="year">Jahr</button>
                     <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
-                        <label for="customDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
-                        <input type="date" id="customDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                        <label for="customDateFrom" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Zeitraum:</label>
+                        <input type="date" id="customDateFrom" class="custom-date-input"
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                        <span style="color:#a0a0b0;font-size:13px;">bis</span>
+                        <input type="date" id="customDateTo" class="custom-date-input"
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                     </div>
                 </div>
             </div>
@@ -92,56 +96,76 @@ async function renderConsumptionTile(deviceInfo, features) {
         </div>
     `;
 
-// Consumption statistics cards (API-data)  moved from dashboard-render-engine
-    // Extract key features
+    // Consumption statistics cards (API-data) moved from dashboard-render-engine
     const keyFeatures = extractKeyFeatures(features);
 
-    let html='<div  class="card">';
-    // Consumption/Production Statistics
+    let html='<div class="card">';
     html += renderConsumptionStatistics(keyFeatures);
     html += '</div>';
     consumptionSection.innerHTML += html;
 
-	// Insert after temperature chart section or at the end
+    // Insert after temperature chart section or at the end
     const tempChartSection = document.getElementById('temperature-chart-section');
     if (tempChartSection && tempChartSection.nextSibling) {
         dashboardContent.insertBefore(consumptionSection, tempChartSection.nextSibling);
     } else if (tempChartSection) {
         tempChartSection.parentNode.insertBefore(consumptionSection, tempChartSection.nextElementSibling);
     } else {
-        // Temperature chart doesn't exist, append at the end
         dashboardContent.appendChild(consumptionSection);
     }
 
     // Set up period selector buttons
     const periodButtons = consumptionSection.querySelectorAll('.time-btn');
+    const dateFromInput = consumptionSection.querySelector('#customDateFrom');
+    const dateToInput   = consumptionSection.querySelector('#customDateTo');
+
     periodButtons.forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', async () => {
             // Update active state
             periodButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
             // Load data for selected period
+            if (dateFromInput) dateFromInput.value = '';
+            if (dateToInput)   dateToInput.value = '';
+
             const period = btn.dataset.period;
             await loadConsumptionData(deviceInfo, period);
         });
     });
 
-    // Set up date picker
-    const datePicker = consumptionSection.querySelector('#customDatePicker');
-    if (datePicker) {
-        // Set max date to today
-        const today = new Date().toISOString().split('T')[0];
-        datePicker.max = today;
+    // Set up date range pickers
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (dateFromInput) dateFromInput.max = todayStr;
+    if (dateToInput)   dateToInput.max   = todayStr;
 
-        datePicker.addEventListener('change', async (e) => {
-            if (e.target.value) {
-                // Deactivate all period buttons
-                periodButtons.forEach(b => b.classList.remove('active'));
+    // Regel 1: Von setzt Bis → Einzel-Tag
+    if (dateFromInput) {
+        dateFromInput.addEventListener('change', async (e) => {
+            const from = e.target.value;
+            if (!from) return;
 
-                // Load data for selected date
-                await loadConsumptionData(deviceInfo, 'today', e.target.value);
+            if (dateToInput) {
+                dateToInput.value = from;
             }
+
+            periodButtons.forEach(b => b.classList.remove('active'));
+
+            await loadConsumptionData(deviceInfo, 'today', null, from, from);
+        });
+    }
+
+    // Regel 2: Bis gesetzt → Zeitraum
+    if (dateToInput) {
+        dateToInput.addEventListener('change', async (e) => {
+            const to   = e.target.value;
+            const from = dateFromInput ? dateFromInput.value : '';
+
+            if (!from || !to) return;
+
+            periodButtons.forEach(b => b.classList.remove('active'));
+
+            await loadConsumptionData(deviceInfo, 'range', null, from, to);
         });
     }
 
@@ -226,6 +250,13 @@ async function loadConsumptionData(deviceInfo, period, customDate = null) {
     const { installationId, gatewaySerial, deviceId, accountId } = deviceInfo;
     const cacheKey = customDate ? `${installationId}_${deviceId}_${customDate}` : `${installationId}_${deviceId}_${period}`;
 
+    let cacheKey = `${installationId}_${deviceId}_${period}`;
+    if (fromDate && toDate) {
+        cacheKey = `${installationId}_${deviceId}_from_${fromDate}_to_${toDate}`;
+    } else if (customDate) {
+        cacheKey = `${installationId}_${deviceId}_${customDate}`;
+    }
+
     try {
         // Show loading state
         const statsGrid = document.getElementById('consumptionStatsGrid');
@@ -234,12 +265,25 @@ async function loadConsumptionData(deviceInfo, period, customDate = null) {
         }
 
         // Build API URL
-        let apiUrl = `/api/consumption/stats?installationId=${installationId}&gatewaySerial=${gatewaySerial}&deviceId=${deviceId}&period=${period}`;
+        let apiUrl = `/api/consumption/stats?installationId=${installationId}&gatewaySerial=${gatewaySerial}&deviceId=${deviceId}`;
+
+        // period immer mitsenden (für Legacy/Preset)
+        if (period) {
+            apiUrl += `&period=${encodeURIComponent(period)}`;
+        }
+
+        // Legacy: einzelnes Datum
         if (customDate) {
-            apiUrl += `&date=${customDate}`;
+            apiUrl += `&date=${encodeURIComponent(customDate)}`;
         }
 
         // Fetch data from API
+        // Neuer Zeitraum: from/to
+        if (fromDate && toDate) {
+            apiUrl += `&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+        }
+
+        // FIX: doppelte fetch-Zeile entfernt
         const response = await fetch(apiUrl);
 
         if (!response.ok) {

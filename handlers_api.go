@@ -979,8 +979,10 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 	installationID := r.URL.Query().Get("installationId")
 	gatewaySerial := r.URL.Query().Get("gatewaySerial")
 	deviceID := r.URL.Query().Get("deviceId")
-	period := r.URL.Query().Get("period") // "today", "week", "month", "year"
-	dateStr := r.URL.Query().Get("date")  // Optional: specific date (YYYY-MM-DD)
+	period := r.URL.Query().Get("period") // "today", "week", "month", "year", "last30days"
+	dateStr := r.URL.Query().Get("date")  // legacy: specific date (YYYY-MM-DD)
+	fromStr := r.URL.Query().Get("from")  // new: start date (YYYY-MM-DD)
+	toStr := r.URL.Query().Get("to")      // new: end date (YYYY-MM-DD)
 
 	// Validate required parameters
 	if installationID == "" || gatewaySerial == "" || deviceID == "" {
@@ -996,103 +998,153 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 		period = "today"
 	}
 
-	// Parse date or use current date
-	var referenceDate time.Time
-	var err error
-	if dateStr != "" {
-		referenceDate, err = time.Parse("2006-01-02", dateStr)
-		if err != nil {
+	var (
+		stats           *ConsumptionStats
+		hourlyBreakdown []ConsumptionDataPoint
+		dailyBreakdown  []ConsumptionDataPoint
+		err             error
+	)
+
+	// --- 1) Vorrang: expliziter Zeitraum via from/to ------------------------
+
+	if fromStr != "" && toStr != "" {
+		fromDate, errFrom := time.Parse("2006-01-02", fromStr)
+		toDate, errTo := time.Parse("2006-01-02", toStr)
+		if errFrom != nil || errTo != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   "Invalid date format. Use YYYY-MM-DD",
+				"error":   "Invalid from/to date format. Use YYYY-MM-DD",
 			})
 			return
 		}
+
+		// Normalisiere auf lokale Tage
+		startTime := time.Date(fromDate.Year(), fromDate.Month(), fromDate.Day(), 0, 0, 0, 0, DefaultLocation)
+		endTime := time.Date(toDate.Year(), toDate.Month(), toDate.Day(), 0, 0, 0, 0, DefaultLocation).Add(24 * time.Hour)
+
+		// Einzelner Tag? → wie bisheriger "Bestimmter Tag" inkl. Stundenverlauf
+		if fromDate.Equal(toDate) {
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "day"
+				hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, fromDate)
+				stats.HourlyBreakdown = hourlyBreakdown
+			}
+		} else {
+			// Mehrtägiger Zeitraum → Tages‑Breakdown
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "range"
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				stats.DailyBreakdown = dailyBreakdown
+			}
+		}
+	} else if fromStr != "" && toStr == "" {
+		// Nur from gesetzt → Einzel‑Tag (Fallback, falls Frontend nur from schickt)
+		fromDate, errFrom := time.Parse("2006-01-02", fromStr)
+		if errFrom != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Invalid from date format. Use YYYY-MM-DD",
+			})
+			return
+		}
+		startTime := time.Date(fromDate.Year(), fromDate.Month(), fromDate.Day(), 0, 0, 0, 0, DefaultLocation)
+		endTime := startTime.Add(24 * time.Hour)
+
+		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+		if err == nil {
+			stats.Period = "day"
+			hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, fromDate)
+			stats.HourlyBreakdown = hourlyBreakdown
+		}
 	} else {
-		referenceDate = time.Now().In(DefaultLocation)
-	}
+		// --- 2) Legacy: period + optional date ------------------------------
 
-	var stats *ConsumptionStats
-	var hourlyBreakdown []ConsumptionDataPoint
-	var dailyBreakdown []ConsumptionDataPoint
-
-	// Calculate time range based on period
-	switch period {
-	case "today":
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation)
-		endTime := startTime.Add(24 * time.Hour)
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "today"
-			// Get hourly breakdown for today
-			hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, referenceDate)
-			stats.HourlyBreakdown = hourlyBreakdown
+		// Parse date or use current date
+		var referenceDate time.Time
+		if dateStr != "" {
+			referenceDate, err = time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"error":   "Invalid date format. Use YYYY-MM-DD",
+				})
+				return
+			}
+		} else {
+			referenceDate = time.Now().In(DefaultLocation)
 		}
 
-	case "yesterday":
-		yesterday := referenceDate.AddDate(0, 0, -1)
-		startTime := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, DefaultLocation)
-		endTime := startTime.Add(24 * time.Hour)
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "yesterday"
-			hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, yesterday)
-			stats.HourlyBreakdown = hourlyBreakdown
-		}
+		switch period {
+		case "today":
+			startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation)
+			endTime := startTime.Add(24 * time.Hour)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "today"
+				hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, referenceDate)
+				stats.HourlyBreakdown = hourlyBreakdown
+			}
 
-	case "week":
-		// Last 7 days
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -6)
-		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "week"
-			// Get daily breakdown for the week
-			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
-			stats.DailyBreakdown = dailyBreakdown
-		}
+		case "yesterday":
+			yesterday := referenceDate.AddDate(0, 0, -1)
+			startTime := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, DefaultLocation)
+			endTime := startTime.Add(24 * time.Hour)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "yesterday"
+				hourlyBreakdown, _ = GetHourlyConsumptionBreakdown(installationID, gatewaySerial, deviceID, yesterday)
+				stats.HourlyBreakdown = hourlyBreakdown
+			}
 
-	case "month":
-		// Current month
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), 1, 0, 0, 0, 0, DefaultLocation)
-		endTime := startTime.AddDate(0, 1, 0).Add(-1 * time.Second) // Last second of the month
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "month"
-			// Get daily breakdown for the month
-			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
-			stats.DailyBreakdown = dailyBreakdown
-		}
+		case "week":
+			startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -6)
+			endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "week"
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				stats.DailyBreakdown = dailyBreakdown
+			}
 
-	case "year":
-		// Current year
-		startTime := time.Date(referenceDate.Year(), 1, 1, 0, 0, 0, 0, DefaultLocation)
-		endTime := startTime.AddDate(1, 0, 0).Add(-1 * time.Second) // Last second of the year
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "year"
-			// Get daily breakdown for the year (might be a lot of data)
-			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
-			stats.DailyBreakdown = dailyBreakdown
-		}
+		case "month":
+			startTime := time.Date(referenceDate.Year(), referenceDate.Month(), 1, 0, 0, 0, 0, DefaultLocation)
+			endTime := startTime.AddDate(0, 1, 0).Add(-1 * time.Second)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "month"
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				stats.DailyBreakdown = dailyBreakdown
+			}
 
-	case "last30days":
-		// Last 30 days
-		startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -29)
-		endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
-		stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
-		if err == nil {
-			stats.Period = "last30days"
-			dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
-			stats.DailyBreakdown = dailyBreakdown
-		}
+		case "year":
+			startTime := time.Date(referenceDate.Year(), 1, 1, 0, 0, 0, 0, DefaultLocation)
+			endTime := startTime.AddDate(1, 0, 0).Add(-1 * time.Second)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "year"
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				stats.DailyBreakdown = dailyBreakdown
+			}
 
-	default:
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Invalid period. Use: today, yesterday, week, month, year, last30days",
-		})
-		return
+		case "last30days":
+			startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -29)
+			endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
+			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
+			if err == nil {
+				stats.Period = "last30days"
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				stats.DailyBreakdown = dailyBreakdown
+			}
+
+		default:
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Invalid period. Use: today, yesterday, week, month, year, last30days",
+			})
+			return
+		}
 	}
 
 	if err != nil {
@@ -1103,7 +1155,6 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the stats
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"stats":   stats,
