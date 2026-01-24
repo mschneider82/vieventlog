@@ -246,9 +246,9 @@ function applyPowerCorrectionFactor(stats, deviceInfo) {
 /**
  * Load consumption data for a specific period
  */
-async function loadConsumptionData(deviceInfo, period, customDate = null) {
+async function loadConsumptionData(deviceInfo, period, customDate = null, fromDate = null, toDate = null) {
     const { installationId, gatewaySerial, deviceId, accountId } = deviceInfo;
-    const cacheKey = customDate ? `${installationId}_${deviceId}_${customDate}` : `${installationId}_${deviceId}_${period}`;
+    // const cacheKey = customDate ? `${installationId}_${deviceId}_${customDate}` : `${installationId}_${deviceId}_${period}`;
 
     let cacheKey = `${installationId}_${deviceId}_${period}`;
     if (fromDate && toDate) {
