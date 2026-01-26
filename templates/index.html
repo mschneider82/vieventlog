@@ -2015,6 +2015,25 @@ ${formatEventBody(event.body)}
                     if (lane.pointEvents && lane.pointEvents.length > 0) {
                         lane.pointEvents.forEach(pointEvent => {
                             const eventType = pointEvent.eventType;
+
+                            // Build display name with feature name and value for feature-changed events
+                            let eventDisplayName = pointEvent.event.featureName;
+                            const featureValueLen = 35;
+
+                            if (eventDisplayName === undefined) {
+                                eventDisplayName = eventType;
+                            } else {
+                                const featureValue = pointEvent.event.featureValue;
+                                if (featureValue !== undefined && featureValue.length > 0) {
+                                    if (featureValue.length < featureValueLen) {
+                                        eventDisplayName = eventDisplayName + "<br>" + featureValue;
+                                    } else {
+                                        const cleanValue = featureValue.replaceAll("]", " ");
+                                        eventDisplayName = eventDisplayName + "<br>" + cleanValue.slice(cleanValue.length - featureValueLen);
+                                    }
+                                }
+                            }
+
                             // Skip if this event type is filtered out
                             // Point events use eventType as their identifier
                             if (globalFilters.timelineTypes[eventType] === false) return;
@@ -2026,9 +2045,9 @@ ${formatEventBody(event.body)}
 
                             // Define colors and labels for point events
                             const pointEventConfig = {
-                                'gateway-online': { color: '#10b981', label: '🟢 Gateway Online', icon: '🟢' },
-                                'gateway-offline': { color: '#ef4444', label: '🔴 Gateway Offline', icon: '🔴' },
-                                'feature-changed': { color: '#3b82f6', label: '🔧 Feature Changed', icon: '🔧' },
+                                'gateway-online': { color: '#10b981', label: 'Gateway Online', icon: '🟢' },
+                                'gateway-offline': { color: '#ef4444', label: 'Gateway Offline', icon: '🔴' },
+                                'feature-changed': { color: '#3b82f6', label: 'Feature Changed', icon: '🔧' },
                                 'firmware-update-status': { color: '#8b5cf6', label: '📦 Firmware Update', icon: '📦' }
                             };
 
@@ -2050,7 +2069,7 @@ ${formatEventBody(event.body)}
                                     }
                                 },
                                 eventType: eventType,
-                                description: config.label,
+                                description: eventDisplayName,
                                 icon: config.icon,
                                 isPointEvent: true,
                                 z: 5 // Render point events above normal events but below S.125-WARMWATER
