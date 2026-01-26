@@ -786,9 +786,15 @@
                 'S.176': true,  // Wärmepumpenregelung: Abtauen angefordert
                 'S.187': true,  // Passiver Frostschutz Wärmepumpe
                 'S.427': true,  // Leistungsbegrenzung durch Netzbetreiber
+                'S.432': true,  // Abtauung des Lüfters aktiv
                 'S.131': true,  // Heizwasser-Durchlauferhitzer: Stufe 1 aktiv
                 'S.132': true,  // Heizwasser-Durchlauferhitzer: Stufe 2 aktiv
                 'S.133': true,  // Heizwasser-Durchlauferhitzer: Stufe 3 aktiv
+                // Gateway/Point Events (Einzelevents ohne Zeitspanne)
+                'gateway-online': true,  // Gateway wieder online
+                'gateway-offline': true,  // Gateway offline
+                'feature-changed': true,  // Feature wurde geändert
+                'firmware-update-status': true,  // Firmware-Update Status
                 'other': true
             },
 
@@ -1307,6 +1313,7 @@ ${formatEventBody(event.body)}
                 'S.176': { label: 'Abtauen Anfr.', description: 'Wärmepumpenregelung: Abtauen angefordert', color: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', icon: '❄️' },
                 'S.187': { label: 'Frostschutz', description: 'Passiver Frostschutz Wärmepumpe eingeschaltet', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '🧊' },
                 'S.427': { label: '§14a EnWG', description: 'Leistungsbegrenzung durch Netzbetreiber nach §14a EnWG', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⚡' },
+                'S.432': { label: 'Abtauen Lüfter', description: 'Abtauung des Lüfters aktiv', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '💧' },
                 'S.131': { label: 'Zusatz Stufe 1', description: 'Heizwasser-Durchlauferhitzer: Stufe 1 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '🔥' },
                 'S.132': { label: 'Zusatz Stufe 2', description: 'Heizwasser-Durchlauferhitzer: Stufe 2 aktiv', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔥' },
                 'S.133': { label: 'Zusatz Stufe 3', description: 'Heizwasser-Durchlauferhitzer: Stufe 3 aktiv', color: '#ea580c', gradient: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)', icon: '🔥' }
@@ -1366,6 +1373,26 @@ ${formatEventBody(event.body)}
                             if (!startTime || !endTime || isNaN(startTime) || isNaN(endTime)) {
                                 return `<div style="padding: 8px;">${name}</div>`;
                             }
+
+                            // Point events (gateway events, etc.) show only timestamp
+                            if (data?.isPointEvent) {
+                                const timestamp = DateTime.fromMillis(startTime).toFormat('dd.MM.yyyy HH:mm:ss');
+                                return `
+                                    <div style="padding: 8px;">
+                                        <div style="font-weight: bold; margin-bottom: 4px;">
+                                            ${data?.icon || '📌'} ${name}
+                                        </div>
+                                        <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">
+                                            ${data?.description || ''}
+                                        </div>
+                                        <div style="font-size: 12px;">
+                                            <strong>Zeitpunkt:</strong> ${timestamp}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+
+                            // Regular events show start, end, and duration
                             const start = DateTime.fromMillis(startTime).toFormat('dd.MM.yyyy HH:mm:ss');
                             const end = DateTime.fromMillis(endTime).toFormat('dd.MM.yyyy HH:mm:ss');
                             const durationStr = formatDurationECharts(duration);
@@ -1690,11 +1717,23 @@ ${formatEventBody(event.body)}
             events.forEach(event => {
                 const laneKey = `${event.installationId}_${event.modelId}_${event.deviceId}`;
                 if (!lanes[laneKey]) {
+                    // Create a friendly name for the device
+                    let deviceName;
+                    if (event.modelId === 'Unknown' && event.deviceId === '0') {
+                        // Gateway-level events (gateway-online, gateway-offline, etc.)
+                        deviceName = 'Gateway';
+                    } else if (event.modelId === 'Unknown') {
+                        deviceName = `Unknown (${event.deviceId})`;
+                    } else {
+                        deviceName = `${event.modelId} (${event.deviceId})`;
+                    }
+
                     lanes[laneKey] = {
-                        name: `${event.modelId} (${event.deviceId})`,
+                        name: deviceName,
                         installationId: event.installationId || 'Unknown',
                         events: [],
-                        hasValveSpans: false
+                        hasValveSpans: false,
+                        pointEvents: []  // For events without active field
                     };
                 }
                 lanes[laneKey].events.push(event);
@@ -1728,8 +1767,21 @@ ${formatEventBody(event.body)}
 
                 sortedEvents.forEach(event => {
                     const code = event.errorCode;
-                    if (!code) return;
                     const eventTime = event.eventTimestamp || event.createdAt;
+                    const eventType = event.eventType;
+
+                    // Handle events without errorCode (e.g., gateway-online/offline, feature-changed)
+                    // These are point events that should be shown as markers
+                    if (!code && eventType && event.active === null) {
+                        lane.pointEvents.push({
+                            eventType: eventType,
+                            timestamp: eventTime,
+                            event: event
+                        });
+                        return; // Skip further processing for point events
+                    }
+
+                    if (!code) return;
 
                     // Handle valve position codes separately
                     if (isValveCode(code)) {
@@ -1957,6 +2009,72 @@ ${formatEventBody(event.body)}
                                 description: eventTypes[span.code]?.description || span.code,
                                 icon: eventTypes[span.code]?.icon || '•',
                                 ongoing: span.ongoing
+                            });
+                        });
+                    }
+
+                    // Add point events (events without active field, shown as markers)
+                    if (lane.pointEvents && lane.pointEvents.length > 0) {
+                        lane.pointEvents.forEach(pointEvent => {
+                            const eventType = pointEvent.eventType;
+
+                            // Build display name with feature name and value for feature-changed events
+                            let eventDisplayName = pointEvent.event.featureName;
+                            const featureValueLen = 35;
+
+                            if (eventDisplayName === undefined) {
+                                eventDisplayName = eventType;
+                            } else {
+                                const featureValue = pointEvent.event.featureValue;
+                                if (featureValue !== undefined && featureValue.length > 0) {
+                                    if (featureValue.length < featureValueLen) {
+                                        eventDisplayName = eventDisplayName + "<br>" + featureValue;
+                                    } else {
+                                        const cleanValue = featureValue.replaceAll("]", " ");
+                                        eventDisplayName = eventDisplayName + "<br>" + cleanValue.slice(cleanValue.length - featureValueLen);
+                                    }
+                                }
+                            }
+
+                            // Skip if this event type is filtered out
+                            // Point events use eventType as their identifier
+                            if (globalFilters.timelineTypes[eventType] === false) return;
+
+                            const timestamp = new Date(pointEvent.timestamp);
+                            // Show point events as 5-minute markers for visibility
+                            const pointDuration = 5; // minutes
+                            const endTime = new Date(timestamp.getTime() + pointDuration * 60 * 1000);
+
+                            // Define colors and labels for point events
+                            const pointEventConfig = {
+                                'gateway-online': { color: '#10b981', label: 'Gateway Online', icon: '🟢' },
+                                'gateway-offline': { color: '#ef4444', label: 'Gateway Offline', icon: '🔴' },
+                                'feature-changed': { color: '#3b82f6', label: 'Feature Changed', icon: '🔧' },
+                                'firmware-update-status': { color: '#8b5cf6', label: 'Firmware Update', icon: '📦' }
+                            };
+
+                            const config = pointEventConfig[eventType] || {
+                                color: '#64748b',
+                                label: eventType,
+                                icon: '📌'
+                            };
+
+                            timelineData.push({
+                                name: config.label,
+                                value: [mainCategoryIndex, timestamp.getTime(), endTime.getTime(), pointDuration],
+                                itemStyle: {
+                                    normal: {
+                                        color: config.color,
+                                        borderColor: '#ffffff',
+                                        borderWidth: 1,
+                                        opacity: 0.8
+                                    }
+                                },
+                                eventType: eventType,
+                                description: eventDisplayName,
+                                icon: config.icon,
+                                isPointEvent: true,
+                                z: 5 // Render point events above normal events but below S.125-WARMWATER
                             });
                         });
                     }
