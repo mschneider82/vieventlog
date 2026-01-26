@@ -2016,8 +2016,24 @@ ${formatEventBody(event.body)}
                         lane.pointEvents.forEach(pointEvent => {
                             const eventType = pointEvent.eventType;
                             let eventF_Name = pointEvent.event.featureName;
-							if (eventF_Name === undefined) eventF_Name = eventType;
-                            // Skip if this event type is filtered out
+							const featureValueLen 35;
+							if (eventF_Name === undefined) {
+								eventF_Name = eventType;
+                            } else {
+								var f_val = pointEvent.event.featureValue;
+								if(f_val !== undefined) {
+									const len = f_val.length;
+									if ( len !== undefined){
+										if( len < featureValueLen ) {
+											eventF_Name = eventF_Name + "<br>" + f_val;
+										} else {
+											f_val = f_val.replaceAll("]"," ");
+											eventF_Name = eventF_Name + "<br>" + f_val.slice(len - featureValueLen);
+										}
+									}
+								}
+							}
+							// Skip if this event type is filtered out
                             // Point events use eventType as their identifier
                             if (globalFilters.timelineTypes[eventType] === false) return;
 
