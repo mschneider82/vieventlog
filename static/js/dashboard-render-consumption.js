@@ -167,7 +167,7 @@ async function renderConsumptionTile(deviceInfo, features) {
 
             periodButtons.forEach(b => b.classList.remove('active'));
 
-            await loadConsumptionData(deviceInfo, 'today', null, from, from);
+            await loadConsumptionData(deviceInfo, 'range', null, from, from);
         });
     }
 
@@ -472,7 +472,9 @@ function renderConsumptionCharts(stats, period, customDate = null, fromDate = nu
         console.warn('Chart title error:', e);
     }
 
-    if (period === 'today' || period === 'yesterday') {
+    const isSingleDayRange = fromDate && toDate && fromDate === toDate;
+
+    if (period === 'today' || period === 'yesterday' || isSingleDayRange) {
         renderHourlyChart(stats, period, customDate);
     } else {
         renderDailyChart(stats, period, customDate, fromDate, toDate);
