@@ -447,9 +447,14 @@ function loadSelected_Fields() {
 	try {
 		const saved = localStorage.getItem('vieventlog_grafic_fields');
 		if (saved && saved.length > 4) {
-			// set selected fields from saved 
+			// set selected fields from saved
 			const savedSet  = new Set(JSON.parse(saved));
-			selectedFields = savedSet;
+			selectedFields.clear();
+			savedSet.forEach(field => {
+				if (availableDataFields.has(field)) {
+					selectedFields.add(field);
+				}
+			});
 			console.log('Loaded fields from localStorage');
 		}
 	} catch (e) {
