@@ -74,6 +74,8 @@ async function initTemperatureChart() {
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                         </div>
+                        <button id="saveSelectedFieldsBtn">Speichern</button>
+                        <button id="presetSelectedFieldsBtn">Reset</button>
                     </div>
                 </div>
             </div>
@@ -134,6 +136,17 @@ async function initTemperatureChart() {
 
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
+
+        // Add event listeners for storage/reset buttons
+        const saveSelFieldsBtn = chartSection.querySelector('#saveSelectedFieldsBtn');  // save selected fields
+        saveSelFieldsBtn.addEventListener('click', (e) => {
+            saveSelected_Fields();
+        });
+     
+        const presetSelFieldsBtn = chartSection.querySelector('#presetSelectedFieldsBtn');  // reset to default
+        presetSelFieldsBtn.addEventListener('click', (e) => {
+            presetSelected_Fields();
+        });  
 
         // Add event listeners for time range buttons
         const timeButtons = chartSection.querySelectorAll('.time-btn');
@@ -406,6 +419,58 @@ function parseTimeRange(range) {
     return unit === 'h' ? value : value * 24;
 }
 
+
+// Save field settings to localStorage
+function saveSelected_Fields() {
+	try {
+		const f_json = JSON.stringify([...selectedFields]);
+		localStorage.setItem('vieventlog_grafic_fields', f_json);
+		// Show success feedback
+		const btn = document.getElementById('saveSelectedFieldsBtn');
+		if (btn) {
+			const originalText = btn.textContent;
+			btn.textContent = '✓ gespeichert';
+			btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+			setTimeout(() => {
+				btn.textContent = originalText;
+				btn.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+			}, 2000);
+		}
+	} catch (e) {
+		console.error('Failed to save fields:', e);
+		alert('Fehler beim Speichern der Einstellungen');
+	}
+}
+
+// Load field settings from localStorage
+function loadSelected_Fields() {
+	try {
+		const saved = localStorage.getItem('vieventlog_grafic_fields');
+		if (saved && saved.length > 4) {
+			// set selected fields from saved 
+			const savedSet  = new Set(JSON.parse(saved));
+			selectedFields = savedSet;
+			console.log('Loaded fields from localStorage');
+		}
+	} catch (e) {
+		console.error('Failed to load fields:', e);
+	}
+}
+
+// Reset fields to default
+function presetSelected_Fields() {
+	if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
+		// Reset to predefined
+		selectedFields.clear();
+		// Clear from localStorage
+		localStorage.removeItem('vieventlog_grafic_fields');
+		// Re-render graph
+		if (temperatureChart) {
+			loadTemperatureData();
+		}
+	}
+}
+
 // Update available data fields from response
 function updateAvailableFields(data) {
     availableDataFields.clear();
@@ -473,6 +538,10 @@ function updateAvailableFields(data) {
                 }
             });
         }
+
+		// overwrite fields with user selection
+        loadSelected_Fields();
+		
     }
 }
 
