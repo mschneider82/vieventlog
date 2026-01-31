@@ -196,16 +196,18 @@
             if (kf.primarySupplyTemp && kf.primaryReturnTemp) {
                 const supplyValue = kf.primarySupplyTemp.value;
                 const returnValue = kf.primaryReturnTemp.value;
-                const spreizung = supplyValue - returnValue;
-                tempsGroup2 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Spreizung Primärkreis</span>
-                        <div>
-                            <span class="temp-value">${formatNum(spreizung)}</span>
-                            <span class="temp-unit">K</span>
+                if (typeof returnValue === 'number' && typeof supplyValue === 'number') {
+                    const spreizung = supplyValue - returnValue;
+                    tempsGroup2 += `
+                        <div class="temp-item">
+                            <span class="temp-label">Spreizung Primärkreis</span>
+                            <div>
+                                <span class="temp-value">${formatNum(spreizung)}</span>
+                                <span class="temp-unit">K</span>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }
             // Spreizung Sekundärkreis/Heizkreis - use central calculation
 
