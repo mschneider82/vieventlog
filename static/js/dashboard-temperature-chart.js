@@ -438,16 +438,22 @@ function saveSelectedFields() {
 // Load field settings from localStorage (called once on initial data load)
 function loadSelectedFields() {
     try {
+        // Migrate old typo key from PR #226 if present
+        const oldSaved = localStorage.getItem('vieventlog_grafic_fields');
+        if (oldSaved && !localStorage.getItem('vieventlog_graphic_fields')) {
+            localStorage.setItem('vieventlog_graphic_fields', oldSaved);
+        }
+        localStorage.removeItem('vieventlog_grafic_fields');
+
         const saved = localStorage.getItem('vieventlog_graphic_fields');
         if (!saved) return;
         const parsed = JSON.parse(saved);
         if (!Array.isArray(parsed) || parsed.length === 0) return;
+        // Only replace current selection if at least one saved field is actually available
+        const validFields = parsed.filter(field => availableDataFields.has(field));
+        if (validFields.length === 0) return;
         selectedFields.clear();
-        parsed.forEach(field => {
-            if (availableDataFields.has(field)) {
-                selectedFields.add(field);
-            }
-        });
+        validFields.forEach(field => selectedFields.add(field));
         console.log('Loaded fields from localStorage');
     } catch (e) {
         console.error('Failed to load fields:', e);
@@ -459,6 +465,7 @@ function presetSelectedFields() {
     if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
         selectedFields.clear();
         localStorage.removeItem('vieventlog_graphic_fields');
+        localStorage.removeItem('vieventlog_grafic_fields');  // cleanup old key
         if (temperatureChart) {
             loadTemperatureData();
         }
@@ -666,7 +673,9 @@ function toggleField(field) {
     } else {
         selectedFields.add(field);
     }
-    loadTemperatureData(true);
+    if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+        renderTemperatureChart(cachedTemperatureData);
+    }
 }
 
 // Render ECharts temperature chart
