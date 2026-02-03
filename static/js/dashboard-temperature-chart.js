@@ -8,6 +8,7 @@ let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
 let cachedTemperatureData = null;  // Store current data for re-rendering
+let savedFieldsLoaded = false;     // Flag: persisted fields loaded once from localStorage
 
 // User preferences for chart display (previously auto-determined based on time range)
 let nullconnect = false;  // Connect points across null values
@@ -74,13 +75,15 @@ async function initTemperatureChart() {
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                         </div>
-                        <button id="saveSelectedFieldsBtn">Speichern</button>
-                        <button id="presetSelectedFieldsBtn">Reset</button>
                     </div>
                 </div>
             </div>
             <div class="chart-filters" id="temperature-chart-filters">
                 <div class="filters-loading">Lade verfügbare Sensoren...</div>
+            </div>
+            <div class="field-persistence-buttons">
+                <button id="saveSelectedFieldsBtn" class="field-btn field-btn-save">💾 Speichern</button>
+                <button id="presetSelectedFieldsBtn" class="field-btn field-btn-reset">↺ Reset</button>
             </div>
             <div id="temperature-chart" style="width: 100%; height: 600px; margin-top: 20px;"></div>
         `;
@@ -137,16 +140,9 @@ async function initTemperatureChart() {
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
 
-        // Add event listeners for storage/reset buttons
-        const saveSelFieldsBtn = chartSection.querySelector('#saveSelectedFieldsBtn');  // save selected fields
-        saveSelFieldsBtn.addEventListener('click', (e) => {
-            saveSelected_Fields();
-        });
-     
-        const presetSelFieldsBtn = chartSection.querySelector('#presetSelectedFieldsBtn');  // reset to default
-        presetSelFieldsBtn.addEventListener('click', (e) => {
-            presetSelected_Fields();
-        });  
+        // Add event listeners for field persistence buttons
+        chartSection.querySelector('#saveSelectedFieldsBtn').addEventListener('click', saveSelectedFields);
+        chartSection.querySelector('#presetSelectedFieldsBtn').addEventListener('click', presetSelectedFields);
 
         // Add event listeners for time range buttons
         const timeButtons = chartSection.querySelectorAll('.time-btn');
@@ -421,59 +417,52 @@ function parseTimeRange(range) {
 
 
 // Save field settings to localStorage
-function saveSelected_Fields() {
-	try {
-		const f_json = JSON.stringify([...selectedFields]);
-		localStorage.setItem('vieventlog_grafic_fields', f_json);
-		// Show success feedback
-		const btn = document.getElementById('saveSelectedFieldsBtn');
-		if (btn) {
-			const originalText = btn.textContent;
-			btn.textContent = '✓ gespeichert';
-			btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-			setTimeout(() => {
-				btn.textContent = originalText;
-				btn.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-			}, 2000);
-		}
-	} catch (e) {
-		console.error('Failed to save fields:', e);
-		alert('Fehler beim Speichern der Einstellungen');
-	}
+function saveSelectedFields() {
+    try {
+        localStorage.setItem('vieventlog_graphic_fields', JSON.stringify([...selectedFields]));
+        const btn = document.getElementById('saveSelectedFieldsBtn');
+        if (btn) {
+            btn.textContent = '✓ gespeichert';
+            btn.classList.add('field-btn-saved');
+            setTimeout(() => {
+                btn.textContent = '💾 Speichern';
+                btn.classList.remove('field-btn-saved');
+            }, 2000);
+        }
+    } catch (e) {
+        console.error('Failed to save fields:', e);
+        alert('Fehler beim Speichern der Einstellungen');
+    }
 }
 
-// Load field settings from localStorage
-function loadSelected_Fields() {
-	try {
-		const saved = localStorage.getItem('vieventlog_grafic_fields');
-		if (saved && saved.length > 4) {
-			// set selected fields from saved
-			const savedSet  = new Set(JSON.parse(saved));
-			selectedFields.clear();
-			savedSet.forEach(field => {
-				if (availableDataFields.has(field)) {
-					selectedFields.add(field);
-				}
-			});
-			console.log('Loaded fields from localStorage');
-		}
-	} catch (e) {
-		console.error('Failed to load fields:', e);
-	}
+// Load field settings from localStorage (called once on initial data load)
+function loadSelectedFields() {
+    try {
+        const saved = localStorage.getItem('vieventlog_graphic_fields');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+        selectedFields.clear();
+        parsed.forEach(field => {
+            if (availableDataFields.has(field)) {
+                selectedFields.add(field);
+            }
+        });
+        console.log('Loaded fields from localStorage');
+    } catch (e) {
+        console.error('Failed to load fields:', e);
+    }
 }
 
 // Reset fields to default
-function presetSelected_Fields() {
-	if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
-		// Reset to predefined
-		selectedFields.clear();
-		// Clear from localStorage
-		localStorage.removeItem('vieventlog_grafic_fields');
-		// Re-render graph
-		if (temperatureChart) {
-			loadTemperatureData();
-		}
-	}
+function presetSelectedFields() {
+    if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
+        selectedFields.clear();
+        localStorage.removeItem('vieventlog_graphic_fields');
+        if (temperatureChart) {
+            loadTemperatureData();
+        }
+    }
 }
 
 // Update available data fields from response
@@ -544,9 +533,11 @@ function updateAvailableFields(data) {
             });
         }
 
-		// overwrite fields with user selection
-        loadSelected_Fields();
-		
+        // Load persisted field selection once on first data load
+        if (!savedFieldsLoaded) {
+            savedFieldsLoaded = true;
+            loadSelectedFields();
+        }
     }
 }
 
@@ -1125,6 +1116,35 @@ chartStyles.textContent = `
     text-align: center;
     color: #a0a0b0;
     padding: 10px;
+}
+
+.field-persistence-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+
+.field-btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
+    color: #e0e0e0;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.field-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.field-btn-save.field-btn-saved {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #fff;
 }
 
 @media (max-width: 768px) {
