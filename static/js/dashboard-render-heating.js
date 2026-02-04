@@ -233,7 +233,7 @@
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
                 // Check if DHW is currently active (4-way valve in domesticHotWater position)
-                const isDhwActive = kf.fourWayValve && kf.fourWayValve.value === 'domesticHotWater';
+                const isDhwActive = kf.fourWayValve && (kf.fourWayValve.value === 'domesticHotWater' || kf.fourWayValve.value === 'climateCircuitTwoDefrostDomesticHotWater');
                 const dhwClass = isDhwActive ? 'with-bg-fire' : '';
                 tempsGroup3 += `
                     <div class="temp-item ${dhwClass}">
@@ -2466,7 +2466,8 @@
                     'standby': 'Standby',
                     'off': 'Aus',
                     'climateCircuitOne': 'Heiz-/Kühlkreis 1',
-                    'climatCircuitTwoDefrost': 'Integrierter Pufferspeicher'
+                    'climatCircuitTwoDefrost': 'Integrierter Pufferspeicher',
+                    'climateCircuitTwoDefrostDomesticHotWater': 'Warmwasser'
                 };
                 const valveValue = kf.fourWayValve.value;
                 const valveDisplay = valveLabels[valveValue] || valveValue;
