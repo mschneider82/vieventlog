@@ -156,6 +156,21 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         valve_1: keyFeatures.expansionValve_1?.value || null
     };
 
+	// validate bufferTemp, option: bufferTempTop
+    let bufferTempVal = null;
+    if (keyFeatures.bufferTemp !== null){
+    	const bufferTempValue = keyFeatures.bufferTemp.value;
+        if ( typeof bufferTempValue === 'number'){
+            bufferTempVal = bufferTempValue;
+        }
+    }
+    else if (keyFeatures.bufferTempTop !== null){
+    	const bufferTempTopValue = keyFeatures.bufferTempTop.value;
+        if ( typeof bufferTempTopValue === 'number'){
+            bufferTempVal = bufferTempTopValue;
+        }
+    }
+
     // Format value with unit
     const formatValue = (value, unit = '', decimals = 1) => {
         if (value === null || value === undefined) return '-';
@@ -244,7 +259,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${keyFeatures.volumetricFlow !== null ? `<div class="value-label" style="top: 17.36%; left: 93.0%;" title="Volumenstrom">${formatValue(keyFeatures.volumetricFlow.value, 'l/h', 0)}</div>` : ''}
 
                     <!-- Speichertemperaturen (unter den Speicher-Bildern) -->
-                    ${keyFeatures.bufferTemp !== null && keyFeatures.bufferTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 84.65%;" title="Heizpuffer Temperatur">${formatValue(keyFeatures.bufferTemp.value, '°C')}</div>` : ''}
+                    ${bufferTempVal !== null ? `<div class="value-label" style="top: 64.74%; left: 84.65%;" title="Heizpuffer Temperatur">${formatValue(bufferTempVal, '°C')}</div>` : ''}
                     ${keyFeatures.dhwTemp !== null && keyFeatures.dhwTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 91.26%;" title="Warmwasser Temperatur">${formatValue(keyFeatures.dhwTemp.value, '°C')}</div>` : ''}
 
                     <!-- Leistungsanzeigen -->
