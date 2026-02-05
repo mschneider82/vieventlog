@@ -164,7 +164,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
             bufferTempVal = bufferTempValue;
         }
     }
-    else if (keyFeatures.bufferTempTop !== null){
+    if (bufferTempVal == null && keyFeatures.bufferTempTop !== null){
     	const bufferTempTopValue = keyFeatures.bufferTempTop.value;
         if ( typeof bufferTempTopValue === 'number'){
             bufferTempVal = bufferTempTopValue;
@@ -232,7 +232,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${values.fan1 !== null ? `<div class="value-label" style="top: 51.52%; left: 8.03%;" title="Lüfter 1">${formatValue(values.fan1, '%', 0)}</div>` : ''}
                     ${values.fan2 !== null ? `<div class="value-label" style="top: 22.87%; left: 8.03%;" title="Lüfter 2">${formatValue(values.fan2, '%', 0)}</div>` : ''}
 
-                    ${values.evaporatorTemp !== null ? `<div class="value-label" style="top: 37.19%; left: 21.72%;" title="Verdampfer Temperatur">${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
+                    ${values.evaporatorTemp !== null && values.evaporatorTemp !== "notConnected" ? `<div class="value-label" style="top: 37.19%; left: 21.72%;" title="Verdampfer Temperatur">${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
                     ${values.evaporatorOverheat !== null ? `<div class="value-label" style="top: 37.19%; left: 56.79%;" title="Verdampfer Überhitzung">${formatValue(values.evaporatorOverheat, '°C')}</div>` : ''}
 
                     ${values.economizer !== null ? `<div class="value-label" style="top: 17.36%; left: 38.72%;" title="Economizer">${formatValue(values.economizer, '°C')}</div>` : ''}
