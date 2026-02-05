@@ -705,7 +705,7 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	// which maps to our HeatingCircuit0SupplyTemp + ReturnTemp
 	if snapshot.ReturnTemp != nil && (supplyTemp == nil || hasHotWaterBuffer == false) {
 		if snapshot.HeatingCircuit0SupplyTemp != nil {
-			supplyTemp = snapshot.SupplyTemp
+			supplyTemp = snapshot.HeatingCircuit0SupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	}
