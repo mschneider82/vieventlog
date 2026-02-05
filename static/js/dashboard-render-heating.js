@@ -252,49 +252,55 @@
                 const formatted = formatValue(kf.boilerTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                // Check if compressor is running
-                const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
-                const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
-                tempsGroup3 += `
-                    <div class="temp-item ${compressorClass}">
-                        <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				if ( typeof value === 'number'){
+	                // Check if compressor is running
+    	            const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
+        	        const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
+            	    tempsGroup3 += `
+                	    <div class="temp-item ${compressorClass}">
+                    	    <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
+                        	<div>
+                            	<span class="temp-value">${value}</span>
+	                            <span class="temp-unit">${unit}</span>
+    	                    </div>
+        	            </div>
+            	    `;
+			}
+			}
             // Puffertemperatur
             if (kf.bufferTemp) {
                 const formatted = formatValue(kf.bufferTemp);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                tempsGroup3 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				if ( typeof value === 'number'){
+	                tempsGroup3 += `
+    	                <div class="temp-item">
+        	                <span class="temp-label">Puffertemperatur</span>
+            	            <div>
+                	            <span class="temp-value">${value}</span>
+                    	        <span class="temp-unit">${unit}</span>
+                        	</div>
+	                    </div>
+    	            `;
+				}
+			}
             // Puffertemperatur Oben
             if (kf.bufferTempTop) {
                 const formatted = formatValue(kf.bufferTempTop);
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
-                tempsGroup3 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur Oben</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				if ( typeof value === 'number'){
+    	            tempsGroup3 += `
+        	            <div class="temp-item">
+            	            <span class="temp-label">Puffertemperatur Oben</span>
+                	        <div>
+                    	        <span class="temp-value">${value}</span>
+                        	    <span class="temp-unit">${unit}</span>
+	                        </div>
+    	                </div>
+        	        `;
+				}
+			}
 
             // --- GROUP 4: Energiecockpit ---
             // Try to calculate thermal power and COP (either from flow or from direct features)
