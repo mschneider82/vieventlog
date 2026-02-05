@@ -249,10 +249,11 @@
             }
             // Wärmeerzeuger-Vorlauf (boilerTemp)
             if (kf.boilerTemp) {
-                const formatted = formatValue(kf.boilerTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-				if ( typeof value === 'number'){
+				const boilerTempValue = kf.boilerTemp.value;
+                if ( typeof boilerTempValue === 'number'){
+					const formatted = formatValue(kf.boilerTemp);
+                	const [value, ...unitParts] = formatted.split(' ');
+                	const unit = unitParts.join(' ');
 	                // Check if compressor is running
     	            const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
         	        const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
@@ -265,14 +266,15 @@
     	                    </div>
         	            </div>
             	    `;
-			}
+				}
 			}
             // Puffertemperatur
             if (kf.bufferTemp) {
-                const formatted = formatValue(kf.bufferTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-				if ( typeof value === 'number'){
+				const bufferTempValue = kf.bufferTemp.value;
+                if ( typeof bufferTempValue === 'number'){
+					const formatted = formatValue(kf.bufferTemp);
+    	            const [value, ...unitParts] = formatted.split(' ');
+        	        const unit = unitParts.join(' ');
 	                tempsGroup3 += `
     	                <div class="temp-item">
         	                <span class="temp-label">Puffertemperatur</span>
@@ -286,10 +288,11 @@
 			}
             // Puffertemperatur Oben
             if (kf.bufferTempTop) {
-                const formatted = formatValue(kf.bufferTempTop);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-				if ( typeof value === 'number'){
+				const bufferTempTopValue = kf.bufferTempTop.value;
+                if ( typeof bufferTempTopValue === 'number'){
+	                const formatted = formatValue(kf.bufferTempTop);
+    	            const [value, ...unitParts] = formatted.split(' ');
+        	        const unit = unitParts.join(' ');
     	            tempsGroup3 += `
         	            <div class="temp-item">
             	            <span class="temp-label">Puffertemperatur Oben</span>
