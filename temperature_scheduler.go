@@ -434,9 +434,11 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.temperature.return":
 		snapshot.ReturnTemp = getFloatValue(feature.Properties)
 
+	
+// remove, this is not an API Data Point (20.01.2026)
 	// Keep for backward compatibility (legacy devices may still use this)
-	case "heating.sensors.temperature.supply":
-		snapshot.SupplyTemp = getFloatValue(feature.Properties)
+	//	case "heating.sensors.temperature.supply":
+	//	snapshot.SupplyTemp = getFloatValue(feature.Properties)
 
 	// Heating circuits 0-3: Store in both legacy fields (backward compat) and new explicit fields
 	// dashboard: supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']), Gemeinsame Vorlauftemperatur IDU (auch Vorlauf 1. Heizkreis)
@@ -684,24 +686,26 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 
 	var supplyTemp, returnTemp *float64
 
-	if hasHotWaterBuffer {
-		// Mit HW-Puffer: Sekundärkreis Spreizung (see dashboard_render_engine)
-		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
-		// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
-		if snapshot.HPSecondaryCircuitSupplyTemp != nil {
-			supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
-			returnTemp = snapshot.ReturnTemp
-		}
-	} else {
-		// Ohne HW-Puffer: Heizkreis Spreizung (see dashboard_render_engine)
-		// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
-		// which maps to our HeatingCircuit0SupplyTemp + ReturnTemp
+//  snapshot values extractet from JSON
+// 	case "heating.circuits.0.sensors.temperature.supply":		snapshot.HeatingCircuit0SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
+// 	case "heating.secondaryCircuit.sensors.temperature.supply":	snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // HP secondary circuit supply
+//
+//	case "heating.sensors.temperature.return":					snapshot.ReturnTemp = getFloatValue(feature.Properties)
+
+	// default to secondarySupplyTemp (ODU)
+	// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply + heating.sensors.temperature.return 
+	// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
+	if snapshot.ReturnTemp != nil && snapshot.HPSecondaryCircuitSupplyTemp != nil {
+		supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
+		returnTemp = snapshot.ReturnTemp
+	}
+    // 'secondarySupplyTemp' not set: use alternative circuit0-supplyTemp
+    // systems w/o buffer always use circuit0-supplyTemp
+	// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
+	// which maps to our HeatingCircuit0SupplyTemp + ReturnTemp
+	if snapshot.ReturnTemp != nil && (supplyTemp == nil || hasHotWaterBuffer == false) {
 		if snapshot.HeatingCircuit0SupplyTemp != nil {
 			supplyTemp = snapshot.HeatingCircuit0SupplyTemp
-			returnTemp = snapshot.ReturnTemp
-		} else if snapshot.SupplyTemp != nil {
-			// Fallback for maximum compatibility
-			supplyTemp = snapshot.SupplyTemp
 			returnTemp = snapshot.ReturnTemp
 		}
 	}

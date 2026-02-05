@@ -156,6 +156,21 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         valve_1: keyFeatures.expansionValve_1?.value || null
     };
 
+	// validate bufferTemp, option: bufferTempTop
+    let bufferTempVal = null;
+    if (keyFeatures.bufferTemp !== null){
+    	const bufferTempValue = keyFeatures.bufferTemp.value;
+        if ( typeof bufferTempValue === 'number'){
+            bufferTempVal = bufferTempValue;
+        }
+    }
+    if (bufferTempVal == null && keyFeatures.bufferTempTop !== null){
+    	const bufferTempTopValue = keyFeatures.bufferTempTop.value;
+        if ( typeof bufferTempTopValue === 'number'){
+            bufferTempVal = bufferTempTopValue;
+        }
+    }
+
     // Format value with unit
     const formatValue = (value, unit = '', decimals = 1) => {
         if (value === null || value === undefined) return '-';
@@ -217,7 +232,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${values.fan1 !== null ? `<div class="value-label" style="top: 51.52%; left: 8.03%;" title="Lüfter 1">${formatValue(values.fan1, '%', 0)}</div>` : ''}
                     ${values.fan2 !== null ? `<div class="value-label" style="top: 22.87%; left: 8.03%;" title="Lüfter 2">${formatValue(values.fan2, '%', 0)}</div>` : ''}
 
-                    ${values.evaporatorTemp !== null ? `<div class="value-label" style="top: 37.19%; left: 21.72%;" title="Verdampfer Temperatur">${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
+                    ${values.evaporatorTemp !== null && values.evaporatorTemp !== "notConnected" ? `<div class="value-label" style="top: 37.19%; left: 21.72%;" title="Verdampfer Temperatur">${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
                     ${values.evaporatorOverheat !== null ? `<div class="value-label" style="top: 37.19%; left: 56.79%;" title="Verdampfer Überhitzung">${formatValue(values.evaporatorOverheat, '°C')}</div>` : ''}
 
                     ${values.economizer !== null ? `<div class="value-label" style="top: 17.36%; left: 38.72%;" title="Economizer">${formatValue(values.economizer, '°C')}</div>` : ''}
@@ -244,7 +259,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
                     ${keyFeatures.volumetricFlow !== null ? `<div class="value-label" style="top: 17.36%; left: 93.0%;" title="Volumenstrom">${formatValue(keyFeatures.volumetricFlow.value, 'l/h', 0)}</div>` : ''}
 
                     <!-- Speichertemperaturen (unter den Speicher-Bildern) -->
-                    ${keyFeatures.bufferTemp !== null && keyFeatures.bufferTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 84.65%;" title="Heizpuffer Temperatur">${formatValue(keyFeatures.bufferTemp.value, '°C')}</div>` : ''}
+                    ${bufferTempVal !== null ? `<div class="value-label" style="top: 64.74%; left: 84.65%;" title="Heizpuffer Temperatur">${formatValue(bufferTempVal, '°C')}</div>` : ''}
                     ${keyFeatures.dhwTemp !== null && keyFeatures.dhwTemp.value !== null ? `<div class="value-label" style="top: 64.74%; left: 91.26%;" title="Warmwasser Temperatur">${formatValue(keyFeatures.dhwTemp.value, '°C')}</div>` : ''}
 
                     <!-- Leistungsanzeigen -->
