@@ -97,7 +97,21 @@ func extractFeatureValue(properties map[string]interface{}) FeatureValue {
 		return fv
 	}
 
-	// No "value" property - the properties themselves are the data
+	// No "value" property - check if properties contain only metadata (status/active/enabled).
+	// Sensors like "notConnected" have only a status property and no usable value.
+	// Return empty FeatureValue so the frontend sees value: null.
+	hasOnlyMeta := true
+	for k := range properties {
+		if k != "status" && k != "active" && k != "enabled" {
+			hasOnlyMeta = false
+			break
+		}
+	}
+	if hasOnlyMeta {
+		return fv
+	}
+
+	// The properties themselves are the data
 	// (e.g., heating.curve has "slope" and "shift" directly)
 	nestedValues := make(map[string]FeatureValue)
 	for propName, propValue := range properties {
