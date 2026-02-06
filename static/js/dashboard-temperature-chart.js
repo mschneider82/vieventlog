@@ -74,8 +74,6 @@ async function initTemperatureChart() {
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                         </div>
-                        <button id="saveSelectedFieldsBtn">Speichern</button>
-                        <button id="presetSelectedFieldsBtn">Reset</button>
                     </div>
                 </div>
             </div>
@@ -136,17 +134,6 @@ async function initTemperatureChart() {
 
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
-
-        // Add event listeners for storage/reset buttons
-        const saveSelFieldsBtn = chartSection.querySelector('#saveSelectedFieldsBtn');  // save selected fields
-        saveSelFieldsBtn.addEventListener('click', (e) => {
-            saveSelected_Fields();
-        });
-     
-        const presetSelFieldsBtn = chartSection.querySelector('#presetSelectedFieldsBtn');  // reset to default
-        presetSelFieldsBtn.addEventListener('click', (e) => {
-            presetSelected_Fields();
-        });  
 
         // Add event listeners for time range buttons
         const timeButtons = chartSection.querySelectorAll('.time-btn');
@@ -641,7 +628,7 @@ function renderFilters() {
     };
 
     let html = '<div class="filter-categories">';
-
+	let buttonsOnce = 1;
     Object.entries(categories).forEach(([category, fields]) => {
         const availableInCategory = fields.filter(f => availableDataFields.has(f));
         if (availableInCategory.length === 0) return;
@@ -660,7 +647,16 @@ function renderFilters() {
                 </label>
             `;
         });
-
+		// save / reset field persistence buttons
+        if (buttonsOnce) {
+            buttonsOnce = 0;
+            html += `
+			<div class="field-persistence-buttons">
+                <button id="saveSelectedFieldsBtn" title="Selektion speichern" class="field-btn field-btn-save" onclick="saveSelectedFields()">💾 Speichern</button>
+                <button id="presetSelectedFieldsBtn" class="field-btn field-btn-reset" onclick="presetSelectedFields()">↺ Reset</button>
+            </div>
+            `;
+        }
         html += `</div></div>`;
     });
 
