@@ -97,18 +97,30 @@ func extractFeatureValue(properties map[string]interface{}) FeatureValue {
 		return fv
 	}
 
-	// No "value" property - check if properties contain only metadata (status/active/enabled).
-	// Sensors like "notConnected" have only a status property and no usable value.
-	// Return empty FeatureValue so the frontend sees value: null.
-	hasOnlyMeta := true
-	for k := range properties {
-		if k != "status" && k != "active" && k != "enabled" {
-			hasOnlyMeta = false
-			break
+	// No "value" property - check if this is a disconnected/error sensor.
+	// Sensors with status "notConnected"/"error" have no usable value.
+	// But pumps/valves use status for their actual state ("on"/"off"), so check the value.
+	if statusObj, ok := properties["status"].(map[string]interface{}); ok {
+		if statusVal, ok := statusObj["value"].(string); ok {
+			// These are metadata statuses, not actual values
+			metaStatuses := []string{"notConnected", "error", "disconnected", "unknown", "unavailable"}
+			for _, meta := range metaStatuses {
+				if statusVal == meta {
+					// Only metadata properties present, no usable value
+					hasOnlyMeta := true
+					for k := range properties {
+						if k != "status" && k != "active" && k != "enabled" {
+							hasOnlyMeta = false
+							break
+						}
+					}
+					if hasOnlyMeta {
+						return fv
+					}
+					break
+				}
+			}
 		}
-	}
-	if hasOnlyMeta {
-		return fv
 	}
 
 	// The properties themselves are the data
