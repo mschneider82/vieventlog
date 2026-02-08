@@ -618,6 +618,8 @@ function renderFilters() {
 
         // Operating state
         'four_way_valve': '🔀 4-Wege-Ventil',
+        'four_way_valve_target': '🔀 4-Wege-Ventil soll',
+        'four_way_valve_current': '🔀 4-Wege-Ventil ist',
         'burner_modulation': '🔥 Brenner Modulation',
         'secondary_heat_generator_status': '🔥 Zusatzheizung'
     };
@@ -635,7 +637,7 @@ function renderFilters() {
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
                       'compressor_hours', 'compressor_starts', 'compressor_power'],
-        'Pumpen': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active'],
+        'Info': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active', 'four_way_valve_target', 'four_way_valve_current'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
         'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
     };
@@ -732,6 +734,10 @@ function renderTemperatureChart(data) {
         'heating_circuit_2_delta_t': { type: 'line', yAxisIndex: 0, color: '#3498db', smooth: true, lineStyle: { type: 'dashed' } },
         'heating_circuit_3_delta_t': { type: 'line', yAxisIndex: 0, color: '#9b59b6', smooth: true, lineStyle: { type: 'dashed' } },
 
+		// 4/3 Valve Position
+		'four_way_valve_current': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true },
+        'four_way_valve_target': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true },
+
         // Boolean states (secondary axis)
         'compressor_active': { type: 'line', yAxisIndex: 1, color: '#f4b400', step: 'end' },
         'circulation_pump_active': { type: 'line', yAxisIndex: 1, color: '#0f9d58', step: 'end' },
@@ -788,6 +794,8 @@ function renderTemperatureChart(data) {
         'secondary_supply_temp': 'Sek.-Vorlauf ODU (L)',
         'primary_return_temp': 'Primär-RL (L)',
         'secondary_return_temp': 'Sek.-RL (L)',
+
+		// Compressor
         'compressor_active': 'Kompressor',
         'compressor_speed': 'Drehzahl',
         'compressor_current': 'Strom',
@@ -799,9 +807,15 @@ function renderTemperatureChart(data) {
         'compressor_hours': 'Betriebsstunden',
         'compressor_starts': 'Starts',
         'compressor_power': 'Leistung',
+		
+		// 4/3 Valve
+		'four_way_valve_current': 'V ist',
+		'four_way_valve_target': 'V soll',
+		// other info
         'circulation_pump_active': 'Umwälzpumpe',
         'dhw_pump_active': 'WW-Pumpe',
         'internal_pump_active': 'Int. Pumpe',
+		// Power/COP/Flow
         'volumetric_flow': 'Volumenstrom',
         'thermal_power': 'Therm. Leistung',
         'cop': 'AZ',
