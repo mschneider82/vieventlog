@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -53,7 +54,7 @@ func handleSetTemperatureLogSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Use default database path if not provided
 	if settings.DatabasePath == "" {
-		settings.DatabasePath = "./viessmann_events.db"
+		settings.DatabasePath = filepath.Join(getDefaultConfigDir(), "viessmann_events.db")
 	}
 
 	// Save settings

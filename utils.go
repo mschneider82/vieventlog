@@ -294,3 +294,18 @@ func processEvent(raw map[string]interface{}) Event {
 
 	return event
 }
+
+// getDefaultConfigDir returns the default configuration directory
+// Priority: VICARE_CONFIG_DIR env var -> /config (if exists) -> current directory
+func getDefaultConfigDir() string {
+	// Check VICARE_CONFIG_DIR environment variable first
+	if configDir := os.Getenv("VICARE_CONFIG_DIR"); configDir != "" {
+		return configDir
+	}
+	// Check if /config exists (Docker/container environment)
+	if _, err := os.Stat("/config"); err == nil {
+		return "/config"
+	}
+	// Fallback to current directory
+	return "."
+}
