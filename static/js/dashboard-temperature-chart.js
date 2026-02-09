@@ -52,7 +52,9 @@ async function initTemperatureChart() {
     // Check if chart container already exists
     let chartSection = document.getElementById('temperature-chart-section');
     if (!chartSection) {
-        // Insert temperature chart section before other content
+		// set currentTimeRange to match button active on autoRefresh
+		currentTimeRange = '24h';
+		// Insert temperature chart section before other content
         chartSection = document.createElement('div');
         chartSection.id = 'temperature-chart-section';
         chartSection.className = 'temperature-chart-container';
