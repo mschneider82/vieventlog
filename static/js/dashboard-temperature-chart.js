@@ -140,12 +140,12 @@ async function initTemperatureChart() {
         // Add event listeners for storage/reset buttons
         const saveSelFieldsBtn = chartSection.querySelector('#saveSelectedFieldsBtn');  // save selected fields
         saveSelFieldsBtn.addEventListener('click', (e) => {
-            saveSelected_Fields();
+            saveSelectedFields();
         });
      
         const presetSelFieldsBtn = chartSection.querySelector('#presetSelectedFieldsBtn');  // reset to default
         presetSelFieldsBtn.addEventListener('click', (e) => {
-            presetSelected_Fields();
+            presetSelectedFields();
         });  
 
         // Add event listeners for time range buttons
@@ -414,7 +414,7 @@ function parseTimeRange(range) {
 
 
 // Save field settings to localStorage
-function saveSelected_Fields() {
+function saveSelectedFields() {
 	try {
 		const f_json = JSON.stringify([...selectedFields]);
 		localStorage.setItem('vieventlog_grafic_fields', f_json);
@@ -436,7 +436,7 @@ function saveSelected_Fields() {
 }
 
 // Load field settings from localStorage
-function loadSelected_Fields() {
+function loadSelectedFields() {
 	try {
 		const saved = localStorage.getItem('vieventlog_grafic_fields');
 		if (saved && saved.length > 4) {
@@ -456,7 +456,7 @@ function loadSelected_Fields() {
 }
 
 // Reset fields to default
-function presetSelected_Fields() {
+function presetSelectedFields() {
 	if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
 		// Reset to predefined
 		selectedFields.clear();
@@ -538,7 +538,7 @@ function updateAvailableFields(data) {
         }
 
 		// overwrite fields with user selection
-        loadSelected_Fields();
+        loadSelectedFields();
 		
     }
 }
