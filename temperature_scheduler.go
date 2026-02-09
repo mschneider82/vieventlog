@@ -577,6 +577,21 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	case "heating.sensors.volumetricFlow.allengra":
 		snapshot.VolumetricFlow = getFloatValue(feature.Properties)
 
+	// Pressure sensors
+	case "heating.sensors.pressure.supply":
+		snapshot.PressureSupply = getFloatValue(feature.Properties)
+
+	// 4/3-Way Valve position (nested properties: current and target)
+	case "heating.secondaryCircuit.valves.fourThreeWay":
+		// Extract current position
+		if current, ok := feature.Properties["current"].(map[string]interface{}); ok {
+			snapshot.FourWayValveCurrent = getFloatValue(current)
+		}
+		// Extract target position
+		if target, ok := feature.Properties["target"].(map[string]interface{}); ok {
+			snapshot.FourWayValveTarget = getFloatValue(target)
+		}
+
 	// Operating state
 
 //remove, will not be used because string content

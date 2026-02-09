@@ -333,7 +333,7 @@ type TemperatureSnapshot struct {
 	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`
 	ThermalPower   *float64 `json:"thermal_power,omitempty"`
 	COP            *float64 `json:"cop,omitempty"`
-	PressureSupply		*float64 `json:"pressure_supply,omitempty"`  // Heizwasserdruck
+	PressureSupply *float64 `json:"pressure_supply,omitempty"` // Heizwasserdruck (bar)
 
 	// Temperature spreads (deltaT) for each heating circuit
 	// NOTE: All circuits share the same return sensor (ReturnTemp), so these deltaT values

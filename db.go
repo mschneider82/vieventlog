@@ -600,7 +600,7 @@ func runSchemaMigrations() error {
 		}
 		// Add pressure supply
 		if !columnExists("temperature_snapshots","pressure_supply") {
-			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN pressure_supply")
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN pressure_supply REAL")
 			if err != nil {
 				return fmt.Errorf("migration 7 failed (pressure supply): %v", err)
 			}
