@@ -333,6 +333,7 @@ type TemperatureSnapshot struct {
 	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`
 	ThermalPower   *float64 `json:"thermal_power,omitempty"`
 	COP            *float64 `json:"cop,omitempty"`
+	PressureSupply *float64 `json:"pressure_supply,omitempty"` // Heizwasserdruck (bar)
 
 	// Temperature spreads (deltaT) for each heating circuit
 	// NOTE: All circuits share the same return sensor (ReturnTemp), so these deltaT values
@@ -344,6 +345,8 @@ type TemperatureSnapshot struct {
 
 	// Operating state
 	FourWayValve                 *string  `json:"four_way_valve,omitempty"`
+	FourWayValveCurrent          *float64 `json:"four_way_valve_current,omitempty"` // 4/3 valve current position
+	FourWayValveTarget           *float64 `json:"four_way_valve_target,omitempty"`  // 4/3 valve target position
 	BurnerModulation             *float64 `json:"burner_modulation,omitempty"`
 	SecondaryHeatGeneratorStatus *string  `json:"secondary_heat_generator_status,omitempty"`
 }
