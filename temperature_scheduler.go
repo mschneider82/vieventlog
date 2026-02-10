@@ -757,10 +757,11 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			// the temperature spread from each circuit's supply to the shared return
 
 			// For systems without buffer, calculate from heating circuit 0 supply temperature
+			// use deltaT, because it is used for thermal power /cop calculation
 			if hasHotWaterBuffer == false {
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
-					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
-					snapshot.HeatingCircuit0DeltaT = &deltaT0
+					deltaT = *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit0DeltaT = &deltaT
 				}
 			}
 			if snapshot.HeatingCircuit1SupplyTemp != nil {
