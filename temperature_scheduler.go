@@ -707,71 +707,75 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 // 	case "heating.secondaryCircuit.sensors.temperature.supply":	snapshot.HPSecondaryCircuitSupplyTemp = getFloatValue(feature.Properties) // HP secondary circuit supply
 //
 //	case "heating.sensors.temperature.return":					snapshot.ReturnTemp = getFloatValue(feature.Properties)
+// Dashboard uses: heating.sensors.temperature.return 
 
-	// default to secondarySupplyTemp (ODU)
-	// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply + heating.sensors.temperature.return 
-	// which maps to our HPSecondaryCircuitSupplyTemp + ReturnTemp
-	if snapshot.ReturnTemp != nil && snapshot.HPSecondaryCircuitSupplyTemp != nil {
-		supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
-		returnTemp = snapshot.ReturnTemp
-	}
-    // 'secondarySupplyTemp' not set: use alternative circuit0-supplyTemp
-    // systems w/o buffer always use circuit0-supplyTemp
-	// Dashboard uses: heating.circuits.0.sensors.temperature.supply + heating.sensors.temperature.return
-	// which maps to our HeatingCircuit0SupplyTemp + ReturnTemp
-	if snapshot.ReturnTemp != nil && (supplyTemp == nil || hasHotWaterBuffer == false) {
-		if snapshot.HeatingCircuit0SupplyTemp != nil {
-			supplyTemp = snapshot.HeatingCircuit0SupplyTemp
-			returnTemp = snapshot.ReturnTemp
+	// any deltaT calculation is based on returnTemp
+	returnTemp = snapshot.ReturnTemp
+	if returnTemp != nil {	
+
+		// default supplyTemp to secondarySupplyTemp (ODU)
+		// Dashboard uses: heating.secondaryCircuit.sensors.temperature.supply
+		// which maps to our HPSecondaryCircuitSupplyTemp
+		if snapshot.HPSecondaryCircuitSupplyTemp != nil {
+			supplyTemp = snapshot.HPSecondaryCircuitSupplyTemp
 		}
-	}
-	// Calculate deltaT if volumetricFlow or compressor is activ 
-	if snapshot.VolumetricFlow != nil || (snapshot.CompressorActive != nil && *snapshot.CompressorActive == true) {
-	
-		if supplyTemp != nil && returnTemp != nil {	
-	
-			deltaT = *supplyTemp - *returnTemp
-
-			// Fallback für 250-A und ähnliche Anlagen: Bei manchen Anlagentypen liefert
-			// die API die "gemeinsame Vorlauftemperatur" statt der höchsten Temperatur.
-			// Verwende BoilerTemp wenn diese höher ist als supplyTemp.
-			if snapshot.BoilerTemp != nil {
-				if *snapshot.BoilerTemp > *supplyTemp {
-					supplyTemp = snapshot.BoilerTemp
-					deltaT = *supplyTemp - *returnTemp
-				}
+		// 'secondarySupplyTemp' not set: use alternative circuit0-supplyTemp
+		// systems w/o buffer always use circuit0-supplyTemp
+		// Dashboard uses: heating.circuits.0.sensors.temperature.supply
+		// which maps to our HeatingCircuit0SupplyTemp
+		if supplyTemp == nil || hasHotWaterBuffer == false {
+			if snapshot.HeatingCircuit0SupplyTemp != nil {
+				supplyTemp = snapshot.HeatingCircuit0SupplyTemp
 			}
-			// default deltaT calculated from secondary circuit (HPSecondaryCircuitSupplyTemp - ReturnTemp)
-			snapshot.HeatingCircuit0DeltaT = &deltaT
 		}
+	
+		// Calculate deltaT if volumetricFlow or compressor is activ 
+		if (snapshot.VolumetricFlow != nil && *snapshot.VolumetricFlow > 0)|| (snapshot.CompressorActive != nil && *snapshot.CompressorActive == true) {
+	
+			if supplyTemp != nil {	
+	
+				deltaT = *supplyTemp - *returnTemp
 
-		// Calculate deltaT for each heating circuit individually
-		// NOTE: All circuits share the same return sensor, so these represent
-		// the temperature spread from each circuit's supply to the shared return
-		if snapshot.ReturnTemp != nil && *snapshot.VolumetricFlow > 0 {
-			// For systems with hot water buffer, use the calculated deltaT from secondary circuit
+				// Fallback für 250-A und ähnliche Anlagen: Bei manchen Anlagentypen liefert
+				// die API die "gemeinsame Vorlauftemperatur" statt der höchsten Temperatur.
+				// Verwende BoilerTemp wenn diese höher ist als supplyTemp.
+				if snapshot.BoilerTemp != nil {
+					if *snapshot.BoilerTemp > *supplyTemp {
+						supplyTemp = snapshot.BoilerTemp
+						deltaT = *supplyTemp - *returnTemp
+					}
+				}
+				// default deltaT calculated from secondary circuit (HPSecondaryCircuitSupplyTemp - ReturnTemp)
+				// For systems with hot water buffer,
+				snapshot.HeatingCircuit0DeltaT = &deltaT
+			}
+
+			// Calculate deltaT for each heating circuit individually
+			// NOTE: All circuits share the same return sensor, so these represent
+			// the temperature spread from each circuit's supply to the shared return
+
 			// For systems without buffer, calculate from heating circuit 0 supply temperature
 			if hasHotWaterBuffer == false {
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
-					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *snapshot.ReturnTemp
+					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
 					snapshot.HeatingCircuit0DeltaT = &deltaT0
 				}
 			}
 			if snapshot.HeatingCircuit1SupplyTemp != nil {
-				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *snapshot.ReturnTemp
+				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *returnTemp
 				snapshot.HeatingCircuit1DeltaT = &deltaT1
 			}
 			if snapshot.HeatingCircuit2SupplyTemp != nil {
-				deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *snapshot.ReturnTemp
+				deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *returnTemp
 				snapshot.HeatingCircuit2DeltaT = &deltaT2
 			}
 			if snapshot.HeatingCircuit3SupplyTemp != nil {
-				deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *snapshot.ReturnTemp
+				deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *returnTemp
 				snapshot.HeatingCircuit3DeltaT = &deltaT3
 			}
 		}
 	}
-	
+
 	// Calculate thermal power if we have all required values	
 	if snapshot.ThermalPower == nil && snapshot.VolumetricFlow != nil  {
 		// Only calculate if deltaT is positive and meaningful (>0°C) and volumetric flow is active
@@ -794,6 +798,7 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 		snapshot.COP = &cop
 	}
 }
+
 
 // IsTemperatureSchedulerRunning returns whether the scheduler is currently running
 func IsTemperatureSchedulerRunning() bool {
