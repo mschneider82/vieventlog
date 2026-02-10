@@ -212,9 +212,10 @@
             }
             // Spreizung Sekundärkreis/Heizkreis - use central calculation
 
-            // Only show spreizung when there is flow > 50 l/h
-            const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
-            if (typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) {
+            // Only show spreizung when compressor is active
+			// Use compressorActive boolean if available, otherwise fall back to compressorSpeed
+            const isRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
+            if (isRunning) {
                 const spreizungResult = calculateSpreizung(kf, hasHotWaterBuffer);
                 if (spreizungResult.spreizung !== null) {
                     tempsGroup2 += `
