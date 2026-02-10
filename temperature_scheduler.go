@@ -702,6 +702,7 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 	}
 
 	var supplyTemp, returnTemp *float64
+	deltaT := 0.0
 
 //  snapshot values extractet from JSON
 // 	case "heating.circuits.0.sensors.temperature.supply":		snapshot.HeatingCircuit0SupplyTemp = getFloatValue(feature.Properties) // Preferred: Explicit heating circuit 0
