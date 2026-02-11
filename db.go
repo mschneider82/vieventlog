@@ -1286,7 +1286,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp <= ?
+			AND timestamp < ? -- WICHTIG: exklusives Ende
 		ORDER BY timestamp ASC
 	`
 

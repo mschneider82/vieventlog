@@ -817,6 +817,15 @@ function renderPeriodComparisonChart(stats, period, customDate = null) {
     consumptionPeriodChartInstance.setOption(option);
 }
 
+function isSameDay(a, b) {
+    if (!a || !b) return false;
+    const da = new Date(a);
+    const db = new Date(b);
+    return da.getFullYear() === db.getFullYear() &&
+           da.getMonth() === db.getMonth() &&
+           da.getDate() === db.getDate();
+}
+
 /**
  * Render detailed breakdown table
  */
@@ -824,17 +833,30 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
     const breakdownContainer = document.getElementById('consumptionBreakdown');
     if (!breakdownContainer) return;
 
-    let breakdown = (period === 'today' || period === 'yesterday')
-        ? stats.hourly_breakdown
-        : stats.daily_breakdown;
+    const isSingleDayRange = isSameDay(fromDate, toDate);
 
-    // FILTER HIER
-    if (period !== 'today' && period !== 'yesterday') {
-        breakdown = filterBreakdownByDateRange(breakdown, fromDate, toDate);
+    // HOURLY oder DAILY bestimmen
+    const isHourly = (period === 'today' || period === 'yesterday' || isSingleDayRange);
+
+    // Breakdown auswählen
+    let breakdown = isHourly ? stats.hourly_breakdown : stats.daily_breakdown;
+
+    // Filter
+    if (fromDate && toDate) {
+        if (isSingleDayRange) {
+            breakdown = breakdown.filter(item => isSameDay(item.timestamp, fromDate));
+        } else {
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+            breakdown = breakdown.filter(item => {
+                const d = new Date(item.timestamp);
+                return d >= from && d <= to;
+            });
+        }
     }
 
     if (!breakdown || breakdown.length === 0) {
-        breakdownContainer.innerHTML = '';
+        breakdownContainer.innerHTML = `<p>Keine Daten verfügbar.</p>`;
         return;
     }
 
@@ -844,7 +866,7 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
             <table class="breakdown-table">
                 <thead>
                     <tr>
-                        <th>${period === 'today' || period === 'yesterday' ? 'Uhrzeit' : 'Datum'}</th>
+                        <th>${isHourly ? 'Uhrzeit' : 'Datum'}</th>
                         <th>Strom (kWh)</th>
                         <th>Wärme (kWh)</th>
                         <th>ArbeitsZahl</th>
@@ -858,11 +880,11 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
     breakdown.forEach(item => {
         const date = new Date(item.timestamp);
         let timeLabel;
-        if (period === 'today' || period === 'yesterday') {
+
+        if (isHourly) {
             const startHour = date.getHours();
             const endHour = (startHour + 1) % 24; // Wrap 24 to 0
-            const endHourStr = endHour.toString().padStart(2, '0');
-            timeLabel = `${startHour}:00 - ${endHourStr}:00`;
+            timeLabel = `${startHour.toString().padStart(2,'0')}:00 - ${endHour.toString().padStart(2,'0')}:00`;
         } else {
             timeLabel = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
         }

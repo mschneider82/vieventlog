@@ -1130,7 +1130,7 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 
 		case "last30days":
 			startTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).AddDate(0, 0, -29)
-			endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 23, 59, 59, 0, DefaultLocation)
+			endTime := time.Date(referenceDate.Year(), referenceDate.Month(), referenceDate.Day(), 0, 0, 0, 0, DefaultLocation).Add(24 * time.Hour)
 			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 			if err == nil {
 				stats.Period = "last30days"
