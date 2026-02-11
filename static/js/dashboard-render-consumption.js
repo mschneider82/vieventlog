@@ -836,14 +836,12 @@ window.addEventListener('resize', () => {
 
             if (!hasArrayFeatures && !hasSummaryFeatures) return '';
 
-            // Use array features if available (gives us historical data)
-            if (hasArrayFeatures) {
-                console.log('📊 Using array-based consumption statistics');
-                return renderConsumptionStatisticsArrays(kf);
-            } else {
-                console.log('📊 Using summary-based consumption statistics (fallback)');
-                return renderConsumptionStatisticsSummary(kf);
-            }
+			// show array and summary statistics because array data may outdated
+			// this may lead to duplicate information shown
+            console.log('📊 show consumption statistics');
+			let html = renderConsumptionStatisticsArrays(kf);
+			html += renderConsumptionStatisticsSummary(kf);
+			return html;
         }
 		
 		
