@@ -118,7 +118,7 @@ nfpms:
       - src: packaging/systemd/vieventlog.service
         dst: /lib/systemd/system/vieventlog.service
 
-      - src: packaging/default/vieventlog
+      - src: packaging/default/vieventlog.env
         dst: /etc/default/vieventlog
         type: config
 
