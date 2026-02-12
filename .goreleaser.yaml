@@ -41,6 +41,22 @@ builds:
     main: .
     binary: vieventlog-container
 
+  # Linux builds for Debian packages (only modern architectures)
+  - id: deb
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    tags:
+      - nokeyring
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    main: .
+    binary: vieventlog
+
 archives:
   # Desktop binaries
   - id: desktop-archives
@@ -98,7 +114,7 @@ changelog:
 nfpms:
   - id: vieventlog-deb
     builds:
-      - container  # Nutzt bestehenden nokeyring Build
+      - deb  # Eigener Build ohne arm6 (armel)
 
     package_name: vieventlog
     vendor: mschneider82

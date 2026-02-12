@@ -40,7 +40,7 @@ jobs:
         run: |
           cd gh-pages
           mkdir -p pool/main/v/vieventlog
-          mkdir -p dists/stable/main/binary-{amd64,arm64,armhf}
+          mkdir -p dists/stable/main/binary-{amd64,arm64}
 
       - name: Copy packages
         run: |
@@ -49,7 +49,7 @@ jobs:
       - name: Generate Packages files
         run: |
           cd gh-pages
-          for arch in amd64 arm64 armhf; do
+          for arch in amd64 arm64; do
             dpkg-scanpackages --arch $arch pool/ > dists/stable/main/binary-$arch/Packages
             gzip -9 -k -f dists/stable/main/binary-$arch/Packages
 
@@ -69,7 +69,7 @@ jobs:
           Label: ViEventLog APT Repository
           Suite: stable
           Codename: stable
-          Architectures: amd64 arm64 armhf
+          Architectures: amd64 arm64
           Components: main
           Description: Offizielle ViEventLog Debian-Pakete
           Date: $(date -R -u)

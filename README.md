@@ -159,8 +159,7 @@ Nach erfolgreicher Kompilierung erhalten Sie eine ausführbare Datei `vieventlog
 
 **Unterstützte Architekturen:**
 - **amd64**: Ubuntu/Debian auf Intel/AMD 64-bit
-- **arm64**: Raspberry Pi 4/5, Ubuntu ARM64
-- **armhf**: Raspberry Pi 2/3 (32-bit)
+- **arm64**: Raspberry Pi 4/5 (64-bit OS), Ubuntu ARM64
 
 #### Schritt 1: Repository hinzufügen
 
