@@ -1,0 +1,106 @@
+name: APT Repository
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-apt-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download .deb artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          echo "Processing release: $TAG"
+          mkdir -p artifacts
+          gh release download "$TAG" -p '*.deb' -D artifacts/
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Setup GPG
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Setup APT structure
+        run: |
+          cd gh-pages
+          mkdir -p pool/main/v/vieventlog
+          mkdir -p dists/stable/main/binary-{amd64,arm64,armhf}
+
+      - name: Copy packages
+        run: |
+          cp artifacts/*.deb gh-pages/pool/main/v/vieventlog/
+
+      - name: Generate Packages files
+        run: |
+          cd gh-pages
+          for arch in amd64 arm64 armhf; do
+            dpkg-scanpackages --arch $arch pool/ > dists/stable/main/binary-$arch/Packages
+            gzip -9 -k -f dists/stable/main/binary-$arch/Packages
+
+            cat > dists/stable/main/binary-$arch/Release <<EOF
+          Archive: stable
+          Component: main
+          Origin: ViEventLog
+          Architecture: $arch
+          EOF
+          done
+
+      - name: Generate Release file
+        run: |
+          cd gh-pages/dists/stable
+          cat > Release <<EOF
+          Origin: ViEventLog
+          Label: ViEventLog APT Repository
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64 armhf
+          Components: main
+          Description: Offizielle ViEventLog Debian-Pakete
+          Date: $(date -R -u)
+          EOF
+
+          {
+            echo "SHA256:"
+            find main -type f -exec sha256sum {} \; | sed 's/\.\///g' | awk '{print " " $1 " " $2}'
+            echo "SHA512:"
+            find main -type f -exec sha512sum {} \; | sed 's/\.\///g' | awk '{print " " $1 " " $2}'
+          } >> Release
+
+      - name: Sign Release
+        run: |
+          cd gh-pages/dists/stable
+          gpg --batch --yes --clearsign --digest-algo SHA512 \
+              --local-user ${{ secrets.GPG_KEY_ID }} \
+              -o InRelease Release
+          gpg --batch --yes --armor --detach-sign --digest-algo SHA512 \
+              --local-user ${{ secrets.GPG_KEY_ID }} \
+              -o Release.gpg Release
+
+      - name: Export public key
+        run: |
+          gpg --armor --export ${{ secrets.GPG_KEY_ID }} > gh-pages/public.key
+
+      - name: Commit and push
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update APT repository for ${{ github.ref_name }}" || exit 0
+          git push
