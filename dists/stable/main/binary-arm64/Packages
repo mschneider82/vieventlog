@@ -1,0 +1,19 @@
+Package: vieventlog
+Version: 0.0.213
+Architecture: arm64
+Maintainer: Matthias Schneider <mschneider82@users.noreply.github.com>
+Installed-Size: 15201
+Depends: ca-certificates, systemd
+Recommends: adduser
+Filename: pool/main/v/vieventlog/vieventlog_0.0.213_arm64.deb
+Size: 6014310
+MD5sum: 0d7fe4ff57dc524fd6d1e92dbc2b6247
+SHA1: 12666fb3e84de6e0f0ca37e3fd649c261d420a62
+SHA256: 5eabf56db8128adbd705b4203f99aa47fa2d80c91e3bf96643ac531ec7b23887
+Section: net
+Priority: optional
+Homepage: https://github.com/mschneider82/vieventlog
+Description: Event Viewer und Dashboard für Viessmann Heizungssysteme via Developer API.
+ Web-basierter Zugriff auf Heizungs-Events, Live-Monitoring und Steuerung.
+License: MIT
+
