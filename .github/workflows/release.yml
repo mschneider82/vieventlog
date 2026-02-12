@@ -105,9 +105,9 @@ jobs:
 
           {
             echo "SHA256:"
-            find main -type f -exec sha256sum {} \; | sed 's/\.\///g' | awk '{print " " $1 " " $2}'
+            find main -type f -exec sh -c 'sha256sum "$1" | awk "{printf \" %s %d %s\n\", \$1, $(stat -c%s "$1"), \$2}"' _ {} \;
             echo "SHA512:"
-            find main -type f -exec sha512sum {} \; | sed 's/\.\///g' | awk '{print " " $1 " " $2}'
+            find main -type f -exec sh -c 'sha512sum "$1" | awk "{printf \" %s %d %s\n\", \$1, $(stat -c%s "$1"), \$2}"' _ {} \;
           } >> Release
 
       - name: Sign Release
