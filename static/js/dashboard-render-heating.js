@@ -31,7 +31,7 @@
 
             // Check if this is a hybrid system and show Hybrid Pro Control button
             // Only consider it a hybrid if the status feature has an actual value (not null/undefined)
-            const isHybrid = kf.secondaryHeatGeneratorStatus !== null;
+			const isHybrid = kf.secondaryHeatGeneratorStatus != null && typeof kf.secondaryHeatGeneratorStatus?.value === 'string';
             const hybridProControlButton = isHybrid ? `
                 <button onclick="openHybridProControlModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}', '${deviceInfo.gatewaySerial}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer; background-color: #ff9800; color: white; border: none; border-radius: 4px;">
