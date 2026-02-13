@@ -752,29 +752,29 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 				snapshot.HeatingCircuit0DeltaT = &deltaT
 			}
 
-			// Calculate deltaT for each heating circuit individually
+ 			// For systems without buffer only, calculate deltaT for the circuits
+			// Calculate deltaT for each heating circuit individually,
 			// NOTE: All circuits share the same return sensor, so these represent
 			// the temperature spread from each circuit's supply to the shared return
+			// in system w/o buffer the return sensor does not relate to water return to the buffer
 
-			// For systems without buffer, calculate from heating circuit 0 supply temperature
-			// use deltaT, because it is used for thermal power /cop calculation
 			if hasHotWaterBuffer == false {
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
-					deltaT = *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
-					snapshot.HeatingCircuit0DeltaT = &deltaT
+					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit0DeltaT = &deltaT0
 				}
-			}
-			if snapshot.HeatingCircuit1SupplyTemp != nil {
-				deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *returnTemp
-				snapshot.HeatingCircuit1DeltaT = &deltaT1
-			}
-			if snapshot.HeatingCircuit2SupplyTemp != nil {
-				deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *returnTemp
-				snapshot.HeatingCircuit2DeltaT = &deltaT2
-			}
-			if snapshot.HeatingCircuit3SupplyTemp != nil {
-				deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *returnTemp
-				snapshot.HeatingCircuit3DeltaT = &deltaT3
+				if snapshot.HeatingCircuit1SupplyTemp != nil {
+					deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit1DeltaT = &deltaT1
+				}
+				if snapshot.HeatingCircuit2SupplyTemp != nil {
+					deltaT2 := *snapshot.HeatingCircuit2SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit2DeltaT = &deltaT2
+				}
+				if snapshot.HeatingCircuit3SupplyTemp != nil {
+					deltaT3 := *snapshot.HeatingCircuit3SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit3DeltaT = &deltaT3
+				}			
 			}
 		}
 	}
