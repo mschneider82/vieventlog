@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"path/filepath"
 )
 
 // eventArchiveSettingsGetHandler handles GET /api/event-archive/settings
@@ -43,7 +44,7 @@ func eventArchiveSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if settings.DatabasePath == "" {
-		settings.DatabasePath = "./viessmann_events.db"
+		settings.DatabasePath = filepath.Join(getDefaultConfigDir(), "viessmann_events.db")
 	}
 
 	// Get old settings to check if we need to restart scheduler

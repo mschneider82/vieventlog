@@ -97,7 +97,33 @@ func extractFeatureValue(properties map[string]interface{}) FeatureValue {
 		return fv
 	}
 
-	// No "value" property - the properties themselves are the data
+	// No "value" property - check if this is a disconnected/error sensor.
+	// Sensors with status "notConnected"/"error" have no usable value.
+	// But pumps/valves use status for their actual state ("on"/"off"), so check the value.
+	if statusObj, ok := properties["status"].(map[string]interface{}); ok {
+		if statusVal, ok := statusObj["value"].(string); ok {
+			// These are metadata statuses, not actual values
+			metaStatuses := []string{"notConnected", "error", "disconnected", "unknown", "unavailable"}
+			for _, meta := range metaStatuses {
+				if statusVal == meta {
+					// Only metadata properties present, no usable value
+					hasOnlyMeta := true
+					for k := range properties {
+						if k != "status" && k != "active" && k != "enabled" {
+							hasOnlyMeta = false
+							break
+						}
+					}
+					if hasOnlyMeta {
+						return fv
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// The properties themselves are the data
 	// (e.g., heating.curve has "slope" and "shift" directly)
 	nestedValues := make(map[string]FeatureValue)
 	for propName, propValue := range properties {
@@ -267,4 +293,19 @@ func processEvent(raw map[string]interface{}) Event {
 	}
 
 	return event
+}
+
+// getDefaultConfigDir returns the default configuration directory
+// Priority: VICARE_CONFIG_DIR env var -> /config (if exists) -> current directory
+func getDefaultConfigDir() string {
+	// Check VICARE_CONFIG_DIR environment variable first
+	if configDir := os.Getenv("VICARE_CONFIG_DIR"); configDir != "" {
+		return configDir
+	}
+	// Check if /config exists (Docker/container environment)
+	if _, err := os.Stat("/config"); err == nil {
+		return "/config"
+	}
+	// Fallback to current directory
+	return "."
 }

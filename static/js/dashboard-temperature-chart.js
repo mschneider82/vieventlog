@@ -15,10 +15,10 @@ let symbolshow = false;   // Show data points as symbols
 let smoothdata = true;    // Apply smoothing to line charts
 
 // zoom parms
-var x1 = 0;  // zoom percentages (start with full view)
+var x1 = 50;  // Start position: show newer half of data (50-100% of timeline)
 var x2 = 100;
-var step_a = 10; // step size when panning
-var step_b = 20;
+var step_w = 33.34; // step size when panning
+var step_n = 16.67;  // _n= narrow step _w= wide Step
 
 // Initialize temperature chart section
 async function initTemperatureChart() {
@@ -189,67 +189,69 @@ async function initTemperatureChart() {
         });
 
 		// zoom or move within time range
-        const jright = chartSection.querySelector('#jumpright'); // jump right
-        jright.addEventListener('click', (e) => {
+		// zoom or move within time range
+
+        const jleft = chartSection.querySelector('#jumpleft');  // jump left
+        jleft.addEventListener('click', (e) => {
 			const windowSize = x2 - x1;
-			x2 += step_b;
-			if (x2 > 100) {
-				x2 = 100;
-				x1 = Math.max(0, 100 - windowSize);
+			x1 -= step_w;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
 			} else {
-				x1 += step_b;
+				x2 -= step_w;
 			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+		
+        const pleft = chartSection.querySelector('#panleft');  // pan left
+        pleft.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x1 -= step_n;
+			if (x1 < 0) {
+				x1 = 0;
+				x2 = Math.min(100, windowSize);
+			} else {
+				x2 -= step_n;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+
+		const pcenter = chartSection.querySelector('#center');  // center view
+        pcenter.addEventListener('click', (e) => {
+			x1=40; x2=60; step_w=20; step_n=10;
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
         const pright = chartSection.querySelector('#panright'); // pan right
 		pright.addEventListener('click', (e) => {
 			const windowSize = x2 - x1;
-			x2 += step_a;
+			x2 += step_n;
 			if (x2 > 100) {
 				x2 = 100;
 				x1 = Math.max(0, 100 - windowSize);
 			} else {
-				x1 += step_a;
+				x1 += step_n;
 			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 
+        const jright = chartSection.querySelector('#jumpright'); // jump right
+        jright.addEventListener('click', (e) => {
+			const windowSize = x2 - x1;
+			x2 += step_w;
+			if (x2 > 100) {
+				x2 = 100;
+				x1 = Math.max(0, 100 - windowSize);
+			} else {
+				x1 += step_w;
+			}
+			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+        });
+		
 		const pfull = chartSection.querySelector('#full');  // full view
         pfull.addEventListener('click', (e) => {
 			x1=0; x2=100;
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-		const pcenter = chartSection.querySelector('#center');  // center view
-        pcenter.addEventListener('click', (e) => {
-			x1=40; x2=60;
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-        const pleft = chartSection.querySelector('#panleft');  // pan left
-        pleft.addEventListener('click', (e) => {
-			const windowSize = x2 - x1;
-			x1 -= step_a;
-			if (x1 < 0) {
-				x1 = 0;
-				x2 = Math.min(100, windowSize);
-			} else {
-				x2 -= step_a;
-			}
-			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
-        });
-
-        const jleft = chartSection.querySelector('#jumpleft');  // jump left
-        jleft.addEventListener('click', (e) => {
-			const windowSize = x2 - x1;
-			x1 -= step_b;
-			if (x1 < 0) {
-				x1 = 0;
-				x2 = Math.min(100, windowSize);
-			} else {
-				x2 -= step_b;
-			}
 			temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
         });
 		
@@ -305,19 +307,29 @@ async function chart_datazoom_event(){
 		if (typeof evt.start !== 'undefined'){
      		x1 = evt.start;
 			x2 = evt.end;
-			// Dynamically adjust step sizes based on current zoom window
+			// do not modify user or programatic setup; 
+			//force button useable and step to 1/3
 			const windowSize = x2 - x1;
-			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
-			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+			if (windowSize > 95 ) {x1 = 50; step_w = 33.34; step_n = 16.67;}
+																									   
 		}
 		// slider/drag event
 		else if (typeof evt.batch !== 'undefined'){
 			x1 = evt.batch[0].start;
 			x2 = evt.batch[0].end;
-			// Dynamically adjust step sizes based on current zoom window
+			// set steps to user selection; clamp to 2%
 			const windowSize = x2 - x1;
-			step_a = Math.max(5, Math.min(30, windowSize / 2));  // Pan: 50% of window, clamped between 5-30%
-			step_b = Math.max(10, Math.min(50, windowSize));     // Jump: 100% of window, clamped between 10-50%
+			step_w = Math.max(2,windowSize); step_n = Math.max(1, (windowSize / 2));
+			if (windowSize < 2) {
+				x1 = x2 - 2;
+				if (x2 < 2) {
+					x1 = 0;
+					x2 = 2;
+				}
+				temperatureChart.dispatchAction({type: 'dataZoom', dataZoomIndex: 0, start: x1, end: x2});
+			}
+			//force button useable and step to 1/3
+			if (windowSize > 95 ) {x1 = 50; step_w = 33.34; step_n = 16.67;}
 		}
     })
 }
@@ -330,7 +342,6 @@ async function loadTemperatureData(silent = false) {
         // Build API URL
         let apiUrl = `/api/temperature-log/data?installationId=${currentInstallationId}&gatewayId=${currentGatewaySerial}&deviceId=${currentDeviceId}&limit=50000`;
 
-
         if (customTemperatureDate) {
             // Use specific date range (from midnight to midnight next day)
             const startDate = new Date(customTemperatureDate + 'T00:00:00');
@@ -341,36 +352,18 @@ async function loadTemperatureData(silent = false) {
         } else {
             // Use hours-based time range
             let hours = parseTimeRange(currentTimeRange);
-
+		
 			// Progressive step sizing based on time range
 			// Longer time ranges get larger steps for easier navigation
-			const days = hours / 24;
-			if (days <= 1) {
-				// 1-24 hours: Small steps
-				step_a = 10;
-				step_b = 20;
-			} else if (days <= 3) {
-				// 2-3 days: Medium-small steps
-				step_a = 12;
-				step_b = 25;
-			} else if (days <= 7) {
-				// 4-7 days: Medium steps
-				step_a = 15;
-				step_b = 30;
-			} else if (days <= 30) {
-				// 8-30 days: Medium-large steps
-				step_a = 20;
-				step_b = 40;
-			} else {
-				// >30 days: Large steps
-				step_a = 25;
-				step_b = 50;
-			}
+			step_w = 33.34; // default ~ 16h bei 24h (=48h daten)
+			step_n = 16.67;  
+			if (hours > 720) {step_w = 11.67;    step_n = 6;}   //  ~ 7 tage bei 30 Tage daten
+			else if (hours >= 336){step_w = 15;    step_n = 7.5;}  //  ~ 3,5Tage  bei 7 Tage daten
 
-			// Reset to full view on time range change
-			x1 = 0;
+			// Start position: show newer half of data (50-100% of timeline)
+			x1 = 50;
 			x2 = 100;
-
+			
 			hours = hours*2;  // request twice the data in time
             apiUrl += `&hours=${hours}`;
         }
@@ -618,6 +611,8 @@ function renderFilters() {
 
         // Operating state
         'four_way_valve': '🔀 4-Wege-Ventil',
+        'four_way_valve_target': '🔀 4-Wege-Ventil soll',
+        'four_way_valve_current': '🔀 4-Wege-Ventil ist',
         'burner_modulation': '🔥 Brenner Modulation',
         'secondary_heat_generator_status': '🔥 Zusatzheizung'
     };
@@ -635,7 +630,7 @@ function renderFilters() {
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
                       'compressor_hours', 'compressor_starts', 'compressor_power'],
-        'Pumpen': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active'],
+        'Info': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active', 'four_way_valve_target', 'four_way_valve_current'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
         'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
     };
@@ -732,6 +727,10 @@ function renderTemperatureChart(data) {
         'heating_circuit_2_delta_t': { type: 'line', yAxisIndex: 0, color: '#3498db', smooth: true, lineStyle: { type: 'dashed' } },
         'heating_circuit_3_delta_t': { type: 'line', yAxisIndex: 0, color: '#9b59b6', smooth: true, lineStyle: { type: 'dashed' } },
 
+		// 4/3 Valve Position
+		'four_way_valve_current': { type: 'line', yAxisIndex: 0, color: '#57bb8a', smooth: true },
+        'four_way_valve_target': { type: 'line', yAxisIndex: 0, color: '#7cb342', smooth: true },
+
         // Boolean states (secondary axis)
         'compressor_active': { type: 'line', yAxisIndex: 1, color: '#f4b400', step: 'end' },
         'circulation_pump_active': { type: 'line', yAxisIndex: 1, color: '#0f9d58', step: 'end' },
@@ -788,6 +787,8 @@ function renderTemperatureChart(data) {
         'secondary_supply_temp': 'Sek.-Vorlauf ODU (L)',
         'primary_return_temp': 'Primär-RL (L)',
         'secondary_return_temp': 'Sek.-RL (L)',
+
+		// Compressor
         'compressor_active': 'Kompressor',
         'compressor_speed': 'Drehzahl',
         'compressor_current': 'Strom',
@@ -799,9 +800,15 @@ function renderTemperatureChart(data) {
         'compressor_hours': 'Betriebsstunden',
         'compressor_starts': 'Starts',
         'compressor_power': 'Leistung',
+		
+		// 4/3 Valve
+		'four_way_valve_current': 'V ist',
+		'four_way_valve_target': 'V soll',
+		// other info
         'circulation_pump_active': 'Umwälzpumpe',
         'dhw_pump_active': 'WW-Pumpe',
         'internal_pump_active': 'Int. Pumpe',
+		// Power/COP/Flow
         'volumetric_flow': 'Volumenstrom',
         'thermal_power': 'Therm. Leistung',
         'cop': 'AZ',

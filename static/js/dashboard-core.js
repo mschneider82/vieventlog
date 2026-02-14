@@ -365,7 +365,7 @@
 
         // Zentrale Spreizungs-Berechnung für alle Dashboard-Komponenten
         // Verwendet je nach Einstellung Sekundärkreis (ODU/mit Puffer) oder Heizkreis (IDU/ohne Puffer)
-        // Fallback auf BoilerTemp wenn Spreizung negativ (z.B. 250-A mit Puffer)
+        // Fallback auf BoilerTemp (z.B. 250-A mit Puffer)
         function calculateSpreizung(kf, hasHotWaterBuffer) {
             let spreizung = null;
             let supplyTemp = null;
@@ -373,20 +373,26 @@
             let usedBoilerFallback = false;
             let label = 'Spreizung';
 
-            if (hasHotWaterBuffer) {
-                // Sekundärkreis Spreizung (ODU)
-                if (kf.secondarySupplyTemp && kf.secondaryReturnTemp) {
-                    const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
-                    const returnVal = unwrapValue(kf.secondaryReturnTemp.value);
-                    if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
-                        spreizung = supplyVal - returnVal;
-                        supplyTemp = supplyVal;
-                        returnTemp = returnVal;
-                        label = 'Spreizung Sekundärkreis';
-                    }
+//  the values as set up in dashboard-render-engine.js 
+//      kf.supplyTemp: find(['heating.circuits.0.sensors.temperature.supply']),                  // Vorlauf zum Heizkreis IDU
+//      kf.secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']),   // Vorlauf von ODU zur IDU
+//
+//      kf.returnTemp: find(['heating.sensors.temperature.return']),                             // Rücklauf IDU  --> = Zulauf Wärmetauscher ODU
+
+            // default to ODU secondary circuit
+            if (kf.secondarySupplyTemp && kf.returnTemp) {
+                const supplyVal = unwrapValue(kf.secondarySupplyTemp.value);
+                const returnVal = unwrapValue(kf.returnTemp.value);
+                if (typeof supplyVal === 'number' && typeof returnVal === 'number') {
+                    spreizung = supplyVal - returnVal;
+                    supplyTemp = supplyVal;
+                    returnTemp = returnVal;
+                    label = 'Spreizung Sekundärkreis';
                 }
-            } else {
-                // Heizkreis Spreizung (IDU)
+            }
+            // kf.secondarySupplyTemp not set: use alternativ kf.supplyTemp
+            // systems without buffer always use kf.supplyTemp (i.e.circuit0)
+            if ((supplyTemp === null ) || (hasHotWaterBuffer == false)){
                 if (kf.supplyTemp && kf.returnTemp) {
                     const supplyVal = unwrapValue(kf.supplyTemp.value);
                     const returnVal = unwrapValue(kf.returnTemp.value);
@@ -395,19 +401,19 @@
                         supplyTemp = supplyVal;
                         returnTemp = returnVal;
                         label = 'Spreizung Heizkreis';
-
-                        // Fallback für 250-A und ähnliche Anlagen: Wenn Spreizung negativ,
-                        // oder temp. Wärmeerzeuge höher, dann verwende BoilerTemp statt supplyTemp
-                        if (kf.boilerTemp) {
-                            const boilerVal = unwrapValue(kf.boilerTemp.value);
-                            if (typeof boilerVal === 'number' && (spreizung < 0 || boilerVal > supplyVal)) {
-                                spreizung = boilerVal - returnVal;
-                                supplyTemp = boilerVal;
-                                usedBoilerFallback = true;
-                                label = 'Spreizung W.-Erzeuger';
-                            }
-                        }
                     }
+                }
+            }
+            
+            // Fallback für 250-A und ähnliche Anlagen:
+            // wenn Wärmeerzeuge höher, dann verwende BoilerTemp statt supplyTemp
+            if (kf.boilerTemp && supplyTemp !== null && returnTemp !== null) {
+                const boilerVal = unwrapValue(kf.boilerTemp.value);
+                if (typeof boilerVal === 'number' && boilerVal > supplyTemp) {
+                    spreizung = boilerVal - returnTemp;
+                    supplyTemp = boilerVal;
+                    usedBoilerFallback = true;
+                    label = 'Spreizung W.-Erzeuger';
                 }
             }
 

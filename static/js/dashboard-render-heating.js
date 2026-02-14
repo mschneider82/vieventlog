@@ -30,7 +30,8 @@
             ` : '';
 
             // Check if this is a hybrid system and show Hybrid Pro Control button
-            const isHybrid = kf.secondaryHeatGeneratorStatus !== undefined;
+            // Only consider it a hybrid if the status feature has an actual value (not null/undefined)
+			const isHybrid = kf.secondaryHeatGeneratorStatus != null && typeof kf.secondaryHeatGeneratorStatus?.value === 'string';
             const hybridProControlButton = isHybrid ? `
                 <button onclick="openHybridProControlModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}', '${deviceInfo.gatewaySerial}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer; background-color: #ff9800; color: white; border: none; border-radius: 4px;">
@@ -196,16 +197,18 @@
             if (kf.primarySupplyTemp && kf.primaryReturnTemp) {
                 const supplyValue = kf.primarySupplyTemp.value;
                 const returnValue = kf.primaryReturnTemp.value;
-                const spreizung = supplyValue - returnValue;
-                tempsGroup2 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Spreizung Primärkreis</span>
-                        <div>
-                            <span class="temp-value">${formatNum(spreizung)}</span>
-                            <span class="temp-unit">K</span>
+                if (typeof returnValue === 'number' && typeof supplyValue === 'number') {
+                    const spreizung = supplyValue - returnValue;
+                    tempsGroup2 += `
+                        <div class="temp-item">
+                            <span class="temp-label">Spreizung Primärkreis</span>
+                            <div>
+                                <span class="temp-value">${formatNum(spreizung)}</span>
+                                <span class="temp-unit">K</span>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }
             // Spreizung Sekundärkreis/Heizkreis - use central calculation
 
@@ -247,52 +250,61 @@
             }
             // Wärmeerzeuger-Vorlauf (boilerTemp)
             if (kf.boilerTemp) {
-                const formatted = formatValue(kf.boilerTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                // Check if compressor is running
-                const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
-                const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
-                tempsGroup3 += `
-                    <div class="temp-item ${compressorClass}">
-                        <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				const boilerTempValue = kf.boilerTemp.value;
+                if ( typeof boilerTempValue === 'number'){
+					const formatted = formatValue(kf.boilerTemp);
+                	const [value, ...unitParts] = formatted.split(' ');
+                	const unit = unitParts.join(' ');
+	                // Check if compressor is running
+    	            const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
+        	        const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
+            	    tempsGroup3 += `
+                	    <div class="temp-item ${compressorClass}">
+                    	    <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
+                        	<div>
+                            	<span class="temp-value">${value}</span>
+	                            <span class="temp-unit">${unit}</span>
+    	                    </div>
+        	            </div>
+            	    `;
+				}
+			}
             // Puffertemperatur
             if (kf.bufferTemp) {
-                const formatted = formatValue(kf.bufferTemp);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                tempsGroup3 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				const bufferTempValue = kf.bufferTemp.value;
+                if ( typeof bufferTempValue === 'number'){
+					const formatted = formatValue(kf.bufferTemp);
+    	            const [value, ...unitParts] = formatted.split(' ');
+        	        const unit = unitParts.join(' ');
+	                tempsGroup3 += `
+    	                <div class="temp-item">
+        	                <span class="temp-label">Puffertemperatur</span>
+            	            <div>
+                	            <span class="temp-value">${value}</span>
+                    	        <span class="temp-unit">${unit}</span>
+                        	</div>
+	                    </div>
+    	            `;
+				}
+			}
             // Puffertemperatur Oben
             if (kf.bufferTempTop) {
-                const formatted = formatValue(kf.bufferTempTop);
-                const [value, ...unitParts] = formatted.split(' ');
-                const unit = unitParts.join(' ');
-                tempsGroup3 += `
-                    <div class="temp-item">
-                        <span class="temp-label">Puffertemperatur Oben</span>
-                        <div>
-                            <span class="temp-value">${value}</span>
-                            <span class="temp-unit">${unit}</span>
-                        </div>
-                    </div>
-                `;
-            }
+				const bufferTempTopValue = kf.bufferTempTop.value;
+                if ( typeof bufferTempTopValue === 'number'){
+	                const formatted = formatValue(kf.bufferTempTop);
+    	            const [value, ...unitParts] = formatted.split(' ');
+        	        const unit = unitParts.join(' ');
+    	            tempsGroup3 += `
+        	            <div class="temp-item">
+            	            <span class="temp-label">Puffertemperatur Oben</span>
+                	        <div>
+                    	        <span class="temp-value">${value}</span>
+                        	    <span class="temp-unit">${unit}</span>
+	                        </div>
+    	                </div>
+        	        `;
+				}
+			}
 
             // --- GROUP 4: Energiecockpit ---
             // Try to calculate thermal power and COP (either from flow or from direct features)
@@ -2478,8 +2490,8 @@
                 `;
             }
 
-            // Secondary Heater
-            if (kf.secondaryHeater) {
+            // Secondary Heater (only show if it has an actual value)
+            if (kf.secondaryHeater?.value) {
                 const heaterStatus = kf.secondaryHeater.value;
                 const isActive = heaterStatus !== 'off' && heaterStatus !== 'standby';
                 sensors += `

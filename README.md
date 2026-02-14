@@ -153,7 +153,200 @@ Nach erfolgreicher Kompilierung erhalten Sie eine ausführbare Datei `vieventlog
 
 **Hinweis:** Die vorkompilierten Binaries von GitHub Releases verwenden **keine Keyring-Integration** (um Cross-Platform-Builds zu ermöglichen). Sie nutzen automatisch Environment Variables oder File-Storage für Credentials. Wenn Sie Keyring-Support benötigen, kompilieren Sie bitte lokal aus dem Quellcode.
 
-### Option 3: Docker Container (für Server/NAS)
+### Option 3: APT-Repository (Ubuntu/Debian/Raspberry Pi OS) ⭐ EMPFOHLEN
+
+**Ideal für Produktivserver und Raspberry Pi Installationen**
+
+**Unterstützte Architekturen:**
+- **amd64**: Ubuntu/Debian auf Intel/AMD 64-bit
+- **arm64**: Raspberry Pi 4/5 (64-bit OS), Ubuntu ARM64
+
+#### Schritt 1: Repository hinzufügen
+
+```bash
+# GPG-Signaturschlüssel importieren
+curl -fsSL https://mschneider82.github.io/vieventlog/public.key | \
+  sudo gpg --dearmor -o /usr/share/keyrings/vieventlog-archive-keyring.gpg
+
+# APT-Repository hinzufügen
+echo "deb [signed-by=/usr/share/keyrings/vieventlog-archive-keyring.gpg] https://mschneider82.github.io/vieventlog stable main" | \
+  sudo tee /etc/apt/sources.list.d/vieventlog.list
+
+# Paketindex aktualisieren
+sudo apt update
+```
+
+#### Schritt 2: Paket installieren
+
+```bash
+sudo apt install vieventlog
+```
+
+#### Schritt 3: Konfiguration
+
+**Einzelner Account (einfach):**
+
+```bash
+sudo nano /etc/default/vieventlog
+```
+
+Fügen Sie Ihre Zugangsdaten hinzu:
+```bash
+VICARE_EMAIL=ihre@email.com
+VICARE_PASSWORD=ihr-passwort
+VICARE_CLIENT_ID=ihre-client-id-vom-developer-portal
+
+# Optional: Basic Auth für Web-Interface
+BASIC_AUTH_USER=admin
+BASIC_AUTH_PASSWORD=ihr-sicheres-passwort
+```
+
+**Mehrere Accounts:**
+
+```bash
+sudo nano /var/lib/vieventlog/accounts.json
+```
+
+```json
+{
+  "accounts": {
+    "user1@example.com": {
+      "id": "user1@example.com",
+      "name": "Haupthaus",
+      "email": "user1@example.com",
+      "password": "passwort1",
+      "clientId": "client-id-1",
+      "clientSecret": "8ad97aceb92c5892e102b093c7c083fa",
+      "active": true
+    },
+    "user2@example.com": {
+      "id": "user2@example.com",
+      "name": "Ferienhaus",
+      "email": "user2@example.com",
+      "password": "passwort2",
+      "clientId": "client-id-2",
+      "clientSecret": "8ad97aceb92c5892e102b093c7c083fa",
+      "active": true
+    }
+  }
+}
+```
+
+Berechtigungen setzen:
+```bash
+sudo chown vieventlog:vieventlog /var/lib/vieventlog/accounts.json
+sudo chmod 600 /var/lib/vieventlog/accounts.json
+```
+
+#### Schritt 4: Service starten
+
+```bash
+sudo systemctl start vieventlog
+sudo systemctl status vieventlog
+```
+
+#### Schritt 5: Web-Interface öffnen
+
+Browser öffnen: `http://ihre-server-ip:5000`
+
+#### Service-Verwaltung
+
+```bash
+# Logs anzeigen (Live)
+sudo journalctl -u vieventlog -f
+
+# Nach Konfigurationsänderungen neu starten
+sudo systemctl restart vieventlog
+
+# Service stoppen
+sudo systemctl stop vieventlog
+
+# Auto-Start beim Booten aktivieren (bereits aktiviert)
+sudo systemctl enable vieventlog
+
+# Status prüfen
+sudo systemctl status vieventlog
+```
+
+#### Automatische Updates
+
+Das APT-Repository wird bei jedem GitHub-Release automatisch aktualisiert:
+
+```bash
+sudo apt update
+sudo apt upgrade vieventlog
+```
+
+Der Service wird nach einem Upgrade automatisch neu gestartet, falls er bereits lief.
+
+#### Deinstallation
+
+```bash
+# Paket entfernen (Konfiguration behalten)
+sudo apt remove vieventlog
+
+# Vollständig entfernen (inkl. Konfiguration und Daten!)
+sudo apt purge vieventlog
+```
+
+⚠️ **Warnung**: `apt purge` löscht alle Daten in `/var/lib/vieventlog` inklusive Event-Archiv und Temperatur-Logs!
+
+#### Migration von Docker zu APT
+
+Falls Sie von Docker zu nativer Installation wechseln möchten:
+
+1. **Config exportieren:**
+   ```bash
+   docker exec vieventlog cat /config/accounts.json > accounts.json
+   ```
+
+2. **APT-Paket installieren** (siehe oben)
+
+3. **Config kopieren:**
+   ```bash
+   sudo cp accounts.json /var/lib/vieventlog/accounts.json
+   sudo chown vieventlog:vieventlog /var/lib/vieventlog/accounts.json
+   sudo chmod 600 /var/lib/vieventlog/accounts.json
+   ```
+
+4. **Service starten:**
+   ```bash
+   sudo systemctl start vieventlog
+   ```
+
+5. **Docker-Container entfernen:**
+   ```bash
+   docker stop vieventlog
+   docker rm vieventlog
+   ```
+
+#### Troubleshooting
+
+**Service startet nicht:**
+```bash
+# Detaillierte Logs anzeigen
+sudo journalctl -u vieventlog -b
+
+# Konfiguration prüfen
+sudo cat /etc/default/vieventlog
+```
+
+**Port bereits belegt:**
+```bash
+# Anderen Port verwenden
+sudo nano /etc/default/vieventlog
+# Ändern: BIND_ADDRESS=0.0.0.0:8080
+sudo systemctl restart vieventlog
+```
+
+**Berechtigungsprobleme:**
+```bash
+# Berechtigungen reparieren
+sudo chown -R vieventlog:vieventlog /var/lib/vieventlog
+sudo chmod 750 /var/lib/vieventlog
+```
+
+### Option 4: Docker Container (für Server/NAS)
 
 **Schnellstart mit Docker:**
 

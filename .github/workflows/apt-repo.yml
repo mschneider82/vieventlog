@@ -1,43 +1,15 @@
-name: Release
+name: APT Repository
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  goreleaser:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
-      - name: Install packaging dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   update-apt-repo:
-    needs: goreleaser
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
@@ -45,11 +17,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download .deb artifacts from release
+      - name: Download .deb artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG=$(git describe --tags --abbrev=0)
           echo "Processing release: $TAG"
           mkdir -p artifacts
           gh release download "$TAG" -p '*.deb' -D artifacts/

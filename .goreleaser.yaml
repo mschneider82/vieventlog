@@ -41,6 +41,22 @@ builds:
     main: .
     binary: vieventlog-container
 
+  # Linux builds for Debian packages (only modern architectures)
+  - id: deb
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    tags:
+      - nokeyring
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    main: .
+    binary: vieventlog
+
 archives:
   # Desktop binaries
   - id: desktop-archives
@@ -94,6 +110,61 @@ changelog:
       - '^ci:'
       - Merge pull request
       - Merge branch
+
+nfpms:
+  - id: vieventlog-deb
+    builds:
+      - deb  # Eigener Build ohne arm6 (armel)
+
+    package_name: vieventlog
+    vendor: mschneider82
+    homepage: https://github.com/mschneider82/vieventlog
+    maintainer: Matthias Schneider <mschneider82@users.noreply.github.com>
+    description: |
+      Event Viewer und Dashboard für Viessmann Heizungssysteme via Developer API.
+      Web-basierter Zugriff auf Heizungs-Events, Live-Monitoring und Steuerung.
+    license: MIT
+
+    formats:
+      - deb
+
+    bindir: /usr/bin
+
+    contents:
+      - src: packaging/systemd/vieventlog.service
+        dst: /lib/systemd/system/vieventlog.service
+
+      - src: packaging/default/vieventlog.env
+        dst: /etc/default/vieventlog
+        type: config
+
+      - dst: /var/lib/vieventlog
+        type: dir
+        file_info:
+          mode: 0750
+
+      - src: README.md
+        dst: /usr/share/doc/vieventlog/README.md
+
+      - src: LICENSE
+        dst: /usr/share/doc/vieventlog/LICENSE
+
+    overrides:
+      deb:
+        file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
+        dependencies:
+          - ca-certificates
+          - systemd
+        recommends:
+          - adduser
+
+    scripts:
+      postinstall: packaging/scripts/postinstall.sh
+      preremove: packaging/scripts/preremove.sh
+      postremove: packaging/scripts/postremove.sh
+
+    section: net
+    priority: optional
 
 release:
   github:

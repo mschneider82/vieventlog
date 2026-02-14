@@ -579,7 +579,38 @@ func runSchemaMigrations() error {
 			return fmt.Errorf("failed to record migration 6: %v", err)
 		}
 		log.Println("Migration 6 completed: Added field  compressor_starts")
-		
+	}
+
+	// Migration 7: Add 4/3 valve fields, add pressure supply field
+	if !migrationApplied("add_valve_and_pressure") {
+		log.Println("Running migration 7: Adding 4/3 valve fields and pressure field")
+
+		// Add 4/3 valve current
+		if !columnExists("temperature_snapshots","four_way_valve_current") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN four_way_valve_current REAL")
+			if err != nil {
+				return fmt.Errorf("migration 7 failed (4/3 valve current): %v", err)
+			}
+		}
+		// Add 4/3 valve target
+		if !columnExists("temperature_snapshots","four_way_valve_target") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN four_way_valve_target REAL")
+			if err != nil {
+				return fmt.Errorf("migration 7 failed (4/3 valve target): %v", err)
+			}
+		}
+		// Add pressure supply
+		if !columnExists("temperature_snapshots","pressure_supply") {
+			_, err := eventDB.Exec("ALTER TABLE temperature_snapshots ADD COLUMN pressure_supply REAL")
+			if err != nil {
+				return fmt.Errorf("migration 7 failed (pressure supply): %v", err)
+			}
+		}
+
+		if err := recordMigration(7, "add_valve_and_pressure", "Add 4/3 valve fields and pressure field"); err != nil {
+			return fmt.Errorf("failed to record migration 7: %v", err)
+		}
+		log.Println("Migration 7 completed: Added fields 4/3 valve, pressure")	
 	}
 	
 	return nil
@@ -934,8 +965,8 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -989,6 +1020,9 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.FourWayValve,
 		snapshot.BurnerModulation,
 		snapshot.SecondaryHeatGeneratorStatus,
+		snapshot.FourWayValveCurrent,
+		snapshot.FourWayValveTarget,
+		snapshot.PressureSupply,
 	)
 
 	if err != nil {
@@ -1022,7 +1056,7 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status
+			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply
 		FROM temperature_snapshots
 		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ?
 	`
@@ -1109,6 +1143,9 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.FourWayValve,
 			&snapshot.BurnerModulation,
 			&snapshot.SecondaryHeatGeneratorStatus,
+			&snapshot.FourWayValveCurrent,
+			&snapshot.FourWayValveTarget,
+			&snapshot.PressureSupply,
 		)
 
 		if err != nil {
