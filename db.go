@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"strconv"
 
 	_ "modernc.org/sqlite"
 )
@@ -271,56 +272,56 @@ func runSchemaMigrations() error {
 		backfillSQL := `
 			WITH diffs AS (
 			  SELECT
-			    id,
-			    timestamp,
-			    installation_id,
-			    gateway_id,
-			    device_id,
-			    LEAD(timestamp) OVER (
-			      PARTITION BY installation_id, gateway_id, device_id
-			      ORDER BY timestamp
-			    ) AS next_ts
+				id,
+				timestamp,
+				installation_id,
+				gateway_id,
+				device_id,
+				LEAD(timestamp) OVER (
+				  PARTITION BY installation_id, gateway_id, device_id
+				  ORDER BY timestamp
+				) AS next_ts
 			  FROM temperature_snapshots
 			  WHERE sample_interval IS NULL
 			),
 			calc AS (
 			  SELECT
-			    id,
-			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
-			    LAG(
-			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
-			    ) OVER (
-			      PARTITION BY installation_id, gateway_id, device_id
-			      ORDER BY timestamp
-			    ) AS prev_diff
+				id,
+				CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+				LAG(
+				  CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+				) OVER (
+				  PARTITION BY installation_id, gateway_id, device_id
+				  ORDER BY timestamp
+				) AS prev_diff
 			  FROM diffs
 			),
 			rules AS (
 			  SELECT
-			    id,
-			    CASE
-			      WHEN diff_minutes IS NULL THEN prev_diff
-			      WHEN diff_minutes > 15 THEN prev_diff
-			      WHEN diff_minutes != prev_diff THEN prev_diff
-			      ELSE diff_minutes
-			    END AS base_value
+				id,
+				CASE
+				  WHEN diff_minutes IS NULL THEN prev_diff
+				  WHEN diff_minutes > 15 THEN prev_diff
+				  WHEN diff_minutes != prev_diff THEN prev_diff
+				  ELSE diff_minutes
+				END AS base_value
 			  FROM calc
 			),
 			context AS (
 			  SELECT
-			    r.id,
-			    r.base_value,
-			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
-			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+				r.id,
+				r.base_value,
+				CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+				CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
 			  FROM rules r
 			)
 			UPDATE temperature_snapshots
 			SET sample_interval = CASE
-			    WHEN context.base_value > 15 THEN COALESCE(context.prev_val, 5)
-			    WHEN context.base_value = 0 AND context.prev_val IS NOT NULL AND context.prev_val != 0 THEN context.prev_val
-			    WHEN context.base_value = 0 AND context.next_val IS NOT NULL AND context.next_val != 0 THEN context.next_val
-			    WHEN context.base_value IS NULL THEN COALESCE(context.next_val, context.prev_val, 5)
-			    ELSE context.base_value
+				WHEN context.base_value > 15 THEN COALESCE(context.prev_val, 5)
+				WHEN context.base_value = 0 AND context.prev_val IS NOT NULL AND context.prev_val != 0 THEN context.prev_val
+				WHEN context.base_value = 0 AND context.next_val IS NOT NULL AND context.next_val != 0 THEN context.next_val
+				WHEN context.base_value IS NULL THEN COALESCE(context.next_val, context.prev_val, 5)
+				ELSE context.base_value
 			END
 			FROM context
 			WHERE temperature_snapshots.id = context.id
@@ -389,72 +390,72 @@ func runSchemaMigrations() error {
 		rebackfillSQL := `
 			WITH diffs AS (
 			  SELECT
-			    id,
-			    timestamp,
-			    installation_id,
-			    gateway_id,
-			    device_id,
-			    LEAD(timestamp) OVER (
-			      PARTITION BY installation_id, gateway_id, device_id
-			      ORDER BY timestamp
-			    ) AS next_ts
+				id,
+				timestamp,
+				installation_id,
+				gateway_id,
+				device_id,
+				LEAD(timestamp) OVER (
+				  PARTITION BY installation_id, gateway_id, device_id
+				  ORDER BY timestamp
+				) AS next_ts
 			  FROM temperature_snapshots
 			),
 			calc AS (
 			  SELECT
-			    id,
-			    CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
-			    LAG(
-			      CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
-			    ) OVER (
-			      PARTITION BY installation_id, gateway_id, device_id
-			      ORDER BY timestamp
-			    ) AS prev_diff
+				id,
+				CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER) AS diff_minutes,
+				LAG(
+				  CAST((strftime('%s', next_ts)/60 - strftime('%s', timestamp)/60) AS INTEGER)
+				) OVER (
+				  PARTITION BY installation_id, gateway_id, device_id
+				  ORDER BY timestamp
+				) AS prev_diff
 			  FROM diffs
 			),
 			rules AS (
 			  SELECT
-			    id,
-			    CASE
-			      WHEN diff_minutes IS NULL THEN prev_diff
-			      WHEN diff_minutes > 15 THEN prev_diff
-			      WHEN diff_minutes != prev_diff THEN prev_diff
-			      ELSE diff_minutes
-			    END AS base_value
+				id,
+				CASE
+				  WHEN diff_minutes IS NULL THEN prev_diff
+				  WHEN diff_minutes > 15 THEN prev_diff
+				  WHEN diff_minutes != prev_diff THEN prev_diff
+				  ELSE diff_minutes
+				END AS base_value
 			  FROM calc
 			),
 			context AS (
 			  SELECT
-			    r.id,
-			    r.base_value,
-			    CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
-			    CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
+				r.id,
+				r.base_value,
+				CASE WHEN LAG(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LAG(r.base_value) OVER (ORDER BY r.id) END AS prev_val,
+				CASE WHEN LEAD(r.base_value) OVER (ORDER BY r.id) <= 15 THEN LEAD(r.base_value) OVER (ORDER BY r.id) END AS next_val
 			  FROM rules r
 			),
 			with_mode AS (
 			  SELECT
-			    c.id,
-			    c.base_value,
-			    c.prev_val,
-			    c.next_val,
-			    d.id as ts_id,
-			    dm.mode_interval
+				c.id,
+				c.base_value,
+				c.prev_val,
+				c.next_val,
+				d.id as ts_id,
+				dm.mode_interval
 			  FROM context c
 			  JOIN diffs d ON c.id = d.id
 			  LEFT JOIN device_modes dm
-			    ON d.installation_id = dm.installation_id
-			    AND d.gateway_id = dm.gateway_id
-			    AND d.device_id = dm.device_id
+				ON d.installation_id = dm.installation_id
+				AND d.gateway_id = dm.gateway_id
+				AND d.device_id = dm.device_id
 			)
 			UPDATE temperature_snapshots
 			SET sample_interval = CASE
-			    -- Use mode for problematic values (too large, too small, or NULL)
-			    WHEN with_mode.base_value IS NULL THEN COALESCE(with_mode.mode_interval, 15)
-			    WHEN with_mode.base_value > 15 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, 15)
-			    WHEN with_mode.base_value = 0 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, with_mode.next_val, 15)
-			    WHEN with_mode.base_value = 1 THEN COALESCE(with_mode.mode_interval, 15)
-			    -- Normal case: use calculated value
-			    ELSE with_mode.base_value
+				-- Use mode for problematic values (too large, too small, or NULL)
+				WHEN with_mode.base_value IS NULL THEN COALESCE(with_mode.mode_interval, 15)
+				WHEN with_mode.base_value > 15 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, 15)
+				WHEN with_mode.base_value = 0 THEN COALESCE(with_mode.mode_interval, with_mode.prev_val, with_mode.next_val, 15)
+				WHEN with_mode.base_value = 1 THEN COALESCE(with_mode.mode_interval, 15)
+				-- Normal case: use calculated value
+				ELSE with_mode.base_value
 			END
 			FROM with_mode
 			WHERE temperature_snapshots.id = with_mode.id
@@ -1322,7 +1323,7 @@ func GetConsumptionStats(installationID, gatewayID, deviceID string, startTime, 
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp <= ?
+			AND timestamp < ? -- WICHTIG: exklusives Ende
 		ORDER BY timestamp ASC
 	`
 
@@ -1418,41 +1419,40 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	}
 	fallbackInterval := settings.SampleInterval
 
-	// Start of day (00:00:00 CET/CEST) to end of day (24:00:00 = 00:00:00 next day)
+	// Lokale Tagesgrenzen → UTC für indexierbare Filterung
 	// Using DefaultLocation which supports both CET and CEST (Europe/Berlin)
-	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
-	endTime := startTime.Add(24 * time.Hour)
+	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
+	end   := time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999999999, DefaultLocation)
+
+	startUTC := start.UTC().Format(time.RFC3339Nano)
+	endUTC   := end.UTC().Format(time.RFC3339Nano)
 
 	query := `
 		SELECT
-			strftime('%Y-%m-%d %H:00:00', timestamp, 'localtime') as hour,
-			-- Calculate total energy by summing (power * interval) for each sample
-			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
-			SUM(COALESCE(case when compressor_power > 0 then thermal_power
-				else
-					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
-					else
-						case when ifnull (thermal_power, 0) = 0 then 0
-						else null
-						end
-					end
-				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
+			STRFTIME('%H', timestamp, 'localtime') as hour,
+			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as electricity_wh,
+			SUM(COALESCE(
+				CASE WHEN compressor_power > 0 THEN thermal_power
+				ELSE CASE WHEN compressor_power = 0 AND IFNULL(thermal_power, 0) > 0 THEN 0
+					ELSE CASE WHEN IFNULL(thermal_power, 0) = 0 THEN 0 ELSE NULL END
+				END END, 0
+			) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as thermal_wh,
 			AVG(cop) as avg_cop,
 			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
-			COUNT(*) as total_samples
+			COUNT(*) as samples
 		FROM temperature_snapshots
 		WHERE installation_id = ?
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp < ?
+			AND timestamp <= ?
 		GROUP BY hour
 		ORDER BY hour ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339))
+		startUTC, endUTC)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
 	}
@@ -1462,41 +1462,36 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 
 	for rows.Next() {
 		var hourStr string
-		var totalElectricityWh, totalThermalWh *float64
+		var electricityWh, thermalWh *float64
 		var avgCOP *float64
 		var runtimeMinutes float64
-		var totalSamples int
+		var samples int
 
-		err := rows.Scan(&hourStr, &totalElectricityWh, &totalThermalWh, &avgCOP, &runtimeMinutes, &totalSamples)
+		err := rows.Scan(&hourStr, &electricityWh, &thermalWh, &avgCOP, &runtimeMinutes, &samples)
 		if err != nil {
 			log.Printf("Warning: failed to scan hourly breakdown row: %v", err)
 			continue
 		}
 
-		// Parse timestamp in DefaultLocation (Europe/Berlin) to preserve local time
-		hourTime, err := time.ParseInLocation("2006-01-02 15:04:05", hourStr, DefaultLocation)
-		if err != nil {
-			log.Printf("Warning: failed to parse hour timestamp: %v", err)
-			continue
-		}
+		hourInt, _ := strconv.Atoi(hourStr)
 
 		// Convert Wh to kWh (energy already calculated correctly in SQL)
-		electricityKWh := 0.0
-		thermalKWh := 0.0
-		if totalElectricityWh != nil {
-			electricityKWh = (*totalElectricityWh) / 1000.0 // Wh -> kWh
+		eKWh := 0.0
+		tKWh := 0.0
+		if electricityWh != nil {
+			eKWh = *electricityWh / 1000.0 // Wh -> kWh
 		}
-		if totalThermalWh != nil {
-			thermalKWh = (*totalThermalWh) / 1000.0 // Wh -> kWh
+		if thermalWh != nil {
+			tKWh = *thermalWh / 1000.0 // Wh -> kWh
 		}
 
 		dataPoint := ConsumptionDataPoint{
-			Timestamp:      hourTime,
-			ElectricityKWh: electricityKWh,
-			ThermalKWh:     thermalKWh,
+			Timestamp:      time.Date(date.Year(), date.Month(), date.Day(), hourInt, 0, 0, 0, DefaultLocation),
+			ElectricityKWh: eKWh,
+			ThermalKWh:     tKWh,
 			AvgCOP:         0.0,
 			RuntimeHours:   runtimeMinutes / 60.0,
-			Samples:        totalSamples,
+			Samples:        samples,
 		}
 		if avgCOP != nil {
 			dataPoint.AvgCOP = *avgCOP
@@ -1525,24 +1520,25 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	fallbackInterval := settings.SampleInterval
 
 	// Normalize to start of day for startDate and end of day for endDate
-	// This ensures we get complete days in local time (CET/CEST)
-	start := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, DefaultLocation)
-	end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, DefaultLocation).Add(24 * time.Hour)
+	// *** WICHTIGER FIX ***
+	// Lokale Tagesgrenzen erzeugen – NICHT aus UTC geparsten Dates!
+	startLocal := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, DefaultLocation)
+	endLocal   := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, DefaultLocation)
+
+	// Danach erst in UTC umwandeln
+	startUTC := startLocal.UTC().Format(time.RFC3339Nano)
+	endUTC   := endLocal.UTC().Format(time.RFC3339Nano)
 
 	query := `
 		SELECT
 			DATE(timestamp, 'localtime') as day,
-			-- Calculate total energy by summing (power * interval) for each sample
 			SUM(COALESCE(compressor_power, 0) * COALESCE(sample_interval, ?) / 60.0) as total_electricity_wh,
-			SUM(COALESCE(case when compressor_power > 0 then thermal_power
-				else
-					case when compressor_power = 0 and ifnull (thermal_power, 0) > 0 then 0
-					else
-						case when ifnull (thermal_power, 0) = 0 then 0
-						else null
-						end
-					end
-				end, 0) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
+			SUM(COALESCE(
+				CASE WHEN compressor_power > 0 THEN thermal_power
+				ELSE CASE WHEN compressor_power = 0 AND IFNULL(thermal_power, 0) > 0 THEN 0
+					ELSE CASE WHEN IFNULL(thermal_power, 0) = 0 THEN 0 ELSE NULL END
+				END END, 0
+			) * 1000.0 * COALESCE(sample_interval, ?) / 60.0) as total_thermal_wh,
 			AVG(cop) as avg_cop,
 			SUM(CASE WHEN compressor_active = 1 THEN COALESCE(sample_interval, ?) ELSE 0 END) as runtime_minutes,
 			COUNT(*) as total_samples
@@ -1551,14 +1547,14 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp < ?
+			AND timestamp <= ?
 		GROUP BY day
 		ORDER BY day ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339))
+		startUTC, endUTC)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
 	}

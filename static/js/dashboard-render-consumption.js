@@ -1,4 +1,4 @@
-/**
+/** 
  * dashboard-render-consumption.js
  * Renders a detailed consumption tile with statistics and charts
  */
@@ -7,6 +7,22 @@
 let consumptionCache = {};
 let consumptionChartInstance = null;
 let consumptionPeriodChartInstance = null;
+
+/**
+ * Hilfsfunktion: Breakdown nach Zeitraum filtern
+ */
+function filterBreakdownByDateRange(breakdown, fromDate, toDate) {
+    if (!fromDate || !toDate || !Array.isArray(breakdown)) return breakdown;
+
+    const from = new Date(fromDate);
+    const to   = new Date(toDate);
+    to.setHours(23, 59, 59, 999);
+
+    return breakdown.filter(dp => {
+        const ts = new Date(dp.timestamp);
+        return ts >= from && ts <= to;
+    });
+}
 
 /**
  * Renders the consumption tile with detailed statistics
@@ -47,8 +63,8 @@ async function renderConsumptionTile(deviceInfo, features) {
     consumptionSection.innerHTML = `
         <div class="chart-header">
             <h2>⚡ Verbrauchsstatistiken
-				<span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
-			</h2>
+                <span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
+            </h2>
             <div class="chart-controls">
                 <div class="time-range-selector">
                     <button class="time-btn active" data-period="today">Heute</button>
@@ -58,8 +74,12 @@ async function renderConsumptionTile(deviceInfo, features) {
                     <button class="time-btn" data-period="last30days">30 Tage</button>
                     <button class="time-btn" data-period="year">Jahr</button>
                     <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
-                        <label for="customDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
-                        <input type="date" id="customDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                        <label for="customDateFrom" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Zeitraum:</label>
+                        <input type="date" id="customDateFrom" class="custom-date-input"
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                        <span style="color:#a0a0b0;font-size:13px;">bis</span>
+                        <input type="date" id="customDateTo" class="custom-date-input"
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                     </div>
                 </div>
             </div>
@@ -81,7 +101,7 @@ async function renderConsumptionTile(deviceInfo, features) {
 
             <!-- Comparison Chart -->
             <div class="consumption-chart-wrapper">
-                <h3 id="consumptionPeriodChartTitle" style="color: #e0e0e0; font-size: 16px; margin-bottom: 15px;">Zeitraumvergleich</h3>
+                <h3 id="consumptionPeriodChartTitle" style="color: #e0e0e0; font-size: 16px; margin-bottom: 15px;">Energieverteilung</h3>
                 <div id="consumptionPeriodChart" style="width: 100%; height: 400px;"></div>
             </div>
         </div>
@@ -92,56 +112,76 @@ async function renderConsumptionTile(deviceInfo, features) {
         </div>
     `;
 
-// Consumption statistics cards (API-data)  moved from dashboard-render-engine
-    // Extract key features
+    // Consumption statistics cards (API-data) moved from dashboard-render-engine
     const keyFeatures = extractKeyFeatures(features);
 
-    let html='<div  class="card">';
-    // Consumption/Production Statistics
+    let html='<div class="card">';
     html += renderConsumptionStatistics(keyFeatures);
     html += '</div>';
     consumptionSection.innerHTML += html;
 
-	// Insert after temperature chart section or at the end
+    // Insert after temperature chart section or at the end
     const tempChartSection = document.getElementById('temperature-chart-section');
     if (tempChartSection && tempChartSection.nextSibling) {
         dashboardContent.insertBefore(consumptionSection, tempChartSection.nextSibling);
     } else if (tempChartSection) {
         tempChartSection.parentNode.insertBefore(consumptionSection, tempChartSection.nextElementSibling);
     } else {
-        // Temperature chart doesn't exist, append at the end
         dashboardContent.appendChild(consumptionSection);
     }
 
     // Set up period selector buttons
     const periodButtons = consumptionSection.querySelectorAll('.time-btn');
+    const dateFromInput = consumptionSection.querySelector('#customDateFrom');
+    const dateToInput   = consumptionSection.querySelector('#customDateTo');
+
     periodButtons.forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', async () => {
             // Update active state
             periodButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
             // Load data for selected period
+            if (dateFromInput) dateFromInput.value = '';
+            if (dateToInput)   dateToInput.value = '';
+
             const period = btn.dataset.period;
             await loadConsumptionData(deviceInfo, period);
         });
     });
 
-    // Set up date picker
-    const datePicker = consumptionSection.querySelector('#customDatePicker');
-    if (datePicker) {
-        // Set max date to today
-        const today = new Date().toISOString().split('T')[0];
-        datePicker.max = today;
+    // Set up date range pickers
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (dateFromInput) dateFromInput.max = todayStr;
+    if (dateToInput)   dateToInput.max   = todayStr;
 
-        datePicker.addEventListener('change', async (e) => {
-            if (e.target.value) {
-                // Deactivate all period buttons
-                periodButtons.forEach(b => b.classList.remove('active'));
+    // Regel 1: Von setzt Bis → Einzel-Tag
+    if (dateFromInput) {
+        dateFromInput.addEventListener('change', async (e) => {
+            const from = e.target.value;
+            if (!from) return;
 
-                // Load data for selected date
-                await loadConsumptionData(deviceInfo, 'today', e.target.value);
+            if (dateToInput) {
+                dateToInput.value = from;
             }
+
+            periodButtons.forEach(b => b.classList.remove('active'));
+
+            await loadConsumptionData(deviceInfo, 'range', null, from, from);
+        });
+    }
+
+    // Regel 2: Bis gesetzt → Zeitraum
+    if (dateToInput) {
+        dateToInput.addEventListener('change', async (e) => {
+            const to   = e.target.value;
+            const from = dateFromInput ? dateFromInput.value : '';
+
+            if (!from || !to) return;
+
+            periodButtons.forEach(b => b.classList.remove('active'));
+
+            await loadConsumptionData(deviceInfo, 'range', null, from, to);
         });
     }
 
@@ -193,7 +233,7 @@ function applyPowerCorrectionFactor(stats, deviceInfo) {
     console.log(`[Consumption] Corrected electricity: ${corrected.electricity_kwh.toFixed(2)} kWh, COP: ${corrected.avg_cop.toFixed(2)}`);
 
     // Apply correction to hourly breakdown
-    if (corrected.hourly_breakdown && Array.isArray(corrected.hourly_breakdown)) {
+    if (corrected.hourly_breakdown) {
         corrected.hourly_breakdown = corrected.hourly_breakdown.map(point => ({
             ...point,
             electricity_kwh: point.electricity_kwh * correctionFactor,
@@ -205,7 +245,7 @@ function applyPowerCorrectionFactor(stats, deviceInfo) {
     }
 
     // Apply correction to daily breakdown
-    if (corrected.daily_breakdown && Array.isArray(corrected.daily_breakdown)) {
+    if (corrected.daily_breakdown) {
         corrected.daily_breakdown = corrected.daily_breakdown.map(point => ({
             ...point,
             electricity_kwh: point.electricity_kwh * correctionFactor,
@@ -222,9 +262,15 @@ function applyPowerCorrectionFactor(stats, deviceInfo) {
 /**
  * Load consumption data for a specific period
  */
-async function loadConsumptionData(deviceInfo, period, customDate = null) {
+async function loadConsumptionData(deviceInfo, period, customDate = null, fromDate = null, toDate = null) {
     const { installationId, gatewaySerial, deviceId, accountId } = deviceInfo;
-    const cacheKey = customDate ? `${installationId}_${deviceId}_${customDate}` : `${installationId}_${deviceId}_${period}`;
+
+    let cacheKey = `${installationId}_${deviceId}_${period}`;
+    if (fromDate && toDate) {
+        cacheKey = `${installationId}_${deviceId}_from_${fromDate}_to_${toDate}`;
+    } else if (customDate) {
+        cacheKey = `${installationId}_${deviceId}_${customDate}`;
+    }
 
     try {
         // Show loading state
@@ -234,12 +280,25 @@ async function loadConsumptionData(deviceInfo, period, customDate = null) {
         }
 
         // Build API URL
-        let apiUrl = `/api/consumption/stats?installationId=${installationId}&gatewaySerial=${gatewaySerial}&deviceId=${deviceId}&period=${period}`;
+        let apiUrl = `/api/consumption/stats?installationId=${installationId}&gatewaySerial=${gatewaySerial}&deviceId=${deviceId}`;
+
+        // period immer mitsenden (für Legacy/Preset)
+        if (period) {
+            apiUrl += `&period=${encodeURIComponent(period)}`;
+        }
+
+        // Legacy: einzelnes Datum
         if (customDate) {
-            apiUrl += `&date=${customDate}`;
+            apiUrl += `&date=${encodeURIComponent(customDate)}`;
         }
 
         // Fetch data from API
+        // Neuer Zeitraum: from/to
+        if (fromDate && toDate) {
+            apiUrl += `&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
+        }
+
+        // FIX: doppelte fetch-Zeile entfernt
         const response = await fetch(apiUrl);
 
         if (!response.ok) {
@@ -260,8 +319,8 @@ async function loadConsumptionData(deviceInfo, period, customDate = null) {
 
         // Render the data
         renderConsumptionStats(correctedStats, period, deviceInfo, customDate);
-        renderConsumptionCharts(correctedStats, period, customDate);
-        renderConsumptionBreakdown(correctedStats, period, customDate);
+        renderConsumptionCharts(correctedStats, period, customDate, fromDate, toDate);
+        renderConsumptionBreakdown(correctedStats, period, customDate, fromDate, toDate);
 
     } catch (err) {
         console.error('Failed to load consumption data:', err);
@@ -373,15 +432,52 @@ function renderConsumptionStats(stats, period, deviceInfo, customDate = null) {
     `;
 }
 
-/**
- * Render consumption charts using ECharts
- */
-function renderConsumptionCharts(stats, period, customDate = null) {
-    // Determine chart type based on period
-    if (period === 'today' || period === 'yesterday') {
+// ------------------------------
+// Titel-Logik für Charts
+// ------------------------------
+function getConsumptionChartTitle(period, customDate = null, fromDate = null, toDate = null) {
+    const formatDate = (str) => {
+        const d = new Date(str);
+        return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear()}`;
+    };
+
+    if (period === 'today') return 'Heutiger Tagesverlauf';
+    if (period === 'yesterday') return 'Gestriger Tagesverlauf';
+    if (period === 'week') return 'Letzte 7 Tage';
+    if (period === 'month') return 'Aktueller Monat';
+    if (period === 'last30days') return 'Letzte 30 Tage';
+    if (period === 'year') return 'Aktuelles Jahr';
+
+    if (customDate || (fromDate && toDate && fromDate === toDate)) {
+        const dateStr = formatDate(customDate || fromDate);
+        return `Tagesverlauf ${dateStr}`;
+    }
+
+    if (fromDate && toDate && fromDate !== toDate) {
+        const fromStr = formatDate(fromDate);
+        const toStr   = formatDate(toDate);
+        return `Zeitraum ${fromStr} bis ${toStr}`;
+    }
+
+    return 'Verbrauchsverlauf';
+}
+
+function renderConsumptionCharts(stats, period, customDate = null, fromDate = null, toDate = null) {
+    try {
+        const chartTitle = document.getElementById('consumptionChartTitle');
+        if (chartTitle && typeof getConsumptionChartTitle === 'function') {
+            chartTitle.textContent = getConsumptionChartTitle(period, customDate, fromDate, toDate);
+        }
+    } catch (e) {
+        console.warn('Chart title error:', e);
+    }
+
+    const isSingleDayRange = fromDate && toDate && fromDate === toDate;
+
+    if (period === 'today' || period === 'yesterday' || isSingleDayRange) {
         renderHourlyChart(stats, period, customDate);
     } else {
-        renderDailyChart(stats, period, customDate);
+        renderDailyChart(stats, period, customDate, fromDate, toDate);
     }
 
     // Always render the period comparison chart
@@ -389,25 +485,12 @@ function renderConsumptionCharts(stats, period, customDate = null) {
 }
 
 /**
- * Render hourly consumption chart (for today/yesterday)
+ * Render hourly consumption chart
  */
 function renderHourlyChart(stats, period, customDate = null) {
     const chartContainer = document.getElementById('consumptionChart');
     if (!chartContainer) return;
 
-    const chartTitle = document.getElementById('consumptionChartTitle');
-    if (chartTitle) {
-        if (customDate) {
-            // Format custom date for display (DD.MM.YYYY)
-            const date = new Date(customDate + 'T00:00:00');
-            const formatted = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
-            chartTitle.textContent = `Tagesverlauf ${formatted}`;
-        } else {
-            chartTitle.textContent = period === 'today' ? 'Heutiger Tagesverlauf' : 'Gestriger Tagesverlauf';
-        }
-    }
-
-    // Dispose old chart
     if (consumptionChartInstance) {
         consumptionChartInstance.dispose();
     }
@@ -525,31 +608,22 @@ function renderHourlyChart(stats, period, customDate = null) {
 }
 
 /**
- * Render daily consumption chart (for week/month/year)
+ * Render daily consumption chart
  */
-function renderDailyChart(stats, period, customDate = null) {
+function renderDailyChart(stats, period, customDate = null, fromDate = null, toDate = null) {
     const chartContainer = document.getElementById('consumptionChart');
     if (!chartContainer) return;
 
-    const chartTitle = document.getElementById('consumptionChartTitle');
-    if (chartTitle) {
-        const titles = {
-            'week': 'Letzte 7 Tage',
-            'month': 'Aktueller Monat',
-            'last30days': 'Letzte 30 Tage',
-            'year': 'Aktuelles Jahr'
-        };
-        chartTitle.textContent = titles[period] || 'Zeitraum';
-    }
-
-    // Dispose old chart
     if (consumptionChartInstance) {
         consumptionChartInstance.dispose();
     }
 
     consumptionChartInstance = echarts.init(chartContainer, 'dark');
 
-    const dailyData = stats.daily_breakdown || [];
+    let dailyData = stats.daily_breakdown || [];
+
+    // FILTER HIER
+    dailyData = filterBreakdownByDateRange(dailyData, fromDate, toDate);
 
     // Prepare data arrays
     const days = dailyData.map(d => {
@@ -662,7 +736,7 @@ function renderDailyChart(stats, period, customDate = null) {
 }
 
 /**
- * Render period comparison chart (pie/donut chart)
+ * Render period comparison chart
  */
 function renderPeriodComparisonChart(stats, period, customDate = null) {
     const chartContainer = document.getElementById('consumptionPeriodChart');
@@ -743,19 +817,46 @@ function renderPeriodComparisonChart(stats, period, customDate = null) {
     consumptionPeriodChartInstance.setOption(option);
 }
 
+function isSameDay(a, b) {
+    if (!a || !b) return false;
+    const da = new Date(a);
+    const db = new Date(b);
+    return da.getFullYear() === db.getFullYear() &&
+           da.getMonth() === db.getMonth() &&
+           da.getDate() === db.getDate();
+}
+
 /**
  * Render detailed breakdown table
  */
-function renderConsumptionBreakdown(stats, period, customDate = null) {
+function renderConsumptionBreakdown(stats, period, customDate = null, fromDate = null, toDate = null) {
     const breakdownContainer = document.getElementById('consumptionBreakdown');
     if (!breakdownContainer) return;
 
-    const breakdown = (period === 'today' || period === 'yesterday')
-        ? stats.hourly_breakdown
-        : stats.daily_breakdown;
+    const isSingleDayRange = isSameDay(fromDate, toDate);
+
+    // HOURLY oder DAILY bestimmen
+    const isHourly = (period === 'today' || period === 'yesterday' || isSingleDayRange);
+
+    // Breakdown auswählen
+    let breakdown = isHourly ? stats.hourly_breakdown : stats.daily_breakdown;
+
+    // Filter
+    if (fromDate && toDate) {
+        if (isSingleDayRange) {
+            breakdown = breakdown.filter(item => isSameDay(item.timestamp, fromDate));
+        } else {
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+            breakdown = breakdown.filter(item => {
+                const d = new Date(item.timestamp);
+                return d >= from && d <= to;
+            });
+        }
+    }
 
     if (!breakdown || breakdown.length === 0) {
-        breakdownContainer.innerHTML = '';
+        breakdownContainer.innerHTML = `<p>Keine Daten verfügbar.</p>`;
         return;
     }
 
@@ -765,7 +866,7 @@ function renderConsumptionBreakdown(stats, period, customDate = null) {
             <table class="breakdown-table">
                 <thead>
                     <tr>
-                        <th>${period === 'today' || period === 'yesterday' ? 'Uhrzeit' : 'Datum'}</th>
+                        <th>${isHourly ? 'Uhrzeit' : 'Datum'}</th>
                         <th>Strom (kWh)</th>
                         <th>Wärme (kWh)</th>
                         <th>ArbeitsZahl</th>
@@ -779,11 +880,11 @@ function renderConsumptionBreakdown(stats, period, customDate = null) {
     breakdown.forEach(item => {
         const date = new Date(item.timestamp);
         let timeLabel;
-        if (period === 'today' || period === 'yesterday') {
+
+        if (isHourly) {
             const startHour = date.getHours();
             const endHour = (startHour + 1) % 24; // Wrap 24 to 0
-            const endHourStr = endHour.toString().padStart(2, '0');
-            timeLabel = `${startHour}:00 - ${endHourStr}:00`;
+            timeLabel = `${startHour.toString().padStart(2,'0')}:00 - ${endHour.toString().padStart(2,'0')}:00`;
         } else {
             timeLabel = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
         }
