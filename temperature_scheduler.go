@@ -457,6 +457,8 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 	// dashboard: primarySupplyTemp: find(['heating.primaryCircuit.sensors.temperature.supply']), Lufteintrittstemperatur
 	case "heating.primaryCircuit.sensors.temperature.supply":
 		snapshot.HPPrimaryCircuitSupplyTemp = getFloatValue(feature.Properties) // Air intake temperature (HP primary circuit)
+	case "heating.primaryCircuit.sensors.temperature.return":
+		snapshot.PrimaryReturnTemp = getFloatValue(feature.Properties) // Split / Sole system return (HP primary circuit)
 
 	// dashboard: secondarySupplyTemp: find(['heating.secondaryCircuit.sensors.temperature.supply']), sek. Vorlauf in ODU
 	case "heating.secondaryCircuit.sensors.temperature.supply":
