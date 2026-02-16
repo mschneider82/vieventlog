@@ -836,15 +836,15 @@ window.addEventListener('resize', () => {
 
             if (!hasArrayFeatures && !hasSummaryFeatures) return '';
 
-			// show array and summary statistics because array data may outdated
-			// this may lead to duplicate information shown
+            // show array and summary statistics because array data may outdated
+            // this may lead to duplicate information shown
             console.log('📊 show consumption statistics');
-			let html = renderConsumptionStatisticsArrays(kf);
-			html += renderConsumptionStatisticsSummary(kf);
-			return html;
+            let html = renderConsumptionStatisticsArrays(kf);
+            html += renderConsumptionStatisticsSummary(kf);
+            return html;
         }
-		
-		
+
+
         // NEW: Render statistics using array-based features - split into two cards
         function renderConsumptionStatisticsArrays(kf) {
             // Helper to get array value safely
@@ -911,30 +911,27 @@ window.addEventListener('resize', () => {
         // Render Power Consumption Card with full array history
         // Power Consumption Card (Stromverbrauch) - separate Kachel
         function renderPowerConsumptionCard(kf, getArrayValue) {
-			
-			// get date to show from data if available
+
+            // get date to show from data if available
             const dayValueReadAt = kf.powerConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
             let now = new Date();
-            if(dayValueReadAt != 0){
+            if (dayValueReadAt !== 0) {
                 now = new Date(dayValueReadAt);
             }
-			
+
             const getMonthName = (index) => {
-				//const now = new Date();
                 const d = new Date(now.getFullYear(), now.getMonth() - index, 1);
                 return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
             };
         
             const getWeekLabel = (index) => {
-                //const now = new Date();
                 const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
                 const onejan = new Date(d.getFullYear(), 0, 1);
                 const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
                 return `KW ${week}`;
             };
-        
+
             const getDayLabel = (index) => {
-                //const now = new Date();
                 const d = new Date(now.getTime() - (index * 24 * 60 * 60 * 1000));
                 return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
             };
@@ -1068,12 +1065,12 @@ window.addEventListener('resize', () => {
         // Render Gas Consumption Card with full array history
         // Gas Consumption Card (Gasverbrauch) - separate Kachel
         function renderGasConsumptionCard(kf, getArrayValue) {
-			
-			// get date to show from data if available
+
+            // get date to show from data if available
             const dayValueReadAt = kf.gasConsumptionDhw?.properties?.dayValueReadAt?.value ||
                                    kf.gasConsumptionHeating?.properties?.dayValueReadAt?.value || 0;
             let now = new Date();
-            if(dayValueReadAt != 0){
+            if (dayValueReadAt !== 0) {
                 now = new Date(dayValueReadAt);
             }
 
@@ -1081,13 +1078,11 @@ window.addEventListener('resize', () => {
             const MAX_DAY_AGE_MS = 4 * 3600 * 1000;
 
             const getMonthName = (index) => {
-                //const now = new Date();
                 const d = new Date(now.getFullYear(), now.getMonth() - index, 1);
                 return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
             };
 
             const getWeekLabel = (index) => {
-                //const now = new Date();
                 const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
                 const onejan = new Date(d.getFullYear(), 0, 1);
                 const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
@@ -1095,7 +1090,6 @@ window.addEventListener('resize', () => {
             };
 
             const getDayLabel = (index) => {
-                //const now = new Date();
                 const d = new Date(now.getTime() - (index * 24 * 60 * 60 * 1000));
                 return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
             };
