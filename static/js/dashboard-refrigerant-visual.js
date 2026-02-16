@@ -42,8 +42,8 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
         return ''; // Not a heat pump, don't show visualization
     }
 	
-	// if primary return temp available and alternativ picture selected, use the other refrigerant picture
-	if (useOtherPic && keyFeatures.primaryReturnTemp && (typeof keyFeatures.primaryReturnTemp?. value === 'number')){
+	// if primary return temp available and alternative picture selected, use the other refrigerant picture
+	if (useOtherPic && keyFeatures.primaryReturnTemp && (typeof keyFeatures.primaryReturnTemp?.value === 'number')){
 		return renderOtherRefrigerantCircuitPic(keyFeatures)
 	}	
 	
@@ -104,7 +104,8 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
             speedValue = speedValue * 60;
         }
 
-	    // calculate Get device settings for RPM percentage calculation
+	    // Calculate RPM percentage from device settings
+        let rpmPercentage = null;
         if (deviceSetting && deviceSetting.max > deviceSetting.min && speedValue > 0) {
             rpmPercentage = Math.round(((speedValue - deviceSetting.min) / (deviceSetting.max - deviceSetting.min)) * 100);
             rpmPercentage = Math.max(0, Math.min(100, rpmPercentage));
@@ -347,17 +348,6 @@ function renderOtherRefrigerantCircuitPic(keyFeatures) {
         }
     }
 	
-	// validate value
-	function validate(featureVal) {
-		if (featureVal !== null && featureVal.value !== null){
-			if (typeof featureVal.value === 'number'){
-				return featureVal.value;
-			}
-        }
-        return null;
-    }
-	
-
     // Map values according to Mapping.png
     const values = {
         //  Verdampfer Überhitzung (Sauggastemperatur Verdampfer)

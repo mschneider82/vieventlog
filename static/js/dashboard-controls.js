@@ -309,7 +309,7 @@
                         cyclesperdaystart: data.cyclesperdaystart,
                         showCyclesPerDay: data.showCyclesPerDay,
                         showRefrigerantVisual: data.showRefrigerantVisual !== undefined ? data.showRefrigerantVisual : true,
-			useOtherRefrigerantPic: data.useOtherRefrigerantPic  !== undefined ? data.useOtherRefrigerantPic : false
+                        useOtherRefrigerantPic: data.useOtherRefrigerantPic !== undefined ? data.useOtherRefrigerantPic : false
                     };
                 }
             } catch (error) {
@@ -640,7 +640,7 @@
                         cyclesperdaystart: cyclesperdaystart,
                         showCyclesPerDay: showCyclesPerDay,
                         showRefrigerantVisual: showRefrigerantVisual,
-			useOtherRefrigerantPic: useOtherRefrigerantPic
+                        useOtherRefrigerantPic: useOtherRefrigerantPic
                     })
                 });
 

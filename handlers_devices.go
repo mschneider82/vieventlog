@@ -167,7 +167,6 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	if req.UseOtherRefrigerantPic != nil {
 		settings.UseOtherRefrigerantPic = req.UseOtherRefrigerantPic
 	}
-	
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(DeviceSettingsResponse{
