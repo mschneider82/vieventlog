@@ -111,6 +111,21 @@
                     </div>
                 `;
             }
+			// Primärkreis-Rücklauf
+            if (kf.primaryReturnTemp != null && (typeof kf.primaryReturnTemp?.value === 'number')) {
+                const formatted = formatValue(kf.primaryReturnTemp);
+                const [value, ...unitParts] = formatted.split(' ');
+                const unit = unitParts.join(' ');
+                tempsGroup1 += `
+                    <div class="temp-item">
+                        <span class="temp-label">Primärkreis-Rücklauf</span>
+                        <div>
+                            <span class="temp-value">${value}</span>
+                            <span class="temp-unit">${unit}</span>
+                        </div>
+                    </div>
+                `;
+            }
             // Sekundärkreis-Vorlauf
             if (kf.secondarySupplyTemp) {
                 const formatted = formatValue(kf.secondarySupplyTemp);
