@@ -76,6 +76,15 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		showRefrigerantVisualPtr = &defaultTrue
 	}
 
+	// Include UseOtherRefrigerantPic (default: false if not set)
+	var useOtherRefrigerantPicPtr *bool
+	if settings.UseOtherRefrigerantPic != nil {
+		useOtherRefrigerantPicPtr = settings.UseOtherRefrigerantPic
+	} else {
+		defaultFalse := false
+		useOtherRefrigerantPicPtr = &defaultFalse
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
 		Success:                         true,
@@ -88,6 +97,7 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		CyclesPerDayStart:               cyclesPerDayStartPtr,
 		ShowCyclesPerDay:                showCyclesPerDayPtr,
 		ShowRefrigerantVisual:           showRefrigerantVisualPtr,
+		UseOtherRefrigerantPic:          useOtherRefrigerantPicPtr,
 	})
 }
 
@@ -154,7 +164,10 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	if req.ShowRefrigerantVisual != nil {
 		settings.ShowRefrigerantVisual = req.ShowRefrigerantVisual
 	}
-
+	if req.UseOtherRefrigerantPic != nil {
+		settings.UseOtherRefrigerantPic = req.UseOtherRefrigerantPic
+	}
+	
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(DeviceSettingsResponse{
