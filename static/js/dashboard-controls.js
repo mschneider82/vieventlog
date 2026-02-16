@@ -308,7 +308,8 @@
                         hasHotWaterBuffer: data.hasHotWaterBuffer, // true = secundär , false = Heizkreis
                         cyclesperdaystart: data.cyclesperdaystart,
                         showCyclesPerDay: data.showCyclesPerDay,
-                        showRefrigerantVisual: data.showRefrigerantVisual !== undefined ? data.showRefrigerantVisual : true
+                        showRefrigerantVisual: data.showRefrigerantVisual !== undefined ? data.showRefrigerantVisual : true,
+                        useOtherRefrigerantPic: data.useOtherRefrigerantPic !== undefined ? data.useOtherRefrigerantPic : false
                     };
                 }
             } catch (error) {
@@ -333,14 +334,18 @@
                     console.error('Failed to load settings:', data.error);
                 }
 
-                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, data.electricityPrice || 0.30, data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer, data.cyclesperdaystart, data.showCyclesPerDay, data.showRefrigerantVisual);
+                showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, 
+										data.electricityPrice || 0.30, 	data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer, data.cyclesperdaystart, 
+										data.showCyclesPerDay, data.showRefrigerantVisual, data.useOtherRefrigerantPic || false);
             } catch (error) {
                 console.error('Error loading device settings:', error);
                 showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null, null, false, true);
             }
         }
 
-        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer, cyclesperdaystart, showCyclesPerDay, showRefrigerantVisual) {
+        function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, 
+					electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer, cyclesperdaystart, 
+					showCyclesPerDay, showRefrigerantVisual, useOtherRefrigerantPic) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
@@ -376,6 +381,9 @@
 
             // Determine refrigerant visual toggle state (default: true)
             const refrigerantToggleChecked = showRefrigerantVisual !== undefined ? showRefrigerantVisual : true;
+
+            // Determine other refrigerant picture toggle state (default: false)
+            const otherRefrigerantPicToggleChecked = useOtherRefrigerantPic !== undefined ? useOtherRefrigerantPic : false;
 
             modal.innerHTML = `
                 <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
@@ -500,6 +508,14 @@
                                 <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${refrigerantToggleChecked ? '#667eea' : 'rgba(255,255,255,0.2)'}; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1);"></span>
                                 <span style="position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: ${refrigerantToggleChecked ? 'translateX(26px)' : 'translateX(0)'};"></span>
                             </label>
+                            <label style="color: #a0a0b0; font-size: 16px;">alternatives Bild:</label>
+                            <label style="position: relative; display: inline-block; width: 50px; height: 24px; cursor: pointer;">
+                                <input type="checkbox" id="useOtherRefrigerantPictureToggle" ${otherRefrigerantPicToggleChecked ? 'checked' : ''}
+                                       onchange="document.getElementById('useOtherRefrigerantPictureToggle').nextElementSibling.style.backgroundColor = this.checked ? '#667eea' : 'rgba(255,255,255,0.2)'; document.getElementById('useOtherRefrigerantPictureToggle').nextElementSibling.nextElementSibling.style.transform = this.checked ? 'translateX(26px)' : 'translateX(0)';"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${otherRefrigerantPicToggleChecked ? '#667eea' : 'rgba(255,255,255,0.2)'}; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1);"></span>
+                                <span style="position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: ${otherRefrigerantPicToggleChecked ? 'translateX(26px)' : 'translateX(0)'};"></span>
+                            </label>
                         </div>
                     </div>
 
@@ -603,6 +619,10 @@
             const showRefrigerantVisualToggle = document.querySelector('#showRefrigerantVisualToggle');
             const showRefrigerantVisual = showRefrigerantVisualToggle ? showRefrigerantVisualToggle.checked : true;
 
+            // Get show refrigerant picture toggle
+            const useOtherRefrigerantPicToggle = document.querySelector('#useOtherRefrigerantPictureToggle');
+            const useOtherRefrigerantPic = useOtherRefrigerantPicToggle ? useOtherRefrigerantPicToggle.checked : false;
+
             try {
                 const response = await fetch('/api/device-settings/set', {
                     method: 'POST',
@@ -619,7 +639,8 @@
                         hasHotWaterBuffer: hasHotWaterBuffer,
                         cyclesperdaystart: cyclesperdaystart,
                         showCyclesPerDay: showCyclesPerDay,
-                        showRefrigerantVisual: showRefrigerantVisual
+                        showRefrigerantVisual: showRefrigerantVisual,
+                        useOtherRefrigerantPic: useOtherRefrigerantPic
                     })
                 });
 
@@ -640,6 +661,7 @@
                     window.deviceSettingsCache[deviceKey].cyclesperdaystart = cyclesperdaystart;
                     window.deviceSettingsCache[deviceKey].showCyclesPerDay = showCyclesPerDay;
                     window.deviceSettingsCache[deviceKey].showRefrigerantVisual = showRefrigerantVisual;
+                    window.deviceSettingsCache[deviceKey].useOtherRefrigerantPic = useOtherRefrigerantPic;
 
                     alert('Einstellungen gespeichert!');
                     closeDeviceSettingsModal();
