@@ -43,7 +43,7 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
     }
 	
 	// if primary return temp available and alternativ picture selected, use the other refrigerant picture
-	if (useOtherPic && keyfeatures.primaryReturnTemp && (typeof keyfeatures.primaryReturnTemp?. value === 'number')){
+	if (useOtherPic && keyFeatures.primaryReturnTemp && (typeof keyFeatures.primaryReturnTemp?. value === 'number')){
 		return renderOtherRefrigerantCircuitPic(keyFeatures)
 	}	
 	
