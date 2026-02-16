@@ -187,6 +187,7 @@ type DeviceSettingsRequest struct {
 	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
+	UseOtherRefrigerantPic          *bool    `json:"useOtherRefrigerantPic,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
@@ -201,6 +202,7 @@ type DeviceSettingsResponse struct {
 	CyclesPerDayStart               *int64   `json:"cyclesperdaystart,omitempty"`
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
+	UseOtherRefrigerantPic          *bool    `json:"useOtherRefrigerantPic,omitempty"`
 }
 
 type DebugDeviceInfo struct {

@@ -1561,6 +1561,14 @@
     height: auto;
 }
 
+/* DHW Storage (Warmwasserspeicher) - links */
+.dhw-storage-overlay-left {
+    top: 44.90%; /* 163px / 363px */
+    left: 4.5%;  
+    width: 4.13%; /* 35px / 847px */
+    height: auto;
+}
+
 /* Heating Storage (Heizwasserspeicher) - rechts mitte */
 .heating-storage-overlay {
     top: 44.90%; /* 163px / 363px */

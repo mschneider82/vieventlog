@@ -47,6 +47,7 @@ type DeviceSettings struct {
 	CyclesPerDayStart               int64                     `json:"cyclesperdaystart,omitempty"`            // Unix timestamp (seconds) for start date of cycles per day calculation
 	ShowCyclesPerDay                bool                      `json:"showCyclesPerDay,omitempty"`             // Show/hide cycles per day in dashboard
 	ShowRefrigerantVisual           *bool                     `json:"showRefrigerantVisual,omitempty"`        // Show/hide refrigerant circuit visualization (default: true)
+	UseOtherRefrigerantPic          *bool                     `json:"useOtherRefrigerantPic,omitempty"`       // use different picture for refrigerant visual (default: false)
 }
 
 type HybridProControlSettings struct {
