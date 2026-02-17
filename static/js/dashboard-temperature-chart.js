@@ -8,6 +8,7 @@ let customTemperatureDate = null;
 let availableDataFields = new Set();
 let selectedFields = new Set();
 let cachedTemperatureData = null;  // Store current data for re-rendering
+let savedFieldsLoaded = false;     // Flag: persisted fields loaded once from localStorage
 
 // User preferences for chart display (previously auto-determined based on time range)
 let nullconnect = false;  // Connect points across null values
@@ -52,6 +53,8 @@ async function initTemperatureChart() {
     // Check if chart container already exists
     let chartSection = document.getElementById('temperature-chart-section');
     if (!chartSection) {
+		// set timerange according to button selected
+		currentTimeRange = '24h';
         // Insert temperature chart section before other content
         chartSection = document.createElement('div');
         chartSection.id = 'temperature-chart-section';
@@ -74,8 +77,6 @@ async function initTemperatureChart() {
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
                         </div>
-                        <button id="saveSelectedFieldsBtn">Speichern</button>
-                        <button id="presetSelectedFieldsBtn">Reset</button>
                     </div>
                 </div>
             </div>
@@ -137,17 +138,6 @@ async function initTemperatureChart() {
         // Insert at the end of dashboard content (after temperature tiles)
         dashboardContent.appendChild(chartSection);
 
-        // Add event listeners for storage/reset buttons
-        const saveSelFieldsBtn = chartSection.querySelector('#saveSelectedFieldsBtn');  // save selected fields
-        saveSelFieldsBtn.addEventListener('click', (e) => {
-            saveSelected_Fields();
-        });
-     
-        const presetSelFieldsBtn = chartSection.querySelector('#presetSelectedFieldsBtn');  // reset to default
-        presetSelFieldsBtn.addEventListener('click', (e) => {
-            presetSelected_Fields();
-        });  
-
         // Add event listeners for time range buttons
         const timeButtons = chartSection.querySelectorAll('.time-btn');
         timeButtons.forEach(btn => {
@@ -188,7 +178,6 @@ async function initTemperatureChart() {
             }
         });
 
-		// zoom or move within time range
 		// zoom or move within time range
 
         const jleft = chartSection.querySelector('#jumpleft');  // jump left
@@ -412,12 +401,10 @@ function parseTimeRange(range) {
     return unit === 'h' ? value : value * 24;
 }
 
-
 // Save field settings to localStorage
-function saveSelected_Fields() {
+function saveSelectedFields() {
 	try {
-		const f_json = JSON.stringify([...selectedFields]);
-		localStorage.setItem('vieventlog_grafic_fields', f_json);
+       localStorage.setItem('vieventlog_graphic_fields', JSON.stringify([...selectedFields]));
 		// Show success feedback
 		const btn = document.getElementById('saveSelectedFieldsBtn');
 		if (btn) {
@@ -435,34 +422,29 @@ function saveSelected_Fields() {
 	}
 }
 
-// Load field settings from localStorage
-function loadSelected_Fields() {
-	try {
-		const saved = localStorage.getItem('vieventlog_grafic_fields');
-		if (saved && saved.length > 4) {
-			// set selected fields from saved
-			const savedSet  = new Set(JSON.parse(saved));
-			selectedFields.clear();
-			savedSet.forEach(field => {
-				if (availableDataFields.has(field)) {
-					selectedFields.add(field);
-				}
-			});
-			console.log('Loaded fields from localStorage');
-		}
-	} catch (e) {
-		console.error('Failed to load fields:', e);
-	}
+// Load field settings from localStorage (called once on initial data load)
+function loadSelectedFields() {
+    try {
+        const saved = localStorage.getItem('vieventlog_graphic_fields');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+        // Only replace current selection if at least one saved field is actually available
+        const validFields = parsed.filter(field => availableDataFields.has(field));
+        if (validFields.length === 0) return;
+        validFields.forEach(field => selectedFields.add(field));
+        console.log('Loaded fields from localStorage');
+    } catch (e) {
+        console.error('Failed to load fields:', e);
+    }
 }
 
 // Reset fields to default
-function presetSelected_Fields() {
+function presetSelectedFields() {
 	if (confirm('Möchtest du die Selektion auf die Standardwerte zurücksetzen?')) {
-		// Reset to predefined
 		selectedFields.clear();
 		// Clear from localStorage
-		localStorage.removeItem('vieventlog_grafic_fields');
-		// Re-render graph
+		localStorage.removeItem('vieventlog_graphic_fields');
 		if (temperatureChart) {
 			loadTemperatureData();
 		}
@@ -537,8 +519,11 @@ function updateAvailableFields(data) {
             });
         }
 
-		// overwrite fields with user selection
-        loadSelected_Fields();
+        // Load persisted field selection once on first data load
+        if (!savedFieldsLoaded) {
+            savedFieldsLoaded = true;
+            loadSelectedFields();
+        }
 		
     }
 }
@@ -636,11 +621,21 @@ function renderFilters() {
     };
 
     let html = '<div class="filter-categories">';
-
-    Object.entries(categories).forEach(([category, fields]) => {
+	
+	let categoriesCnt = 0;
+	let btnPos = 0;
+    
+	//	count categories with elements, use to position buttons
+	Object.entries(categories).forEach(([category, fields]) => {
         const availableInCategory = fields.filter(f => availableDataFields.has(f));
         if (availableInCategory.length === 0) return;
-
+        categoriesCnt ++;
+    });
+	
+	Object.entries(categories).forEach(([category, fields]) => {
+        const availableInCategory = fields.filter(f => availableDataFields.has(f));
+        if (availableInCategory.length === 0) return;
+		btnPos ++;
         html += `<div class="filter-category">`;
         html += `<h4>${category}</h4>`;
         html += `<div class="filter-checkboxes">`;
@@ -655,7 +650,15 @@ function renderFilters() {
                 </label>
             `;
         });
-
+		// display save/reset fileds butons underneath the last field list
+		if ( categoriesCnt == btnPos) {
+            html += `
+			<div class="field-persistence-buttons">
+                <button id="saveSelectedFieldsBtn" title="Selektion speichern" class="field-btn field-btn-save" onclick="saveSelectedFields()">💾 Speichern</button>
+                <button id="presetSelectedFieldsBtn" class="field-btn field-btn-reset" onclick="presetSelectedFields()">↺ Reset</button>
+            </div>
+            `;
+		}
         html += `</div></div>`;
     });
 
@@ -670,7 +673,9 @@ function toggleField(field) {
     } else {
         selectedFields.add(field);
     }
-    loadTemperatureData(true);
+    if (cachedTemperatureData && cachedTemperatureData.length > 0) {
+        renderTemperatureChart(cachedTemperatureData);
+    }
 }
 
 // Render ECharts temperature chart
@@ -1132,6 +1137,36 @@ chartStyles.textContent = `
     text-align: center;
     color: #a0a0b0;
     padding: 10px;
+}
+
+.field-persistence-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+
+.field-btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
+    color: #e0e0e0;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+      margin-top: 15px;
+}
+
+.field-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.field-btn-save.field-btn-saved {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #fff;
 }
 
 @media (max-width: 768px) {
