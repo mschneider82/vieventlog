@@ -251,7 +251,7 @@
                 const [value, ...unitParts] = formatted.split(' ');
                 const unit = unitParts.join(' ');
                 // Check if DHW is currently active (4-way valve in domesticHotWater position)
-                const isDhwActive = kf.fourWayValve && kf.fourWayValve.value === 'domesticHotWater';
+                const isDhwActive = kf.fourWayValve && (kf.fourWayValve.value === 'domesticHotWater' || kf.fourWayValve.value === 'climateCircuitTwoDefrostDomesticHotWater') ;
                 const dhwClass = isDhwActive ? 'with-bg-fire' : '';
                 tempsGroup3 += `
                     <div class="temp-item ${dhwClass}">
@@ -1812,6 +1812,7 @@
             // 4/3-Way Valve Position
             if (kf.fourWayValve) {
                 const valveLabels = {
+					'climateCircuitTwoDefrostDomesticHotWater': 'Warmwasser',
                     'domesticHotWater': 'Warmwasser',
                     'heating': 'Heizen',
                     'cooling': 'Kühlen',
