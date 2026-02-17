@@ -2,6 +2,15 @@
 // Rendering functions for standard heating devices (Vitocal/Vitodens)
 // Part 2 of 3 - refactored from dashboard-render.js
 
+        // Returns true if the compressor is currently running.
+        // Prefers the boolean compressorActive field; falls back to compressorSpeed > 0.
+        function isCompressorRunning(kf) {
+            if (kf.compressorActive) {
+                return kf.compressorActive.value;
+            }
+            return kf.compressorSpeed && kf.compressorSpeed.value > 0;
+        }
+
         function renderDeviceHeader(deviceInfo, kf) {
             // Prefer device.name feature over modelId/displayName
             let deviceTitle = deviceInfo.modelId || deviceInfo.displayName;
@@ -227,11 +236,9 @@
             }
 
             // Only show spreizung when compressor is active or volumetric flow
-			const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
-			// Use compressorActive boolean if available, otherwise fall back to compressorSpeed
-            const isRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
-            if ((typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) || isRunning) {
-	            // Spreizung Sekundärkreis/Heizkreis - use central calculation
+            const volumetricFlowValue = kf.volumetricFlow ? unwrapValue(kf.volumetricFlow.value) : null;
+            if ((typeof volumetricFlowValue === 'number' && volumetricFlowValue > 50.0) || isCompressorRunning(kf)) {
+                // Spreizung Sekundärkreis/Heizkreis - use central calculation
                 const spreizungResult = calculateSpreizung(kf, hasHotWaterBuffer);
                 if (spreizungResult.spreizung !== null) {
                     tempsGroup2 += `
@@ -272,9 +279,8 @@
 					const formatted = formatValue(kf.boilerTemp);
                 	const [value, ...unitParts] = formatted.split(' ');
                 	const unit = unitParts.join(' ');
-	                // Check if compressor is running
-    	            const isCompressorRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
-        	        const compressorClass = isCompressorRunning ? 'with-bg-fan' : '';
+                    // Check if compressor is running
+                    const compressorClass = isCompressorRunning(kf) ? 'with-bg-fan' : '';
             	    tempsGroup3 += `
                 	    <div class="temp-item ${compressorClass}">
                     	    <span class="temp-label">Wärmeerzeuger-Vorlauf</span>
@@ -527,8 +533,7 @@
 
             if (hasCompressor) {
                 title = '⚙️ Verdichter';
-                // Use compressorActive boolean if available, otherwise fall back to compressorSpeed
-                const isRunning = kf.compressorActive ? kf.compressorActive.value : (kf.compressorSpeed && kf.compressorSpeed.value > 0);
+                const isRunning = isCompressorRunning(kf);
 
                 // Convert speed to RPM if unit is revolutionsPerSecond
                 let speedValue = kf.compressorSpeed && kf.compressorSpeed.value !== undefined ? kf.compressorSpeed.value : 0;
