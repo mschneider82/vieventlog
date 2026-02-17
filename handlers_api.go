@@ -1035,7 +1035,9 @@ func HandleConsumptionStats(w http.ResponseWriter, r *http.Request) {
 			stats, err = GetConsumptionStats(installationID, gatewaySerial, deviceID, startTime, endTime)
 			if err == nil {
 				stats.Period = "range"
-				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, endTime)
+				// GetDailyConsumptionBreakdown adds +24h internally, so pass toDate (not endTime=toDate+24h)
+				toDateMidnight := time.Date(toDate.Year(), toDate.Month(), toDate.Day(), 0, 0, 0, 0, DefaultLocation)
+				dailyBreakdown, _ = GetDailyConsumptionBreakdown(installationID, gatewaySerial, deviceID, startTime, toDateMidnight)
 				stats.DailyBreakdown = dailyBreakdown
 			}
 		}

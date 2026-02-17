@@ -1419,13 +1419,10 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 	}
 	fallbackInterval := settings.SampleInterval
 
-	// Lokale Tagesgrenzen → UTC für indexierbare Filterung
+	// Start of day (00:00:00 CET/CEST) to end of day (exclusive: 00:00:00 next day)
 	// Using DefaultLocation which supports both CET and CEST (Europe/Berlin)
-	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
-	end   := time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999999999, DefaultLocation)
-
-	startUTC := start.UTC().Format(time.RFC3339Nano)
-	endUTC   := end.UTC().Format(time.RFC3339Nano)
+	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, DefaultLocation)
+	endTime := startTime.Add(24 * time.Hour)
 
 	query := `
 		SELECT
@@ -1445,14 +1442,14 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp <= ?
+			AND timestamp < ?
 		GROUP BY hour
 		ORDER BY hour ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startUTC, endUTC)
+		startTime.UTC().Format(time.RFC3339), endTime.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query hourly breakdown: %v", err)
 	}
@@ -1473,7 +1470,11 @@ func GetHourlyConsumptionBreakdown(installationID, gatewayID, deviceID string, d
 			continue
 		}
 
-		hourInt, _ := strconv.Atoi(hourStr)
+		hourInt, err := strconv.Atoi(hourStr)
+		if err != nil {
+			log.Printf("Warning: unexpected hour value %q: %v", hourStr, err)
+			continue
+		}
 
 		// Convert Wh to kWh (energy already calculated correctly in SQL)
 		eKWh := 0.0
@@ -1519,15 +1520,10 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 	}
 	fallbackInterval := settings.SampleInterval
 
-	// Normalize to start of day for startDate and end of day for endDate
-	// *** WICHTIGER FIX ***
-	// Lokale Tagesgrenzen erzeugen – NICHT aus UTC geparsten Dates!
-	startLocal := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, DefaultLocation)
-	endLocal   := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, DefaultLocation)
-
-	// Danach erst in UTC umwandeln
-	startUTC := startLocal.UTC().Format(time.RFC3339Nano)
-	endUTC   := endLocal.UTC().Format(time.RFC3339Nano)
+	// Normalize to start of day for startDate, exclusive start of next day for endDate
+	// This ensures we get complete days in local time (CET/CEST)
+	start := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, DefaultLocation)
+	end := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, DefaultLocation).Add(24 * time.Hour)
 
 	query := `
 		SELECT
@@ -1547,14 +1543,14 @@ func GetDailyConsumptionBreakdown(installationID, gatewayID, deviceID string, st
 			AND gateway_id = ?
 			AND device_id = ?
 			AND timestamp >= ?
-			AND timestamp <= ?
+			AND timestamp < ?
 		GROUP BY day
 		ORDER BY day ASC
 	`
 
 	rows, err := eventDB.Query(query, fallbackInterval, fallbackInterval, fallbackInterval,
 		installationID, gatewayID, deviceID,
-		startUTC, endUTC)
+		start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily breakdown: %v", err)
 	}
