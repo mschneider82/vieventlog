@@ -348,31 +348,42 @@ function renderOtherRefrigerantCircuitPic(keyFeatures) {
         }
     }
 	
-    // Map values according to Mapping.png
+    // Map values according to WMPrefrigerant.jpg (1299x547px)
     const values = {
-        //  Verdampfer Überhitzung (Sauggastemperatur Verdampfer)
+        //  Verdampfer Flüssigtemperatur (tO)
         evaporatorTemp: validate(keyFeatures.evaporatorTemp),
+        //  Verdampfer Überhitzung
+        evaporatorOverheat: validate(keyFeatures.evaporatorOverheat),
         //  Heizkreis Rücklauftemperatur (Rücklauf Sekundärkreis)
-        returnTemp: validate (keyFeatures.returnTemp),
-        //  Interne Pumpe (Drehzahl Sekundärpumpe)
-        pumpInternal: validate (keyFeatures.pumpInternal),
-        // M: Vorlauftemperatur (Vorlauftemperatur IDU)
-        //supplyTemp: validate (keyFeatures.supplyTemp),
+        returnTemp: validate(keyFeatures.returnTemp),
         //  Vorlauftemperatur (Vorlauftemperatur ODU Sekundärkreis)
-        supplyTempSec: validate (keyFeatures.secondarySupplyTemp),
+        supplyTempSec: validate(keyFeatures.secondarySupplyTemp),
         //  Einlassdruck (Saugasdruck Verdichter)
-        compressorPressure: validate (keyFeatures.compressorPressure),
+        compressorPressure: validate(keyFeatures.compressorPressure),
         //  Einlasstemperatur (Sauggastemperatur Verdichter)
-        compressorInletTemp: validate (keyFeatures.compressorInletTemp),
-        //  Auslasstemperatur (Heissgastemperatur)
-        compressorOutletTemp: validate (keyFeatures.compressorOutletTemp),
-        //  Ein-/Austrittstemperatur Verdampfer (Primärkreis)
-        primarySupply: validate (keyFeatures.primarySupplyTemp),
-		primaryReturn:  validate (keyFeatures.primaryReturnTemp),
+        compressorInletTemp: validate(keyFeatures.compressorInletTemp),
+        //  Auslasstemperatur (Heißgastemperatur Verdichter)
+        compressorOutletTemp: validate(keyFeatures.compressorOutletTemp),
+        //  Eintrittstemperatur Primärkreis (Sole-Eintritt)
+        primarySupply: validate(keyFeatures.primarySupplyTemp),
+        //  Austrittstemperatur Primärkreis (Sole-Austritt)
+        primaryReturn: validate(keyFeatures.primaryReturnTemp),
         //  Außentemperatur
-        outsideTemp: validate (keyFeatures.outsideTemp),
-        //  Warmwasser:
-		dhwTemp:  validate (keyFeatures.dhwTemp),
+        outsideTemp: validate(keyFeatures.outsideTemp),
+        //  Warmwasser
+        dhwTemp: validate(keyFeatures.dhwTemp),
+        // Sole-spezifisch: Heißgasdruck
+        hotGasPressure: validate(keyFeatures.hotGasPressure),
+        // Sole-spezifisch: Sauggasdruck
+        suctionGasPressure: validate(keyFeatures.suctionGasPressure),
+        // Sole-spezifisch: Heißgastemperatur
+        hotGasTemp: validate(keyFeatures.hotGasTemp),
+        // Sole-spezifisch: Sauggastemperatur
+        suctionGasTemp: validate(keyFeatures.suctionGasTemp),
+        // Sole-spezifisch: Flüssiggastemperatur
+        liquidGasTemp: validate(keyFeatures.liquidGasTemp),
+        // Sole-spezifisch: Primärkreis Pumpendrehzahl
+        primaryRotation: validate(keyFeatures.primaryRotation),
     };
 
 
@@ -404,8 +415,8 @@ function renderOtherRefrigerantCircuitPic(keyFeatures) {
             <div class="refrigerant-visual-container">
                 <div class="refrigerant-diagram">
                     <img src="${baseImage}" alt="Kältekreislauf" class="base-diagram">
-					
-					<!-- Component overlays with status images -->
+
+                    <!-- Component overlays with status images -->
                     <!-- DHW Storage -->
                     ${dhw_exists ? `
                     <img src="${dhw_image}"
@@ -413,22 +424,31 @@ function renderOtherRefrigerantCircuitPic(keyFeatures) {
                     ` : ''}
 
                     <!-- Individual value overlays with tooltips -->
-                    <!-- Alle Positionen basierend auf View-Größe 1299x547px -->
+                    <!-- Alle Positionen basierend auf WMPrefrigerant.jpg 1299x547px -->
 
-                    ${values.compressorInletTemp !== null ? `<div class="value-label" style="top: 18%; left: 55%;" title="Kompressor Einlasstemperatur">${formatValue(values.compressorInletTemp, '°C')}</div>` : ''}
-                    ${values.compressorPressure !== null ? `<div class="value-label" style="top: 23%; left: 55%;" title="Kompressor Einlassdruck">${formatValue(values.compressorPressure, 'bar')}</div>` : ''}
-                    ${values.compressorOutletTemp !== null ? `<div class="value-label" style="top: 18%; left: 39%;" title="Kompressor Auslasstemperatur">${formatValue(values.compressorOutletTemp, '°C')}</div>` : ''}
+                    ${values.compressorInletTemp !== null ? `<div class="value-label" style="top: 18.00%; left: 55.00%;" title="Kompressor Einlasstemperatur">${formatValue(values.compressorInletTemp, '°C')}</div>` : ''}
+                    ${values.compressorPressure !== null ? `<div class="value-label" style="top: 23.00%; left: 55.00%;" title="Kompressor Einlassdruck">${formatValue(values.compressorPressure, 'bar')}</div>` : ''}
+                    ${values.compressorOutletTemp !== null ? `<div class="value-label" style="top: 18.00%; left: 39.00%;" title="Kompressor Auslasstemperatur">${formatValue(values.compressorOutletTemp, '°C')}</div>` : ''}
 
-                    ${values.returnTemp !== null ? `<div class="value-label" style="top: 84%; left: 15%;" title="Rücklauftemperatur">${formatValue(values.returnTemp, '°C')}</div>` : ''}
-                    ${values.supplyTempSec !== null ? `<div class="value-label" style="top: 16%; left: 15%;" title="sekundär Vorlauftemperatur">${formatValue(values.supplyTempSec, '°C')}</div>` : ''}
+                    ${values.returnTemp !== null ? `<div class="value-label" style="top: 84.00%; left: 15.00%;" title="Rücklauftemperatur sekundär">${formatValue(values.returnTemp, '°C')}</div>` : ''}
+                    ${values.supplyTempSec !== null ? `<div class="value-label" style="top: 16.00%; left: 15.00%;" title="Vorlauftemperatur sekundär">${formatValue(values.supplyTempSec, '°C')}</div>` : ''}
 
-                    ${values.evaporatorTemp !== null ? `<div class="value-label" style="top: 60%; left: 80%;" title="Verdampfer Temperatur">tO:${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
-                    ${values.primarySupply !== null ? `<div class="value-label" style="top: 16%; left: 80%;" title="Eintrittstemperatur">${formatValue(values.primarySupply, '°C')}</div>` : ''}
-                    ${values.primaryReturn !== null ? `<div class="value-label" style="top: 84%; left: 80%;" title="Austrittstemperatur">${formatValue(values.primaryReturn, '°C')}</div>` : ''}
-                    ${values.outsideTemp !== null ? `<div class="value-label" style="top: 49%; left: 92%;" title="Außentemperatur">${formatValue(values.outsideTemp, '°C')}</div>` : ''}
+                    ${values.evaporatorTemp !== null ? `<div class="value-label" style="top: 59.09%; left: 85.39%;" title="Verdampfer Flüssigtemperatur (tO)">tO:${formatValue(values.evaporatorTemp, '°C')}</div>` : ''}
+                    ${values.evaporatorOverheat !== null ? `<div class="value-label" style="top: 50.00%; left: 85.00%;" title="Verdampfer Überhitzung">${formatValue(values.evaporatorOverheat, '°C')}</div>` : ''}
+                    ${values.primarySupply !== null ? `<div class="value-label" style="top: 16.00%; left: 80.00%;" title="Eintrittstemperatur Primärkreis (Sole)">${formatValue(values.primarySupply, '°C')}</div>` : ''}
+                    ${values.primaryReturn !== null ? `<div class="value-label" style="top: 84.00%; left: 80.00%;" title="Austrittstemperatur Primärkreis (Sole)">${formatValue(values.primaryReturn, '°C')}</div>` : ''}
+                    ${values.outsideTemp !== null ? `<div class="value-label" style="top: 49.00%; left: 92.00%;" title="Außentemperatur">${formatValue(values.outsideTemp, '°C')}</div>` : ''}
+
+                    <!-- Sole-spezifische Sensoren -->
+                    ${values.hotGasPressure !== null ? `<div class="value-label" style="top: 52.49%; left: 55.23%;" title="Heißgasdruck">${formatValue(values.hotGasPressure, 'bar')}</div>` : ''}
+                    ${values.suctionGasPressure !== null ? `<div class="value-label" style="top: 44.14%; left: 55.31%;" title="Sauggasdruck">${formatValue(values.suctionGasPressure, 'bar')}</div>` : ''}
+                    ${values.hotGasTemp !== null ? `<div class="value-label" style="top: 25.16%; left: 39.08%;" title="Heißgastemperatur">${formatValue(values.hotGasTemp, '°C')}</div>` : ''}
+                    ${values.suctionGasTemp !== null ? `<div class="value-label" style="top: 12.00%; left: 55.00%;" title="Sauggastemperatur">${formatValue(values.suctionGasTemp, '°C')}</div>` : ''}
+                    ${values.liquidGasTemp !== null ? `<div class="value-label" style="top: 81.86%; left: 39.44%;" title="Flüssiggastemperatur">${formatValue(values.liquidGasTemp, '°C')}</div>` : ''}
+                    ${values.primaryRotation !== null ? `<div class="value-label" style="top: 38.67%; left: 93.48%;" title="Primärkreis Pumpendrehzahl">${formatValue(values.primaryRotation, '%', 0)}</div>` : ''}
 
                     <!-- Speichertemperaturen (unter den Speicher-Bildern) -->
-                    ${values.dhwTemp !== null ? `<div class="value-label" style="top: 65%; left: 4.5%;" title="Warmwasser Temperatur">${formatValue(values.dhwTemp, '°C')}</div>` : ''}
+                    ${values.dhwTemp !== null ? `<div class="value-label" style="top: 65.00%; left: 4.50%;" title="Warmwasser Temperatur">${formatValue(values.dhwTemp, '°C')}</div>` : ''}
 
                 </div>
             </div>

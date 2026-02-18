@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Sole Kältekreislauf – Layout Dev Tool</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; }
+
+#topbar {
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+#topbar h1 { font-size: 14px; color: #e94560; white-space: nowrap; }
+#info-box {
+    font-size: 12px;
+    background: #0f3460;
+    padding: 4px 10px;
+    border-radius: 4px;
+    min-width: 260px;
+}
+#info-box span { color: #e94560; font-weight: bold; }
+button {
+    font-family: monospace;
+    font-size: 12px;
+    padding: 4px 12px;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #0f3460;
+    color: #e0e0e0;
+}
+button:hover { background: #e94560; border-color: #e94560; }
+#reset-btn { background: #2a2a4a; }
+#toggle-labels { background: #2a1a3a; }
+
+#main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+#canvas-area {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+#diagram-wrap {
+    position: relative;
+    display: inline-block;
+    border: 2px solid #0f3460;
+    flex-shrink: 0;
+}
+#diagram-wrap img {
+    display: block;
+    max-width: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.lbl {
+    position: absolute;
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.3);
+    cursor: move;
+    user-select: none;
+    white-space: nowrap;
+    line-height: 1.4;
+    transform: translate(-50%, -50%);
+}
+.lbl:hover { border-color: #e94560; z-index: 100; }
+.lbl.active { border-color: #e94560; background: rgba(233,69,96,0.3); z-index: 200; }
+.lbl.new-field { border-color: #00ff88; background: rgba(0,255,136,0.15); }
+.lbl.new-field.active { background: rgba(0,255,136,0.3); }
+.lbl-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: #e94560;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 50;
+}
+.lbl-dot.new-field { background: #00ff88; }
+
+#sidebar {
+    width: 320px;
+    background: #16213e;
+    border-left: 1px solid #0f3460;
+    overflow-y: auto;
+    padding: 10px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#sidebar h3 { font-size: 12px; color: #e94560; border-bottom: 1px solid #0f3460; padding-bottom: 4px; }
+
+.field-item {
+    font-size: 11px;
+    padding: 5px 8px;
+    background: #0f3460;
+    border-radius: 4px;
+    cursor: pointer;
+    border-left: 3px solid #0f3460;
+    line-height: 1.6;
+}
+.field-item:hover { background: #1a4a80; }
+.field-item.selected { border-left-color: #e94560; background: #1a3060; }
+.field-item.new-field { border-left-color: #00ff88; }
+.field-item .fname { color: #aaa; font-size: 10px; }
+.field-item .fval { color: #fff; font-weight: bold; }
+.field-item .fpos { color: #e94560; font-size: 10px; }
+.field-item.new-field .fpos { color: #00ff88; }
+
+#export-box {
+    background: #0a0a1a;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 10px;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+    line-height: 1.5;
+    color: #aaffaa;
+}
+
+#cursor-pos {
+    font-size: 11px;
+    color: #888;
+    padding: 3px 0;
+}
+
+.legend { font-size: 10px; display: flex; gap: 12px; align-items: center; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+    <h1>Sole Kältekreislauf – Layout Dev Tool</h1>
+    <div id="info-box">
+        Ausgewählt: <span id="sel-name">–</span> &nbsp;|&nbsp;
+        top: <span id="sel-top">–</span> &nbsp; left: <span id="sel-left">–</span>
+        &nbsp;|&nbsp; px: <span id="sel-px">–</span>
+    </div>
+    <div id="cursor-pos">Cursor: –</div>
+    <button id="copy-btn" onclick="copyExport()">Export kopieren</button>
+    <button id="reset-btn" onclick="resetPositions()">Positionen zurücksetzen</button>
+    <button id="toggle-labels" onclick="toggleLabels()">Labels ein/aus</button>
+    <div class="legend">
+        <span><span class="legend-dot" style="background:#e94560"></span> bestehend</span>
+        <span><span class="legend-dot" style="background:#00ff88"></span> neu</span>
+    </div>
+</div>
+
+<div id="main">
+    <div id="canvas-area">
+        <div id="diagram-wrap">
+            <img id="base-img" src="/static/img/vitocal/WMPrefrigerant.jpg" alt="WM Sole Kältekreislauf" draggable="false">
+            <!-- Labels werden per JS eingefügt -->
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <h3>Felder</h3>
+        <div id="field-list"></div>
+        <h3 style="margin-top:8px;">Export (top% / left%)</h3>
+        <pre id="export-box">– Noch kein Export –</pre>
+        <button onclick="copyExport()" style="margin-top:4px;">In Zwischenablage kopieren</button>
+    </div>
+</div>
+
+<script>
+// ── Echtdaten aus dem JSON (config_entry-vicare-9b3383069ba18a8d462053cd5ec5516a.json) ──
+const FIELDS = [
+    // id, label (Anzeige auf dem Bild), apiPath, value, unit, top%, left%, isNew
+    {
+        id: 'compressorInletTemp',
+        label: 'Einlasstemp.',
+        apiPath: 'heating.compressors.0.sensors.temperature.inlet',
+        value: '25.4 °C',
+        top: 18, left: 55,
+        isNew: false,
+    },
+    {
+        id: 'compressorPressure',
+        label: 'Einlassdruck',
+        apiPath: 'heating.compressors.0.sensors.pressure.inlet',
+        value: '12.5 bar',
+        top: 23, left: 55,
+        isNew: false,
+    },
+    {
+        id: 'compressorOutletTemp',
+        label: 'Auslasstemp.',
+        apiPath: 'heating.compressors.0.sensors.temperature.outlet',
+        value: '34.5 °C',
+        top: 18, left: 39,
+        isNew: false,
+    },
+    {
+        id: 'returnTemp',
+        label: 'Rücklauf sek.',
+        apiPath: 'heating.sensors.temperature.return',
+        value: '36.3 °C',
+        top: 84, left: 15,
+        isNew: false,
+    },
+    {
+        id: 'supplyTempSec',
+        label: 'Vorlauf sek.',
+        apiPath: 'heating.secondaryCircuit.sensors.temperature.supply',
+        value: '37.5 °C',
+        top: 16, left: 15,
+        isNew: false,
+    },
+    {
+        id: 'evaporatorTemp',
+        label: 'tO= Verdampfer',
+        apiPath: 'heating.evaporators.0.sensors.temperature.liquid',
+        value: '24.4 °C',
+        top: 60, left: 80,
+        isNew: false,
+        note: '⚠ falsch platziert',
+    },
+    {
+        id: 'primarySupply',
+        label: 'Eintritt Primär',
+        apiPath: 'heating.primaryCircuit.sensors.temperature.supply',
+        value: '13.9 °C',
+        top: 16, left: 80,
+        isNew: false,
+    },
+    {
+        id: 'primaryReturn',
+        label: 'Austritt Primär',
+        apiPath: 'heating.primaryCircuit.sensors.temperature.return',
+        value: '13.5 °C',
+        top: 84, left: 80,
+        isNew: false,
+    },
+    {
+        id: 'outsideTemp',
+        label: 'Außentemp.',
+        apiPath: 'heating.sensors.temperature.outside',
+        value: '13.6 °C',
+        top: 49, left: 92,
+        isNew: false,
+    },
+    {
+        id: 'dhwTemp',
+        label: 'WW-Temp.',
+        apiPath: 'heating.dhw.sensors.temperature.hotWaterStorage',
+        value: '41.5 °C',
+        top: 65, left: 4.5,
+        isNew: false,
+    },
+    // ── Neu hinzuzufügende Felder ──
+    {
+        id: 'hotGasPressure',
+        label: 'Heißgasdruck',
+        apiPath: 'heating.sensors.pressure.hotGas',
+        value: '17.3 bar',
+        top: 30, left: 50,
+        isNew: true,
+    },
+    {
+        id: 'primaryRotation',
+        label: 'Primärkreis Pumpe',
+        apiPath: 'heating.primaryCircuit.sensors.rotation',
+        value: '0 %',
+        top: 50, left: 75,
+        isNew: true,
+    },
+    {
+        id: 'liquidGasTemp',
+        label: 'Flüssiggastemp.',
+        apiPath: 'heating.sensors.temperature.liquidGas',
+        value: '24.4 °C',
+        top: 40, left: 70,
+        isNew: true,
+    },
+    // Weitere vorhandene Sensoren (zur Vollständigkeit)
+    {
+        id: 'suctionGasPressure',
+        label: 'Sauggasdruck',
+        apiPath: 'heating.sensors.pressure.suctionGas',
+        value: '12.5 bar',
+        top: 35, left: 55,
+        isNew: true,
+    },
+    {
+        id: 'hotGasTemp',
+        label: 'Heißgastemp.',
+        apiPath: 'heating.sensors.temperature.hotGas',
+        value: '34.5 °C',
+        top: 12, left: 39,
+        isNew: true,
+    },
+    {
+        id: 'suctionGasTemp',
+        label: 'Sauggastemp.',
+        apiPath: 'heating.sensors.temperature.suctionGas',
+        value: '25.4 °C',
+        top: 12, left: 55,
+        isNew: true,
+    },
+    {
+        id: 'evaporatorOverheat',
+        label: 'Verdampfer ÜH',
+        apiPath: 'heating.evaporators.0.sensors.temperature.overheat',
+        value: '0.0 °C',
+        top: 50, left: 85,
+        isNew: true,
+    },
+];
+
+// Aktuelle Positionen (werden beim Ziehen aktualisiert)
+const positions = {};
+FIELDS.forEach(f => {
+    positions[f.id] = { top: f.top, left: f.left };
+});
+
+let selectedId = null;
+let labelsVisible = true;
+
+const wrap = document.getElementById('diagram-wrap');
+const img  = document.getElementById('base-img');
+
+function getImgSize() {
+    return { w: img.offsetWidth, h: img.offsetHeight };
+}
+
+function renderLabels() {
+    // Alle alten Labels/Dots entfernen
+    wrap.querySelectorAll('.lbl, .lbl-dot').forEach(e => e.remove());
+
+    FIELDS.forEach(f => {
+        if (!labelsVisible) return;
+        const pos = positions[f.id];
+        const { w, h } = getImgSize();
+
+        const pxLeft = pos.left / 100 * w;
+        const pxTop  = pos.top  / 100 * h;
+
+        // Dot (Ankerpunkt)
+        const dot = document.createElement('div');
+        dot.className = 'lbl-dot' + (f.isNew ? ' new-field' : '');
+        dot.style.left = pxLeft + 'px';
+        dot.style.top  = pxTop  + 'px';
+        wrap.appendChild(dot);
+
+        // Label
+        const lbl = document.createElement('div');
+        lbl.className = 'lbl' + (f.isNew ? ' new-field' : '') + (selectedId === f.id ? ' active' : '');
+        lbl.id = 'lbl-' + f.id;
+        lbl.dataset.id = f.id;
+        lbl.style.left = pxLeft + 'px';
+        lbl.style.top  = pxTop  + 'px';
+        lbl.innerHTML = f.label + '<br><b>' + f.value + '</b>' + (f.note ? '<br><span style="color:#ffaa00;font-size:9px">' + f.note + '</span>' : '');
+        lbl.addEventListener('mousedown', onLabelMousedown);
+        wrap.appendChild(lbl);
+    });
+}
+
+function renderSidebar() {
+    const list = document.getElementById('field-list');
+    list.innerHTML = '';
+    FIELDS.forEach(f => {
+        const pos = positions[f.id];
+        const div = document.createElement('div');
+        div.className = 'field-item' + (f.isNew ? ' new-field' : '') + (selectedId === f.id ? ' selected' : '');
+        div.innerHTML =
+            '<div class="fname">' + f.apiPath + '</div>' +
+            '<div class="fval">' + f.label + ': ' + f.value + (f.note ? ' <span style="color:#ffaa00">' + f.note + '</span>' : '') + '</div>' +
+            '<div class="fpos">top: ' + pos.top.toFixed(2) + '%  left: ' + pos.left.toFixed(2) + '%</div>';
+        div.addEventListener('click', () => {
+            selectedId = f.id;
+            renderLabels();
+            renderSidebar();
+            updateInfoBox(f.id);
+            updateExport();
+        });
+        list.appendChild(div);
+    });
+}
+
+function updateInfoBox(id) {
+    const f = FIELDS.find(x => x.id === id);
+    const pos = positions[id];
+    const { w, h } = getImgSize();
+    document.getElementById('sel-name').textContent = f ? f.label : '–';
+    document.getElementById('sel-top').textContent  = pos ? pos.top.toFixed(2) + '%' : '–';
+    document.getElementById('sel-left').textContent = pos ? pos.left.toFixed(2) + '%' : '–';
+    if (pos) {
+        const px = Math.round(pos.left / 100 * w) + 'px / ' + Math.round(pos.top / 100 * h) + 'px';
+        document.getElementById('sel-px').textContent = px;
+    }
+}
+
+function updateExport() {
+    const lines = FIELDS.map(f => {
+        const pos = positions[f.id];
+        const marker = f.isNew ? '// NEU: ' : '// ';
+        return marker + f.apiPath + '\n' +
+               '// ' + f.label + ': ' + f.value + (f.note ? ' ' + f.note : '') + '\n' +
+               '{ id: \'' + f.id + '\', top: ' + pos.top.toFixed(2) + ', left: ' + pos.left.toFixed(2) + ' },';
+    });
+    document.getElementById('export-box').textContent = lines.join('\n\n');
+}
+
+// ── Drag-and-drop ──
+
+let dragging = null;
+let dragStart = null;
+let origPos   = null;
+
+function onLabelMousedown(e) {
+    e.preventDefault();
+    const id = e.currentTarget.dataset.id;
+    selectedId = id;
+    dragging   = id;
+
+    const { w, h } = getImgSize();
+    const rect = wrap.getBoundingClientRect();
+    dragStart = { x: e.clientX, y: e.clientY };
+    origPos   = { ...positions[id] };
+
+    renderLabels();
+    renderSidebar();
+    updateInfoBox(id);
+    updateExport();
+}
+
+document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const { w, h } = getImgSize();
+    const rect = wrap.getBoundingClientRect();
+
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+
+    let newLeft = origPos.left + (dx / w * 100);
+    let newTop  = origPos.top  + (dy / h * 100);
+
+    // Innerhalb des Bildes halten
+    newLeft = Math.max(0, Math.min(100, newLeft));
+    newTop  = Math.max(0, Math.min(100, newTop));
+
+    positions[dragging] = { left: newLeft, top: newTop };
+
+    // Nur das aktive Label live aktualisieren (kein volles Re-render)
+    const pxLeft = newLeft / 100 * w;
+    const pxTop  = newTop  / 100 * h;
+    const lbl = document.getElementById('lbl-' + dragging);
+    if (lbl) {
+        lbl.style.left = pxLeft + 'px';
+        lbl.style.top  = pxTop  + 'px';
+    }
+    const dot = wrap.querySelectorAll('.lbl-dot');
+    // Dot neu positionieren
+    const idx = FIELDS.findIndex(f => f.id === dragging);
+    if (dot[idx]) {
+        dot[idx].style.left = pxLeft + 'px';
+        dot[idx].style.top  = pxTop  + 'px';
+    }
+
+    updateInfoBox(dragging);
+    // Sidebar-Position live updaten
+    const sideItem = document.getElementById('field-list').children[idx];
+    if (sideItem) {
+        const posDiv = sideItem.querySelector('.fpos');
+        if (posDiv) posDiv.textContent = 'top: ' + newTop.toFixed(2) + '%  left: ' + newLeft.toFixed(2) + '%';
+    }
+    updateExport();
+});
+
+document.addEventListener('mouseup', () => {
+    if (dragging) {
+        renderLabels();
+        renderSidebar();
+        updateExport();
+    }
+    dragging = null;
+});
+
+// Cursor-Position über dem Bild anzeigen
+wrap.addEventListener('mousemove', (e) => {
+    const rect = wrap.getBoundingClientRect();
+    const { w, h } = getImgSize();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const xPct = (x / w * 100).toFixed(1);
+    const yPct = (y / h * 100).toFixed(1);
+    document.getElementById('cursor-pos').textContent =
+        'Cursor: ' + Math.round(x) + 'px/' + Math.round(y) + 'px  →  top: ' + yPct + '%  left: ' + xPct + '%';
+});
+
+function toggleLabels() {
+    labelsVisible = !labelsVisible;
+    renderLabels();
+}
+
+function resetPositions() {
+    FIELDS.forEach(f => {
+        positions[f.id] = { top: f.top, left: f.left };
+    });
+    renderLabels();
+    renderSidebar();
+    if (selectedId) updateInfoBox(selectedId);
+    updateExport();
+}
+
+function copyExport() {
+    const text = document.getElementById('export-box').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copy-btn');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Kopiert!';
+        setTimeout(() => btn.textContent = orig, 2000);
+    });
+}
+
+// Init nach Bild-Laden
+img.addEventListener('load', () => {
+    renderLabels();
+    renderSidebar();
+    updateExport();
+});
+if (img.complete) {
+    renderLabels();
+    renderSidebar();
+    updateExport();
+}
+</script>
+</body>
+</html>

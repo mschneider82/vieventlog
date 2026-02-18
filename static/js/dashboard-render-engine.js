@@ -528,6 +528,14 @@
                 economizerTemp: find(['heating.economizers.0.sensors.temperature.liquid']),
                 inverterTemp: find(['heating.inverters.0.sensors.temperature.powerModule']),
 
+                // Sole/Brine system specific sensors
+                hotGasPressure: find(['heating.sensors.pressure.hotGas']),
+                suctionGasPressure: find(['heating.sensors.pressure.suctionGas']),
+                hotGasTemp: find(['heating.sensors.temperature.hotGas']),
+                suctionGasTemp: find(['heating.sensors.temperature.suctionGas']),
+                liquidGasTemp: find(['heating.sensors.temperature.liquidGas']),
+                primaryRotation: find(['heating.primaryCircuit.sensors.rotation']),
+
                 // Device information
                 deviceSerial: find(['device.serial']),
                 deviceType: find(['device.type']),
