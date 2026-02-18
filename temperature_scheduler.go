@@ -762,8 +762,9 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 
 			if !hasHotWaterBuffer {
 				if snapshot.HeatingCircuit0SupplyTemp != nil {
-					deltaT0 := *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
-					snapshot.HeatingCircuit0DeltaT = &deltaT0
+					// deltaT is used for calculation of thermalPower/cop
+					deltaT = *snapshot.HeatingCircuit0SupplyTemp - *returnTemp
+					snapshot.HeatingCircuit0DeltaT = &deltaT
 				}
 				if snapshot.HeatingCircuit1SupplyTemp != nil {
 					deltaT1 := *snapshot.HeatingCircuit1SupplyTemp - *returnTemp
