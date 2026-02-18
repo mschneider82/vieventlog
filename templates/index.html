@@ -1026,11 +1026,10 @@
                             <div class="event-time">${formatTimestamp(event.eventTimestamp || event.createdAt)}</div>
                             <div class="event-type">
                                 ${eventTypeDisplay}
-                                ${statusIndicator}
                                 ${deviceInfo}
                                 ${accountInfo}
                                 ${installationInfo}
-                                ${event.humanReadable ? `<div class="code-description">${event.humanReadable}</div>` : ''}
+                                ${event.humanReadable ? `<div class="code-description">${event.humanReadable}&nbsp &nbsp${statusIndicator}</div>` : `${statusIndicator}`}
                             </div>
                             <div class="event-badge ${category}">${category.toUpperCase()}</div>
                         </div>
