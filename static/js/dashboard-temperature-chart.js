@@ -53,8 +53,6 @@ async function initTemperatureChart() {
     // Check if chart container already exists
     let chartSection = document.getElementById('temperature-chart-section');
     if (!chartSection) {
-		// set timerange according to button selected
-		currentTimeRange = '24h';
         // Insert temperature chart section before other content
         chartSection = document.createElement('div');
         chartSection.id = 'temperature-chart-section';
@@ -64,15 +62,15 @@ async function initTemperatureChart() {
                 <h2>📊 Temperatur- und Sensor-Verlauf</h2>
                 <div class="chart-controls">
                     <div class="time-range-selector">
-                        <button class="time-btn" data-range="1h">1h</button>
-                        <button class="time-btn" data-range="6h">6h</button>
-                        <button class="time-btn" data-range="12h">12h</button>
-                        <button class="time-btn active" data-range="24h">24h</button>
-                        <button class="time-btn" data-range="48h">48h</button>
-                        <button class="time-btn" data-range="72h">72h</button>
-                        <button class="time-btn" data-range="7d">7d</button>
-                        <button class="time-btn" data-range="30d">30d</button>
-                        <button class="time-btn" data-range="90d">90d</button>
+                        <button class='time-btn ${ (currentTimeRange == "1") ? 'active' : ''}' data-range='1h'>1h</button>
+                        <button class='time-btn ${ (currentTimeRange == "6h") ? 'active' : ''}' data-range='6h'>6h</button>
+                        <button class='time-btn ${ (currentTimeRange == "12h") ? 'active' : ''}' data-range='12h'>12h</button>
+                        <button class='time-btn ${ (currentTimeRange == "24h") ? 'active' : ''}' data-range='24h'>24h</button>
+                        <button class='time-btn ${ (currentTimeRange == "48h") ? 'active' : ''}' data-range='48h'>48h</button>
+                        <button class='time-btn ${ (currentTimeRange == "72h") ? 'active' : ''}' data-range='72h'>72h</button>
+                        <button class='time-btn ${ (currentTimeRange == "7d") ? 'active' : ''}' data-range='7d'>7d</button>
+                        <button class='time-btn ${ (currentTimeRange == "30d") ? 'active' : ''}' data-range='30d'>30d</button>
+                        <button class='time-btn ${ (currentTimeRange == "90d") ? 'active' : ''}' data-range='90d'>90d</button>
                         <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
                             <label for="temperatureCustomDatePicker" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Bestimmter Tag:</label>
                             <input type="date" id="temperatureCustomDatePicker" class="custom-date-input" style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
