@@ -203,11 +203,15 @@
         }
 
         .event-item {
-            padding: 15px 30px;
+            padding: 4px 30px;
             border-bottom: 1px solid rgba(255,255,255,0.05);
             transition: background 0.2s;
             cursor: pointer;
         }
+        
+        .event-item-padding {
+                padding: 6px 0px;
+         }
 
         .event-item:hover {
             background: rgba(255,255,255,0.05);
@@ -483,7 +487,11 @@
             }
 
             .event-item {
-                padding: 12px 15px;
+                padding: 4px 15px;
+            }
+            
+            .event-item-padding {
+                padding: 3px 0px;
             }
 
             .event-header {
@@ -577,7 +585,11 @@
             }
 
             .event-item {
-                padding: 10px 12px;
+                padding: 4px 15px;
+            }
+            
+            .event-item-padding {
+                padding: 3px 0px;
             }
 
             .event-type {
@@ -715,6 +727,12 @@
         <div class="events-container">
             <div class="events-header">
                 <h2>Events</h2>
+
+                <label>
+                <input title="Basisliste oder vollständige Liste" type="checkbox" id="showNotImportantEvents" onclick="toggleShowImportantEvents()" checked="checked">
+                <span>Ansicht komprimiert</span>
+                </label>
+                
                 <button id="resetZoomBtn" onclick="resetTimelineZoom()"
                         style="padding: 7px 13px; border: 1px solid rgba(255,255,255,0.2);
                                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
@@ -742,6 +760,7 @@
         let installations = {};
         let autoRefreshInterval = null;
         let autoRefreshEnabled = false;
+        let showEventsNotImportant = true; // true = Ansicht komprimiert, checked
 
         // Pagination state
         let displayedEventCount = 100; // Initial: show 100 events
@@ -811,6 +830,17 @@
                 // 'S.149',  // Abtauen ueber Waermepumpe inaktiv
                 // 'S.152',  // Abtauen ueber Heiz-/Kuehlkreis inaktiv
                 // 'S.163'   // Waermepumpe: Systemstatus inaktiv
+            ],
+            
+            //  importants Events to be shown in the list always
+            // 'F.', 'A.', 'I.',  Error- Warn- Info- Messages are shown always               
+            // only status 'S.xyz' BEENDET are considered redundant, except the following
+            timelineImportant: [
+                'S.74',   // 
+                'S.75',   // 
+                'S.88',   // 
+                'S.89',   // 
+                'S.196',  // 
             ],
 
             // Timeline zoom range filter (set by ECharts dataZoom)
@@ -961,6 +991,15 @@
             renderTimeline(filteredEvents);
         }
 
+        // toggle compressed or full event list
+        function toggleShowImportantEvents(){
+            const btnIsSet = document.getElementById("showNotImportantEvents").checked;
+            if (btnIsSet) showEventsNotImportant = true;
+            else showEventsNotImportant = false;
+    
+           refreshViews();
+        }
+        
         // ========================================
         // RENDERING FUNCTIONS
         // ========================================
@@ -988,10 +1027,20 @@
             container.innerHTML = eventsToDisplay.map((event, index) => {
                 const category = categorizeEvent(event);
                 let statusIndicator = '';
+                let eventNotImportant = false;
                 if (event.active !== null && event.errorCode) {
                     statusIndicator = event.active
                         ? '<span style="color: #c53030;">● AKTIV</span>'
                         : '<span style="color: #48bb78;">● BEENDET</span>';
+
+                    // only status "S.xyz BENDET" may be redundant
+                    if (event.active == false && event.errorCode[0] == "S"){
+                        // status event is in "Important list" do not omit
+                        if (globalFilters.timelineImportant && globalFilters.timelineImportant.includes(event.errorCode) == false){
+                            eventNotImportant = true;
+							if (showEventsNotImportant) statusIndicator = ' beendet';
+                        }
+                    }
                 }
 
                 const deviceInfo = `<span class="device-info">${event.modelId || 'Unknown'} - Device ${event.deviceId || '0'}</span>`;
@@ -1020,8 +1069,25 @@
                     }
                 }
 
-                return `
+                if (showEventsNotImportant && eventNotImportant ){
+                  return ` 
                     <div class="event-item" onclick="toggleEvent(${index})">
+                        <div class="event-details" id="details-${index}">
+Event: 
+${event.errorDescription ? event.errorDescription + "  " + event.humanReadable + "  " + (event.active ? " AKTIV" :" BEENDET") +'\n' : ''}
+Gerät: ${event.modelId || 'Unknown'} (ID: ${event.deviceId || '0'})
+Gateway Serial: ${event.gatewaySerial || 'N/A'}
+
+Rohdaten:
+${formatEventBody(event.body)}
+                        </div>
+                    </div>
+  `;
+                }
+                else {
+                  return `
+                    <div class="event-item" onclick="toggleEvent(${index})">
+                    <div class="event-item-padding"></div>
                         <div class="event-header">
                             <div class="event-time">${formatTimestamp(event.eventTimestamp || event.createdAt)}</div>
                             <div class="event-type">
@@ -1046,10 +1112,13 @@ Gateway Serial: ${event.gatewaySerial || 'N/A'}
 Rohdaten:
 ${formatEventBody(event.body)}
                         </div>
+                    <div class="event-item-padding"></div>
                     </div>
                 `;
-            }).join('');
+                }
+                }).join('');
 
+            
             // Add "Load More" button if there are more events
             if (hasMore) {
                 const remaining = filteredEvents.length - displayedEventCount;
