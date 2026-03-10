@@ -148,9 +148,9 @@ func InitEventDatabase(dbPath string) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_temp_timestamp ON temperature_snapshots(timestamp);
-	CREATE INDEX IF NOT EXISTS idx_temp_installation_id ON temperature_snapshots(installation_id);
+	CREATE INDEX IF NOT EXISTS idx_temp_inst_ts ON temperature_snapshots(installation_id, timestamp);
 	CREATE INDEX IF NOT EXISTS idx_temp_account_id ON temperature_snapshots(account_id);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_temp_unique ON temperature_snapshots(timestamp, installation_id, gateway_id, device_id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_temp_unique ON temperature_snapshots(installation_id, gateway_id, device_id, timestamp);
 	`
 
 	_, err = eventDB.Exec(createTempTableSQL)
@@ -610,9 +610,44 @@ func runSchemaMigrations() error {
 		if err := recordMigration(7, "add_valve_and_pressure", "Add 4/3 valve fields and pressure field"); err != nil {
 			return fmt.Errorf("failed to record migration 7: %v", err)
 		}
-		log.Println("Migration 7 completed: Added fields 4/3 valve, pressure")	
+		log.Println("Migration 7 completed: Added fields 4/3 valve, pressure")
 	}
-	
+
+	// Migration 8: Optimize indices for temperature_snapshots queries
+	if !migrationApplied("optimize_temperature_indices") {
+		log.Println("Running migration 8: Optimizing temperature_snapshots indices...")
+
+		// Composite index for dashboard query: installation_id (equality) + timestamp (range)
+		_, err := eventDB.Exec(`CREATE INDEX IF NOT EXISTS idx_temp_inst_ts
+			ON temperature_snapshots(installation_id, timestamp)`)
+		if err != nil {
+			return fmt.Errorf("migration 8 failed (idx_temp_inst_ts): %v", err)
+		}
+
+		// Reorder unique index: equality columns first, range column last
+		_, err = eventDB.Exec(`DROP INDEX IF EXISTS idx_temp_unique`)
+		if err != nil {
+			return fmt.Errorf("migration 8 failed (drop idx_temp_unique): %v", err)
+		}
+		_, err = eventDB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_temp_unique
+			ON temperature_snapshots(installation_id, gateway_id, device_id, timestamp)`)
+		if err != nil {
+			return fmt.Errorf("migration 8 failed (recreate idx_temp_unique): %v", err)
+		}
+
+		// Drop redundant single-column index
+		_, err = eventDB.Exec(`DROP INDEX IF EXISTS idx_temp_installation_id`)
+		if err != nil {
+			return fmt.Errorf("migration 8 failed (drop idx_temp_installation_id): %v", err)
+		}
+
+		if err := recordMigration(8, "optimize_temperature_indices",
+			"Reorder composite indices for optimal query performance"); err != nil {
+			return fmt.Errorf("failed to record migration 8: %v", err)
+		}
+		log.Println("Migration 8 completed: Optimized temperature_snapshots indices")
+	}
+
 	return nil
 }
 
