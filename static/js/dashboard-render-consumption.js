@@ -1,4 +1,4 @@
-/** 
+/**
  * dashboard-render-consumption.js
  * Renders a detailed consumption tile with statistics and charts
  */
@@ -7,6 +7,7 @@
 let consumptionCache = {};
 let consumptionChartInstance = null;
 let consumptionPeriodChartInstance = null;
+let currentConsumptionView = "daily"; // "daily" | "monthly"
 
 /**
  * Hilfsfunktion: Breakdown nach Zeitraum filtern
@@ -22,6 +23,45 @@ function filterBreakdownByDateRange(breakdown, fromDate, toDate) {
         const ts = new Date(dp.timestamp);
         return ts >= from && ts <= to;
     });
+}
+
+function updateToggleButtons() {
+    const btnDaily = document.getElementById("toggleDaily");
+    const btnMonthly = document.getElementById("toggleMonthly");
+
+    if (!btnDaily || !btnMonthly) return;
+
+    btnDaily.classList.toggle("active", currentConsumptionView === "daily");
+    btnMonthly.classList.toggle("active", currentConsumptionView === "monthly");
+}
+
+function updateConsumptionToggleVisibility(period, fromDate = null, toDate = null) {
+    const toggle = document.getElementById("consumptionViewToggle");
+    if (!toggle) return;
+
+    // Heute / Gestern → Toggle aus
+    if (period === "today" || period === "yesterday") {
+        toggle.style.display = "none";
+        return;
+    }
+
+    // Date-Range aktiv?
+    if (fromDate && toDate) {
+        const isSingleDay = isSameDay(fromDate, toDate);
+
+        // 1 Tag → HOURLY → Toggle aus
+        if (isSingleDay) {
+            toggle.style.display = "none";
+            return;
+        }
+
+        // > 1 Tag → Toggle an
+        toggle.style.display = "flex";
+        return;
+    }
+
+    // Standard: Toggle an
+    toggle.style.display = "flex";
 }
 
 /**
@@ -63,7 +103,7 @@ async function renderConsumptionTile(deviceInfo, features) {
     consumptionSection.innerHTML = `
         <div class="chart-header">
             <h2>⚡ Verbrauchsstatistiken
-                <span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;">  (berechnet)</span>
+                <span style="font-size: 11px; color: #666; margin-left: 10px; font-family: monospace;"> (berechnet)</span>
             </h2>
             <div class="chart-controls">
                 <div class="time-range-selector">
@@ -73,13 +113,18 @@ async function renderConsumptionTile(deviceInfo, features) {
                     <button class="time-btn" data-period="month">Monat</button>
                     <button class="time-btn" data-period="last30days">30 Tage</button>
                     <button class="time-btn" data-period="year">Jahr</button>
+
                     <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
-                        <label for="customDateFrom" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Zeitraum:</label>
+                        <label style="color: #a0a0b0; font-size: 13px;">📅 Zeitraum:</label>
                         <input type="date" id="customDateFrom" class="custom-date-input"
-                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05);
+                               border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+                               color: #fff; font-size: 13px; cursor: pointer;">
                         <span style="color:#a0a0b0;font-size:13px;">bis</span>
                         <input type="date" id="customDateTo" class="custom-date-input"
-                               style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer;">
+                               style="padding: 6px 10px; background: rgba(255,255,255,0.05);
+                               border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+                               color: #fff; font-size: 13px; cursor: pointer;">
                     </div>
                 </div>
             </div>
@@ -94,8 +139,16 @@ async function renderConsumptionTile(deviceInfo, features) {
         <!-- Charts Container -->
         <div class="consumption-charts">
             <!-- Period Overview Chart -->
-            <div class="consumption-chart-wrapper">
+            <div class="consumption-chart-wrapper" style="position: relative;">
                 <h3 id="consumptionChartTitle" style="color: #e0e0e0; font-size: 16px; margin-bottom: 15px;">Tagesverlauf</h3>
+
+                <div id="consumptionViewToggle"
+                     class="view-toggle"
+                     style="display:none; position:absolute; top:0; right:10px;">
+                    <button id="toggleDaily" class="toggle-btn active">Tag</button>
+                    <button id="toggleMonthly" class="toggle-btn">Monat</button>
+                </div>
+
                 <div id="consumptionChart" style="width: 100%; height: 400px;"></div>
             </div>
 
@@ -114,11 +167,7 @@ async function renderConsumptionTile(deviceInfo, features) {
 
     // Consumption statistics cards (API-data) moved from dashboard-render-engine
     const keyFeatures = extractKeyFeatures(features);
-
-    let html='<div class="card">';
-    html += renderConsumptionStatistics(keyFeatures);
-    html += '</div>';
-    consumptionSection.innerHTML += html;
+    consumptionSection.innerHTML += `<div class="card">${renderConsumptionStatistics(keyFeatures)}</div>`;
 
     // Insert after temperature chart section or at the end
     const tempChartSection = document.getElementById('temperature-chart-section');
@@ -130,25 +179,69 @@ async function renderConsumptionTile(deviceInfo, features) {
         dashboardContent.appendChild(consumptionSection);
     }
 
+    const btnDaily = document.getElementById("toggleDaily");
+    const btnMonthly = document.getElementById("toggleMonthly");
+
+    if (btnDaily && btnMonthly) {
+        btnDaily.addEventListener("click", () => {
+            currentConsumptionView = "daily";
+            updateToggleButtons();
+            rerenderConsumption();
+        });
+
+        btnMonthly.addEventListener("click", () => {
+            // ❗ Monatsansicht bei 1-Tages-Range blockieren
+            if (window.lastConsumptionFrom && window.lastConsumptionTo) {
+                const from = window.lastConsumptionFrom;
+                const to   = window.lastConsumptionTo;
+
+                if (isSameDay(from, to)) {
+                    return; // Klick ignorieren
+                }
+            }
+            currentConsumptionView = "monthly";
+            updateToggleButtons();
+            rerenderConsumption();
+        });
+    }
+
     // Set up period selector buttons
     const periodButtons = consumptionSection.querySelectorAll('.time-btn');
     const dateFromInput = consumptionSection.querySelector('#customDateFrom');
     const dateToInput   = consumptionSection.querySelector('#customDateTo');
 
-    periodButtons.forEach(btn => {
-        btn.addEventListener('click', async () => {
-            // Update active state
-            periodButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+periodButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+        const selectedPeriod = btn.dataset.period;
 
-            // Load data for selected period
-            if (dateFromInput) dateFromInput.value = '';
-            if (dateToInput)   dateToInput.value = '';
+        periodButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
 
-            const period = btn.dataset.period;
-            await loadConsumptionData(deviceInfo, period);
-        });
+        // ⭐ Date-Range zurücksetzen
+        if (dateFromInput) dateFromInput.value = "";
+        if (dateToInput)   dateToInput.value   = "";
+
+        window.lastConsumptionFrom = null;
+        window.lastConsumptionTo   = null;
+
+        window.lastConsumptionPeriod = selectedPeriod;
+
+        if (selectedPeriod === "year") {
+            currentConsumptionView = "monthly";
+        }
+
+        updateToggleButtons();
+
+        loadConsumptionData(
+            deviceInfo,
+            selectedPeriod,
+            null,   // customDate
+            null,   // fromDate
+            null    // toDate
+        );
     });
+});
+
 
     // Set up date range pickers
     const todayStr = new Date().toISOString().split('T')[0];
@@ -167,6 +260,9 @@ async function renderConsumptionTile(deviceInfo, features) {
 
             periodButtons.forEach(b => b.classList.remove('active'));
 
+            // Auto-View setzen
+            autoSelectViewForRange(from, from);
+
             await loadConsumptionData(deviceInfo, 'range', null, from, from);
         });
     }
@@ -180,6 +276,9 @@ async function renderConsumptionTile(deviceInfo, features) {
             if (!from || !to) return;
 
             periodButtons.forEach(b => b.classList.remove('active'));
+
+            // Auto-View setzen
+            autoSelectViewForRange(from, to);
 
             await loadConsumptionData(deviceInfo, 'range', null, from, to);
         });
@@ -275,6 +374,8 @@ async function loadConsumptionData(deviceInfo, period, customDate = null, fromDa
     try {
         // Show loading state
         const statsGrid = document.getElementById('consumptionStatsGrid');
+        window.lastDeviceInfo = deviceInfo;
+
         if (statsGrid) {
             statsGrid.innerHTML = '<div class="spinner"></div><p style="color: #a0a0b0; text-align: center; margin-top: 10px;">Lade Verbrauchsdaten...</p>';
         }
@@ -317,7 +418,19 @@ async function loadConsumptionData(deviceInfo, period, customDate = null, fromDa
         // Cache the corrected data
         consumptionCache[cacheKey] = correctedStats;
 
-        // Render the data
+        // Globale Werte für rerender
+        window.lastConsumptionStats = correctedStats;
+        window.lastConsumptionPeriod = period;
+        window.lastConsumptionCustomDate = customDate;
+        window.lastConsumptionFrom = fromDate;
+        window.lastConsumptionTo = toDate;
+
+        // Nur YEAR setzt die View
+        if (period === "year") {
+            currentConsumptionView = "monthly";
+            updateToggleButtons();
+        }
+
         renderConsumptionStats(correctedStats, period, deviceInfo, customDate);
         renderConsumptionCharts(correctedStats, period, customDate, fromDate, toDate);
         renderConsumptionBreakdown(correctedStats, period, customDate, fromDate, toDate);
@@ -472,16 +585,33 @@ function renderConsumptionCharts(stats, period, customDate = null, fromDate = nu
         console.warn('Chart title error:', e);
     }
 
-    const isSingleDayRange = fromDate && toDate && fromDate === toDate;
+    // Toggle sichtbar/unsichtbar machen
+    updateConsumptionToggleVisibility(period, fromDate, toDate);
 
+    const isSingleDayRange =
+        fromDate &&
+        toDate &&
+        (typeof isSameDay === "function"
+            ? isSameDay(fromDate, toDate)
+            : fromDate === toDate);
+
+    // HOURLY hat Vorrang
     if (period === 'today' || period === 'yesterday' || isSingleDayRange) {
         renderHourlyChart(stats, period, customDate);
-    } else {
+    }
+
+    // MONTHLY-View aktiv → immer daily → monthly aggregieren
+    else if (currentConsumptionView === "monthly") {
+        renderMonthlyChart(stats, period, customDate, fromDate, toDate);
+    }
+
+    // DAILY-View aktiv
+    else {
         renderDailyChart(stats, period, customDate, fromDate, toDate);
     }
 
     // Always render the period comparison chart
-    renderPeriodComparisonChart(stats, period, customDate);
+    renderPeriodComparisonChart(stats, period, customDate, fromDate, toDate);
 }
 
 /**
@@ -735,10 +865,85 @@ function renderDailyChart(stats, period, customDate = null, fromDate = null, toD
     consumptionChartInstance.setOption(option);
 }
 
+function renderMonthlyChart(stats) {
+    const chartContainer = document.getElementById('consumptionChart');
+    if (!chartContainer) return;
+
+    if (consumptionChartInstance) {
+        consumptionChartInstance.dispose();
+    }
+
+    consumptionChartInstance = echarts.init(chartContainer, 'dark');
+
+    const breakdown = stats.daily_breakdown || [];
+    const monthlyMap = {};
+
+    breakdown.forEach(item => {
+        const d = new Date(item.timestamp);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+        if (!monthlyMap[key]) {
+            monthlyMap[key] = {
+                electricity_kwh: 0,
+                thermal_kwh: 0
+            };
+        }
+
+        monthlyMap[key].electricity_kwh += item.electricity_kwh;
+        monthlyMap[key].thermal_kwh     += item.thermal_kwh;
+    });
+
+    const months = Object.keys(monthlyMap).sort();
+
+    const electricity = months.map(m => monthlyMap[m].electricity_kwh);
+    const thermal     = months.map(m => monthlyMap[m].thermal_kwh);
+
+    // ⭐ KORREKT: COP = Wärme / Strom
+    const cop = months.map(m => {
+        const e = monthlyMap[m].electricity_kwh;
+        const t = monthlyMap[m].thermal_kwh;
+        return e > 0 ? t / e : 0;
+    });
+
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            formatter: function (params) {
+                let html = params[0].axisValue + "<br>";
+                params.forEach(p => {
+                    html += `${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)}<br>`;
+                });
+                return html;
+            }
+        },
+        legend: {
+            data: ['Stromverbrauch', 'Wärmeerzeugung', 'ArbeitsZahl'],
+            textStyle: { color: '#a0a0b0' }
+        },
+        xAxis: {
+            type: 'category',
+            data: months,
+            axisLabel: { color: '#a0a0b0' }
+        },
+        yAxis: [
+            { type: 'value', name: 'Energie (kWh)', axisLabel: { color: '#a0a0b0' } },
+            { type: 'value', name: 'ArbeitsZahl', axisLabel: { color: '#a0a0b0' } }
+        ],
+        series: [
+            { name: 'Stromverbrauch', type: 'bar', data: electricity, itemStyle: { color: '#ff6b6b' } },
+            { name: 'Wärmeerzeugung', type: 'bar', data: thermal, itemStyle: { color: '#4ecdc4' } },
+            { name: 'ArbeitsZahl', type: 'line', yAxisIndex: 1, data: cop, itemStyle: { color: '#ffffff' } }
+        ]
+    };
+
+    consumptionChartInstance.setOption(option);
+}
+
 /**
  * Render period comparison chart
  */
-function renderPeriodComparisonChart(stats, period, customDate = null) {
+function renderPeriodComparisonChart(stats, period, customDate = null, fromDate = null, toDate = null) {
     const chartContainer = document.getElementById('consumptionPeriodChart');
     if (!chartContainer) return;
 
@@ -753,6 +958,34 @@ function renderPeriodComparisonChart(stats, period, customDate = null) {
     }
 
     consumptionPeriodChartInstance = echarts.init(chartContainer, 'dark');
+
+    const isSingleDayRange = fromDate && toDate && isSameDay(fromDate, toDate);
+    const isHourly = (period === "today" || period === "yesterday" || isSingleDayRange);
+
+    let breakdown;
+
+    if (isHourly) {
+        breakdown = stats.hourly_breakdown || [];
+    }
+    else if (period === "year") {
+        // monthly_breakdown existiert nicht mehr → daily verwenden
+        breakdown = stats.daily_breakdown || [];
+    }
+    else {
+        breakdown = stats.daily_breakdown || [];
+    }
+
+    if (fromDate && toDate && !isHourly) {
+        const from = new Date(fromDate);
+        const to   = new Date(toDate);
+        breakdown = breakdown.filter(item => {
+            const d = new Date(item.timestamp);
+            return d >= from && d <= to;
+        });
+    }
+
+    const totalElectricity = breakdown.reduce((sum, x) => sum + x.electricity_kwh, 0);
+    const totalThermal     = breakdown.reduce((sum, x) => sum + x.thermal_kwh, 0);
 
     const option = {
         backgroundColor: 'transparent',
@@ -826,6 +1059,33 @@ function isSameDay(a, b) {
            da.getDate() === db.getDate();
 }
 
+function autoSelectViewForRange(fromDate, toDate) {
+    if (!fromDate || !toDate) return;
+
+    const from = new Date(fromDate);
+    const to   = new Date(toDate);
+
+    const diffDays = Math.floor((to - from) / (1000 * 60 * 60 * 24));
+
+    // 1 Tag → HOURLY, Toggle = DAILY
+    if (diffDays === 0) {
+        currentConsumptionView = "daily";
+        updateToggleButtons();
+        return;
+    }
+
+    // > 31 Tage → MONTHLY
+    if (diffDays > 31) {
+        currentConsumptionView = "monthly";
+        updateToggleButtons();
+        return;
+    }
+
+    // 2–31 Tage → DAILY
+    currentConsumptionView = "daily";
+    updateToggleButtons();
+}
+
 /**
  * Render detailed breakdown table
  */
@@ -833,26 +1093,64 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
     const breakdownContainer = document.getElementById('consumptionBreakdown');
     if (!breakdownContainer) return;
 
-    const isSingleDayRange = isSameDay(fromDate, toDate);
-
-    // HOURLY oder DAILY bestimmen
+    const isSingleDayRange = fromDate && toDate && isSameDay(fromDate, toDate);
     const isHourly = (period === 'today' || period === 'yesterday' || isSingleDayRange);
 
-    // Breakdown auswählen
-    let breakdown = isHourly ? stats.hourly_breakdown : stats.daily_breakdown;
+    let breakdown;
 
-    // Filter
-    if (fromDate && toDate) {
-        if (isSingleDayRange) {
-            breakdown = breakdown.filter(item => isSameDay(item.timestamp, fromDate));
-        } else {
-            const from = new Date(fromDate);
-            const to = new Date(toDate);
-            breakdown = breakdown.filter(item => {
-                const d = new Date(item.timestamp);
-                return d >= from && d <= to;
-            });
-        }
+    // HOURLY
+    if (isHourly) {
+        breakdown = stats.hourly_breakdown || [];
+    }
+
+    // MONTHLY VIEW → daily → monthly aggregieren
+    else if (currentConsumptionView === "monthly") {
+        const daily = stats.daily_breakdown || [];
+        const monthlyMap = {};
+
+        daily.forEach(item => {
+            const d = new Date(item.timestamp);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!monthlyMap[key]) {
+                monthlyMap[key] = {
+                    timestamp: new Date(d.getFullYear(), d.getMonth(), 1),
+                    electricity_kwh: 0,
+                    thermal_kwh: 0,
+                    runtime_hours: 0,
+                    samples: 0
+                };
+            }
+
+            monthlyMap[key].electricity_kwh += item.electricity_kwh;
+            monthlyMap[key].thermal_kwh     += item.thermal_kwh;
+            monthlyMap[key].runtime_hours   += item.runtime_hours;
+            monthlyMap[key].samples         += item.samples;
+        });
+
+        breakdown = Object.values(monthlyMap).map(m => ({
+            timestamp: m.timestamp.toISOString(),
+            electricity_kwh: m.electricity_kwh,
+            thermal_kwh: m.thermal_kwh,
+            avg_cop: m.electricity_kwh > 0 ? m.thermal_kwh / m.electricity_kwh : 0,
+            runtime_hours: m.runtime_hours,
+            samples: m.samples
+        }));
+    }
+
+    // DAILY VIEW
+    else {
+        breakdown = stats.daily_breakdown || [];
+    }
+
+    // RANGE-FILTER (nicht für hourly, nicht für monthly view)
+    if (fromDate && toDate && !isHourly && currentConsumptionView !== "monthly") {
+        const from = new Date(fromDate);
+        const to   = new Date(toDate);
+        breakdown = breakdown.filter(item => {
+            const d = new Date(item.timestamp);
+            return d >= from && d <= to;
+        });
     }
 
     if (!breakdown || breakdown.length === 0) {
@@ -860,13 +1158,15 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
         return;
     }
 
+    const isMonthlyView = !isHourly && currentConsumptionView === "monthly";
+
     let html = `
         <h3 style="color: #e0e0e0; font-size: 16px; margin: 20px 0 15px 0;">Detaillierte Aufschlüsselung</h3>
         <div class="breakdown-table-container">
             <table class="breakdown-table">
                 <thead>
                     <tr>
-                        <th>${isHourly ? 'Uhrzeit' : 'Datum'}</th>
+                        <th>${isHourly ? 'Uhrzeit' : (isMonthlyView ? 'Monat' : 'Datum')}</th>
                         <th>Strom (kWh)</th>
                         <th>Wärme (kWh)</th>
                         <th>ArbeitsZahl</th>
@@ -885,6 +1185,8 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
             const startHour = date.getHours();
             const endHour = (startHour + 1) % 24; // Wrap 24 to 0
             timeLabel = `${startHour.toString().padStart(2,'0')}:00 - ${endHour.toString().padStart(2,'0')}:00`;
+        } else if (isMonthlyView) {
+            timeLabel = `${date.getMonth() + 1}.${date.getFullYear()}`;
         } else {
             timeLabel = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
         }
@@ -914,6 +1216,37 @@ function renderConsumptionBreakdown(stats, period, customDate = null, fromDate =
     breakdownContainer.innerHTML = html;
 }
 
+function rerenderConsumption() {
+    if (!window.lastConsumptionStats) return;
+
+    const deviceInfo = window.lastDeviceInfo || null;
+
+    if (deviceInfo) {
+        renderConsumptionStats(
+            window.lastConsumptionStats,
+            window.lastConsumptionPeriod,
+            deviceInfo,
+            window.lastConsumptionCustomDate
+        );
+    }
+
+    renderConsumptionCharts(
+        window.lastConsumptionStats,
+        window.lastConsumptionPeriod,
+        window.lastConsumptionCustomDate,
+        window.lastConsumptionFrom,
+        window.lastConsumptionTo
+    );
+
+    renderConsumptionBreakdown(
+        window.lastConsumptionStats,
+        window.lastConsumptionPeriod,
+        window.lastConsumptionCustomDate,
+        window.lastConsumptionFrom,
+        window.lastConsumptionTo
+    );
+}
+
 // Window resize handler for charts
 window.addEventListener('resize', () => {
     if (consumptionChartInstance) {
@@ -923,7 +1256,6 @@ window.addEventListener('resize', () => {
         consumptionPeriodChartInstance.resize();
     }
 });
-
 
 //RS moved from dashboard-render-heating
 
@@ -998,8 +1330,8 @@ window.addEventListener('resize', () => {
             if (hasCompressorEnergyData) {
                 html += renderCompressorEnergyCard(kf, getArrayValue);
             }
-		
-            // Card 3: Gas Consumption (always with arrays if available) (Vitodens)			
+
+            // Card 3: Gas Consumption (always with arrays if available) (Vitodens)
             if (hasGasConsumptionArrays) {
                 html += renderGasConsumptionCard(kf, getArrayValue);
             }
@@ -1024,7 +1356,7 @@ window.addEventListener('resize', () => {
                 const d = new Date(now.getFullYear(), now.getMonth() - index, 1);
                 return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
             };
-        
+
             const getWeekLabel = (index) => {
                 const d = new Date(now.getTime() - (index * 7 * 24 * 60 * 60 * 1000));
                 const onejan = new Date(d.getFullYear(), 0, 1);
@@ -1036,14 +1368,14 @@ window.addEventListener('resize', () => {
                 const d = new Date(now.getTime() - (index * 24 * 60 * 60 * 1000));
                 return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
             };
-        
+
             let mainTabsHtml = `
                 <button class="stat-tab active" onclick="switchStatPeriod(event, 'power-period-day')">Tag</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-week')">Woche</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-month')">Monat</button>
                 <button class="stat-tab" onclick="switchStatPeriod(event, 'power-period-year')">Jahr</button>
             `;
-        
+
             // Build days
             const dayArray = kf.powerConsumptionDhw?.properties?.day?.value || kf.powerConsumptionHeating?.properties?.day?.value || [];
             const maxDays = Math.min(dayArray.length, 8);
@@ -1053,7 +1385,7 @@ window.addEventListener('resize', () => {
                 const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'day', i);
                 const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'day', i);
                 if (powerDhw === null && powerHeating === null) continue;
-        
+
                 const totalPower = (powerDhw || 0) + (powerHeating || 0);
                 dayTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-day-${i}')">${getDayLabel(i)}</button>`;
                 dayContentHtml += `
@@ -1066,17 +1398,17 @@ window.addEventListener('resize', () => {
                     </div>
                 `;
             }
-        
+
             // Build weeks
             const weekArray = kf.powerConsumptionDhw?.properties?.week?.value || kf.powerConsumptionHeating?.properties?.week?.value || [];
             const maxWeeks = Math.min(weekArray.length, 6);
             let weekTabsHtml = '', weekContentHtml = '';
-        
+
             for (let i = 0; i < maxWeeks; i++) {
                 const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'week', i);
                 const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'week', i);
                 if (powerDhw === null && powerHeating === null) continue;
-        
+
                 const totalPower = (powerDhw || 0) + (powerHeating || 0);
                 weekTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-week-${i}')">${getWeekLabel(i)}</button>`;
                 weekContentHtml += `
@@ -1089,17 +1421,17 @@ window.addEventListener('resize', () => {
                     </div>
                 `;
             }
-        
+
             // Build months
             const monthArray = kf.powerConsumptionDhw?.properties?.month?.value || kf.powerConsumptionHeating?.properties?.month?.value || [];
             const maxMonths = Math.min(monthArray.length, 13);
             let monthTabsHtml = '', monthContentHtml = '';
-        
+
             for (let i = 0; i < maxMonths; i++) {
                 const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'month', i);
                 const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'month', i);
                 if (powerDhw === null && powerHeating === null) continue;
-        
+
                 const totalPower = (powerDhw || 0) + (powerHeating || 0);
                 monthTabsHtml += `<button class="stat-tab ${i === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'power-month-${i}')">${getMonthName(i)}</button>`;
                 monthContentHtml += `
@@ -1112,17 +1444,17 @@ window.addEventListener('resize', () => {
                     </div>
                 `;
             }
-        
+
             // Build years
             const yearArray = kf.powerConsumptionDhw?.properties?.year?.value || kf.powerConsumptionHeating?.properties?.year?.value || [];
             const maxYears = Math.min(yearArray.length, 2);
             let yearTabsHtml = '', yearContentHtml = '';
-        
+
             for (let i = 0; i < maxYears; i++) {
                 const powerDhw = getArrayValue(kf.powerConsumptionDhw, 'year', i);
                 const powerHeating = getArrayValue(kf.powerConsumptionHeating, 'year', i);
                 if (powerDhw === null && powerHeating === null) continue;
-        
+
                 const now = new Date();
                 const yearLabel = now.getFullYear() - i;
                 const totalPower = (powerDhw || 0) + (powerHeating || 0);
@@ -1137,9 +1469,9 @@ window.addEventListener('resize', () => {
                     </div>
                 `;
             }
-        
+
             if (!dayTabsHtml && !weekTabsHtml && !monthTabsHtml && !yearTabsHtml) return '';
-        
+
             return `
                 <div class="card">
                     <div class="card-header"><h2>⚡ Stromverbrauch</h2></div>
@@ -1322,8 +1654,8 @@ window.addEventListener('resize', () => {
                 </div>
             `;
         }
-        
-        
+
+
         // Heat Production Summary Card (Erzeugte Wärmeenergie) - separate Kachel mit Summary-Daten
         function renderHeatProductionSummaryCard(kf, getSummaryValue) {
             const periods = [
@@ -1334,18 +1666,18 @@ window.addEventListener('resize', () => {
                 {key: 'currentYear', label: 'Aktuelles Jahr'},
                 {key: 'lastYear', label: 'Letztes Jahr'}
             ];
-        
+
             let tabsHtml = '';
             let contentHtml = '';
-        
+
             periods.forEach((period, index) => {
                 const heatDhw = getSummaryValue(kf.heatProductionSummaryDhw, period.key);
                 const heatHeating = getSummaryValue(kf.heatProductionSummaryHeating, period.key);
-        
+
                 if (heatDhw === null && heatHeating === null) return;
-        
+
                 const totalHeat = (heatDhw || 0) + (heatHeating || 0);
-        
+
                 tabsHtml += `<button class="stat-tab ${index === 0 ? 'active' : ''}" onclick="switchStatTab(event, 'heat-${period.key}')">${period.label}</button>`;
                 contentHtml += `
                     <div id="heat-${period.key}" class="stat-tab-content" style="${index === 0 ? 'display: block;' : 'display: none;'}">
@@ -1357,9 +1689,9 @@ window.addEventListener('resize', () => {
                     </div>
                 `;
             });
-        
+
             if (!tabsHtml) return '';
-        
+
             return `
                 <div class="card">
                     <div class="card-header"><h2>🌡️ Erzeugte Wärmeenergie</h2></div>
