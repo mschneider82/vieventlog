@@ -765,6 +765,41 @@
             margin-top: 4px;
         }
 
+        /* -------------------------------------- */
+        /* Consumption View Toggle (Tag/Monat)    */
+        /* -------------------------------------- */
+
+        .view-toggle {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            justify-content: flex-start !important;
+            padding-left: 10px;
+            margin-left: 0 !important;
+        }
+
+        .view-toggle .toggle-btn {
+            padding: 6px 12px !important;
+            background: rgba(255,255,255,0.08) !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 6px !important;
+            color: #e0e0e0 !important;
+            cursor: pointer;
+            font-size: 14px !important;
+            transition: all 0.2s ease !important;
+        }
+
+        .view-toggle .toggle-btn:hover {
+            background-color: rgba(102, 126, 234, 0.25) !important;
+        }
+
+        .view-toggle .toggle-btn.active {
+            background-color: #667eea !important;
+            border-color: #667eea !important;
+            color: #fff !important;
+        }
+
         /* Mobile Responsive Design */
         @media (max-width: 768px) {
             body {
@@ -1564,7 +1599,7 @@
 /* DHW Storage (Warmwasserspeicher) - links */
 .dhw-storage-overlay-left {
     top: 44.90%; /* 163px / 363px */
-    left: 4.5%;  
+    left: 4.5%;
     width: 4.13%; /* 35px / 847px */
     height: auto;
 }
