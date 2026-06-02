@@ -212,6 +212,9 @@ func main() {
 	// Consumption statistics endpoint
 	http.HandleFunc("/api/consumption/stats", HandleConsumptionStats)
 
+	// Health check endpoint (verifies DB writability for Kubernetes probes)
+	http.HandleFunc("/health", healthHandler)
+
 	// Start event archive scheduler if enabled
 	go func() {
 		// Small delay to ensure everything is initialized

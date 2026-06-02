@@ -20,6 +20,12 @@ func BasicAuthMiddleware(next http.Handler) http.Handler {
 	log.Printf("Basic Auth enabled for user: %s\n", username)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow Kubernetes (or any other) probes to reach /health without credentials
+		if r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		user, pass, ok := r.BasicAuth()
 
 		// Use constant-time comparison to prevent timing attacks
