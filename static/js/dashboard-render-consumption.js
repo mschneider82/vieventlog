@@ -7,6 +7,7 @@
 let consumptionCache = {};
 let consumptionChartInstance = null;
 let consumptionPeriodChartInstance = null;
+let period = 'today';
 
 /**
  * Hilfsfunktion: Breakdown nach Zeitraum filtern
@@ -52,7 +53,7 @@ async function renderConsumptionTile(deviceInfo, features) {
     let consumptionSection = document.getElementById('consumption-stats-section');
     if (consumptionSection) {
         // Already exists, just refresh data
-        await loadConsumptionData(deviceInfo, 'today');
+        await loadConsumptionData(deviceInfo, period);
         return;
     }
 
@@ -67,12 +68,12 @@ async function renderConsumptionTile(deviceInfo, features) {
             </h2>
             <div class="chart-controls">
                 <div class="time-range-selector">
-                    <button class="time-btn active" data-period="today">Heute</button>
-                    <button class="time-btn" data-period="yesterday">Gestern</button>
-                    <button class="time-btn" data-period="week">7 Tage</button>
-                    <button class="time-btn" data-period="month">Monat</button>
-                    <button class="time-btn" data-period="last30days">30 Tage</button>
-                    <button class="time-btn" data-period="year">Jahr</button>
+                    <button class="time-btn ${ (period == 'today') ? 'active' : ''}" data-period="today">Heute</button>
+                    <button class="time-btn ${ (period == 'yesterday') ? 'active' : ''}" data-period="yesterday">Gestern</button>
+                    <button class="time-btn ${ (period == 'week') ? 'active' : ''}" data-period="week">7 Tage</button>
+                    <button class="time-btn ${ (period == 'month') ? 'active' : ''}" data-period="month">Monat</button>
+                    <button class="time-btn ${ (period == 'last30days') ? 'active' : ''}" data-period="last30days">30 Tage</button>
+                    <button class="time-btn ${ (period == 'year') ? 'active' : ''}" data-period="year">Jahr</button>
                     <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 10px;">
                         <label for="customDateFrom" style="color: #a0a0b0; font-size: 13px; white-space: nowrap;">📅 Zeitraum:</label>
                         <input type="date" id="customDateFrom" class="custom-date-input"
@@ -145,7 +146,7 @@ async function renderConsumptionTile(deviceInfo, features) {
             if (dateFromInput) dateFromInput.value = '';
             if (dateToInput)   dateToInput.value = '';
 
-            const period = btn.dataset.period;
+            period = btn.dataset.period;
             await loadConsumptionData(deviceInfo, period);
         });
     });
@@ -186,7 +187,7 @@ async function renderConsumptionTile(deviceInfo, features) {
     }
 
     // Load initial data (today)
-    await loadConsumptionData(deviceInfo, 'today');
+    await loadConsumptionData(deviceInfo, period);
 }
 
 /**
