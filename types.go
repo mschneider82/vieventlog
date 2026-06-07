@@ -387,6 +387,7 @@ type ConsumptionStats struct {
 	Samples         int                    `json:"samples"`         // Number of snapshots
 	HourlyBreakdown []ConsumptionDataPoint `json:"hourly_breakdown,omitempty"`
 	DailyBreakdown  []ConsumptionDataPoint `json:"daily_breakdown,omitempty"`
+	MonthlyBreakdown []ConsumptionDataPoint `json:"monthly_breakdown,omitempty"`
 }
 
 // ConsumptionDataPoint represents a single data point in consumption breakdown
