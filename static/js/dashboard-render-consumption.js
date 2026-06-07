@@ -210,38 +210,38 @@ async function renderConsumptionTile(deviceInfo, features) {
     const dateFromInput = consumptionSection.querySelector('#customDateFrom');
     const dateToInput   = consumptionSection.querySelector('#customDateTo');
 
-periodButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-        const selectedPeriod = btn.dataset.period;
+    periodButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const selectedPeriod = btn.dataset.period;
 
-        periodButtons.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
+            periodButtons.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
 
-        // ⭐ Date-Range zurücksetzen
-        if (dateFromInput) dateFromInput.value = "";
-        if (dateToInput)   dateToInput.value   = "";
+            // Date-Range zurücksetzen
+            if (dateFromInput) dateFromInput.value = "";
+            if (dateToInput)   dateToInput.value   = "";
 
-        window.lastConsumptionFrom = null;
-        window.lastConsumptionTo   = null;
+            window.lastConsumptionFrom = null;
+            window.lastConsumptionTo   = null;
 
-        window.lastConsumptionPeriod = selectedPeriod;
+            window.lastConsumptionPeriod = selectedPeriod;
 
-        if (selectedPeriod === "year") {
-            currentConsumptionView = "monthly";
-        }
+            // Default-View pro Periode festlegen (Jahr → monthly, sonst daily).
+            // Ohne else-Zweig würde "monthly" nach einem Klick auf "Jahr" auch
+            // für nachfolgend gewählte Perioden wie "Woche"/"Monat" haften bleiben.
+            currentConsumptionView = (selectedPeriod === "year") ? "monthly" : "daily";
 
-        updateToggleButtons();
+            updateToggleButtons();
 
-        loadConsumptionData(
-            deviceInfo,
-            selectedPeriod,
-            null,   // customDate
-            null,   // fromDate
-            null    // toDate
-        );
+            loadConsumptionData(
+                deviceInfo,
+                selectedPeriod,
+                null,   // customDate
+                null,   // fromDate
+                null    // toDate
+            );
+        });
     });
-});
-
 
     // Set up date range pickers
     const todayStr = new Date().toISOString().split('T')[0];
@@ -865,7 +865,11 @@ function renderDailyChart(stats, period, customDate = null, fromDate = null, toD
     consumptionChartInstance.setOption(option);
 }
 
-function renderMonthlyChart(stats) {
+// fromDate/toDate werden aktuell nicht benötigt, weil das Backend
+// daily_breakdown bereits auf den angefragten Zeitraum begrenzt.
+// Die Signatur spiegelt aber den Aufrufer wider, damit zukünftige
+// Filterungen hier ergänzt werden können, ohne den Aufruf zu brechen.
+function renderMonthlyChart(stats, period, customDate = null, fromDate = null, toDate = null) {
     const chartContainer = document.getElementById('consumptionChart');
     if (!chartContainer) return;
 
@@ -984,8 +988,13 @@ function renderPeriodComparisonChart(stats, period, customDate = null, fromDate 
         });
     }
 
+    // Summen aus dem gefilterten Breakdown – spiegelt die im Hauptchart
+    // sichtbare Range. Wenn kein Breakdown vorhanden ist (z.B. frische
+    // Daten oder Aggregations-Fehler), Fallback auf die Backend-Totals.
     const totalElectricity = breakdown.reduce((sum, x) => sum + x.electricity_kwh, 0);
     const totalThermal     = breakdown.reduce((sum, x) => sum + x.thermal_kwh, 0);
+    const pieElectricity = breakdown.length > 0 ? totalElectricity : stats.electricity_kwh;
+    const pieThermal     = breakdown.length > 0 ? totalThermal     : stats.thermal_kwh;
 
     const option = {
         backgroundColor: 'transparent',
@@ -1033,12 +1042,12 @@ function renderPeriodComparisonChart(stats, period, customDate = null, fromDate 
                 },
                 data: [
                     {
-                        value: stats.electricity_kwh,
+                        value: pieElectricity,
                         name: 'Stromverbrauch',
                         itemStyle: { color: '#ff6b6b' }
                     },
                     {
-                        value: stats.thermal_kwh,
+                        value: pieThermal,
                         name: 'Wärmeerzeugung',
                         itemStyle: { color: '#4ecdc4' }
                     }
