@@ -6,6 +6,8 @@ metadata:
     app: vieventlog
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: vieventlog
@@ -21,7 +23,7 @@ spec:
       containers:
       - name: vieventlog
         image: ghcr.io/mschneider82/vieventlog:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 5000
