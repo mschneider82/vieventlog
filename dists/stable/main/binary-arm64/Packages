@@ -1,15 +1,15 @@
 Package: vieventlog
-Version: 0.0.224
+Version: 0.0.225
 Architecture: arm64
 Maintainer: Matthias Schneider <mschneider82@users.noreply.github.com>
-Installed-Size: 15329
+Installed-Size: 15777
 Depends: ca-certificates, systemd
 Recommends: adduser
-Filename: pool/main/v/vieventlog/vieventlog_0.0.224_arm64.deb
-Size: 6047592
-MD5sum: 30436da2c5d100f818804b860d5da54b
-SHA1: 4c5daf1480c5d000441917f335e837448481a408
-SHA256: 60fe281d77b4ce496926f05ace58039ccecde28615446fe68a9087e4b82cb7f1
+Filename: pool/main/v/vieventlog/vieventlog_0.0.225_arm64.deb
+Size: 6341778
+MD5sum: d015449f52a0411803a68e741a531346
+SHA1: 01c102179bb67f6fae4c3efbabf95a03959d9f88
+SHA256: 238e5df16b055d3f8eebedd163de2f9b00ac7cadce7017c7f276fc5b5b955499
 Section: net
 Priority: optional
 Homepage: https://github.com/mschneider82/vieventlog
