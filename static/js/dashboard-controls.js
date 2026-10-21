@@ -309,7 +309,9 @@
                         cyclesperdaystart: data.cyclesperdaystart,
                         showCyclesPerDay: data.showCyclesPerDay,
                         showRefrigerantVisual: data.showRefrigerantVisual !== undefined ? data.showRefrigerantVisual : true,
-                        useOtherRefrigerantPic: data.useOtherRefrigerantPic !== undefined ? data.useOtherRefrigerantPic : false
+                        useOtherRefrigerantPic: data.useOtherRefrigerantPic !== undefined ? data.useOtherRefrigerantPic : false,
+                        showDhwSchedule: data.showDhwSchedule !== undefined ? data.showDhwSchedule : true,
+                        showCirculationSchedule: data.showCirculationSchedule !== undefined ? data.showCirculationSchedule : true
                     };
                 }
             } catch (error) {
@@ -336,16 +338,17 @@
 
                 showDeviceSettingsModal(installationId, deviceId, data.compressorRpmMin || 0, data.compressorRpmMax || 0, data.compressorPowerCorrectionFactor || 1.0, 
 										data.electricityPrice || 0.30, 	data.useAirIntakeTemperatureLabel, data.hasHotWaterBuffer, data.cyclesperdaystart, 
-										data.showCyclesPerDay, data.showRefrigerantVisual, data.useOtherRefrigerantPic || false);
+										data.showCyclesPerDay, data.showRefrigerantVisual, data.useOtherRefrigerantPic || false,
+										data.showDhwSchedule, data.showCirculationSchedule);
             } catch (error) {
                 console.error('Error loading device settings:', error);
-                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null, null, false, true);
+                showDeviceSettingsModal(installationId, deviceId, 0, 0, 1.0, 0.30, null, null, null, false, true, false, true, true);
             }
         }
 
         function showDeviceSettingsModal(installationId, deviceId, currentMin, currentMax, correctionFactor, 
 					electricityPrice, useAirIntakeTemperatureLabel, hasHotWaterBuffer, cyclesperdaystart, 
-					showCyclesPerDay, showRefrigerantVisual, useOtherRefrigerantPic) {
+					showCyclesPerDay, showRefrigerantVisual, useOtherRefrigerantPic, showDhwSchedule, showCirculationSchedule) {
             const modal = document.createElement('div');
             modal.className = 'debug-modal';
             modal.style.display = 'flex';
@@ -384,6 +387,10 @@
 
             // Determine other refrigerant picture toggle state (default: false)
             const otherRefrigerantPicToggleChecked = useOtherRefrigerantPic !== undefined ? useOtherRefrigerantPic : false;
+
+            // Determine schedule toggle states (default: true)
+            const dhwScheduleToggleChecked = showDhwSchedule !== undefined ? showDhwSchedule : true;
+            const circulationScheduleToggleChecked = showCirculationSchedule !== undefined ? showCirculationSchedule : true;
 
             modal.innerHTML = `
                 <div style="background: #1a1a2e; padding: 30px; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
@@ -519,6 +526,18 @@
                         </div>
                     </div>
 
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; color: #fff; margin-bottom: 12px; font-weight: 600;">
+                            Zeitpläne
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <label style="color: #a0a0b0; font-size: 16px;">Warmwasser:</label>
+                            ${settingsToggleHtml('showDhwScheduleToggle', dhwScheduleToggleChecked)}
+                            <label style="color: #a0a0b0; font-size: 16px;">Zirkulationspumpe:</label>
+                            ${settingsToggleHtml('showCirculationScheduleToggle', circulationScheduleToggleChecked)}
+                        </div>
+                    </div>
+
                     <div style="display: flex; gap: 10px; margin-top: 30px;">
                         <button onclick="saveDeviceSettings('${installationId}', '${deviceId}')"
                                 style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
@@ -545,6 +564,18 @@
                     closeDeviceSettingsModal();
                 }
             });
+        }
+
+        // On/off switch used in the device settings modal
+        function settingsToggleHtml(id, checked) {
+            return `
+                            <label style="position: relative; display: inline-block; width: 50px; height: 24px; cursor: pointer;">
+                                <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}
+                                       onchange="this.nextElementSibling.style.backgroundColor = this.checked ? '#667eea' : 'rgba(255,255,255,0.2)'; this.nextElementSibling.nextElementSibling.style.transform = this.checked ? 'translateX(26px)' : 'translateX(0)';"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${checked ? '#667eea' : 'rgba(255,255,255,0.2)'}; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1);"></span>
+                                <span style="position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: ${checked ? 'translateX(26px)' : 'translateX(0)'};"></span>
+                            </label>`;
         }
 
         function closeDeviceSettingsModal() {
@@ -623,6 +654,12 @@
             const useOtherRefrigerantPicToggle = document.querySelector('#useOtherRefrigerantPictureToggle');
             const useOtherRefrigerantPic = useOtherRefrigerantPicToggle ? useOtherRefrigerantPicToggle.checked : false;
 
+            // Get schedule toggles
+            const showDhwScheduleToggle = document.querySelector('#showDhwScheduleToggle');
+            const showDhwSchedule = showDhwScheduleToggle ? showDhwScheduleToggle.checked : true;
+            const showCirculationScheduleToggle = document.querySelector('#showCirculationScheduleToggle');
+            const showCirculationSchedule = showCirculationScheduleToggle ? showCirculationScheduleToggle.checked : true;
+
             try {
                 const response = await fetch('/api/device-settings/set', {
                     method: 'POST',
@@ -640,7 +677,9 @@
                         cyclesperdaystart: cyclesperdaystart,
                         showCyclesPerDay: showCyclesPerDay,
                         showRefrigerantVisual: showRefrigerantVisual,
-                        useOtherRefrigerantPic: useOtherRefrigerantPic
+                        useOtherRefrigerantPic: useOtherRefrigerantPic,
+                        showDhwSchedule: showDhwSchedule,
+                        showCirculationSchedule: showCirculationSchedule
                     })
                 });
 
@@ -662,6 +701,8 @@
                     window.deviceSettingsCache[deviceKey].showCyclesPerDay = showCyclesPerDay;
                     window.deviceSettingsCache[deviceKey].showRefrigerantVisual = showRefrigerantVisual;
                     window.deviceSettingsCache[deviceKey].useOtherRefrigerantPic = useOtherRefrigerantPic;
+                    window.deviceSettingsCache[deviceKey].showDhwSchedule = showDhwSchedule;
+                    window.deviceSettingsCache[deviceKey].showCirculationSchedule = showCirculationSchedule;
 
                     alert('Einstellungen gespeichert!');
                     closeDeviceSettingsModal();

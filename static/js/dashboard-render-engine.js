@@ -244,6 +244,9 @@
                 // Hot water card
                 html += renderHotWater(keyFeatures);
 
+                // Hot water / circulation pump schedules
+                html += renderDhwSchedules(features);
+
                 // Heating curve & settings - only show if no heating circuit cards were rendered
                 if (circuits.length === 0) {
                     html += renderHeatingCurve(keyFeatures);

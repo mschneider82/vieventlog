@@ -146,6 +146,46 @@ type Feature struct {
 	GatewayID  string                 `json:"gatewayId,omitempty"`
 	DeviceID   string                 `json:"deviceId,omitempty"`
 	Timestamp  string                 `json:"timestamp,omitempty"`
+	// Commands is only used while parsing (e.g. schedule constraints) and stripped afterwards
+	Commands map[string]FeatureCommand `json:"commands,omitempty"`
+}
+
+// FeatureCommand represents a command offered by a feature (e.g. setSchedule)
+type FeatureCommand struct {
+	IsExecutable bool                           `json:"isExecutable"`
+	Params       map[string]FeatureCommandParam `json:"params"`
+}
+
+// FeatureCommandParam describes a single command parameter
+type FeatureCommandParam struct {
+	Type        string                 `json:"type"`
+	Required    bool                   `json:"required"`
+	Constraints map[string]interface{} `json:"constraints,omitempty"`
+}
+
+// ScheduleEntry is a single time window of a Viessmann schedule
+type ScheduleEntry struct {
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	Mode     string `json:"mode"`
+	Position int    `json:"position"`
+}
+
+// ScheduleConstraints are the limits reported by the setSchedule command
+type ScheduleConstraints struct {
+	Modes          []string `json:"modes"`
+	DefaultMode    string   `json:"defaultMode"`
+	MaxEntries     int      `json:"maxEntries"`
+	Resolution     int      `json:"resolution"` // minutes
+	OverlapAllowed bool     `json:"overlapAllowed"`
+}
+
+// ScheduleInfo is a parsed schedule feature (heating.dhw.schedule, ...) including its write constraints
+type ScheduleInfo struct {
+	Active      *bool                      `json:"active,omitempty"`
+	Entries     map[string][]ScheduleEntry `json:"entries"`
+	Writable    bool                       `json:"writable"`
+	Constraints *ScheduleConstraints       `json:"constraints,omitempty"`
 }
 
 // FeatureValue represents the parsed value of a feature
@@ -170,6 +210,7 @@ type DeviceFeatures struct {
 	DHW            map[string]FeatureValue `json:"dhw"` // Domestic Hot Water
 	Circuits       map[string]FeatureValue `json:"circuits"`
 	Other          map[string]FeatureValue `json:"other"`
+	Schedules      map[string]ScheduleInfo `json:"schedules"`
 	RawFeatures    []Feature               `json:"rawFeatures"`
 	LastUpdate     time.Time               `json:"lastUpdate"`
 }
@@ -188,6 +229,8 @@ type DeviceSettingsRequest struct {
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
 	UseOtherRefrigerantPic          *bool    `json:"useOtherRefrigerantPic,omitempty"`
+	ShowDhwSchedule                 *bool    `json:"showDhwSchedule,omitempty"`
+	ShowCirculationSchedule         *bool    `json:"showCirculationSchedule,omitempty"`
 }
 
 type DeviceSettingsResponse struct {
@@ -203,6 +246,8 @@ type DeviceSettingsResponse struct {
 	ShowCyclesPerDay                *bool    `json:"showCyclesPerDay,omitempty"`
 	ShowRefrigerantVisual           *bool    `json:"showRefrigerantVisual,omitempty"`
 	UseOtherRefrigerantPic          *bool    `json:"useOtherRefrigerantPic,omitempty"`
+	ShowDhwSchedule                 *bool    `json:"showDhwSchedule,omitempty"`
+	ShowCirculationSchedule         *bool    `json:"showCirculationSchedule,omitempty"`
 }
 
 type DebugDeviceInfo struct {

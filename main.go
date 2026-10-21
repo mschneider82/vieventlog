@@ -153,6 +153,9 @@ func main() {
 	http.HandleFunc("/api/dhw/hysteresis/set", dhwHysteresisSetHandler)
 	http.HandleFunc("/api/dhw/oneTimeCharge/activate", dhwOneTimeChargeHandler)
 
+	// Schedule endpoints (DHW, circulation pump, heating circuits)
+	http.HandleFunc("/api/schedule/set", scheduleSetHandler)
+
 	// Noise reduction control
 	http.HandleFunc("/api/noise-reduction/mode/set", noiseReductionModeSetHandler)
 
