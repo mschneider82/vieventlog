@@ -79,7 +79,8 @@
             });
         }
 
-        function renderDhwSchedules(features) {
+        // Schedule blocks for embedding in the hot water card
+        function renderDhwScheduleSection(features) {
             const visible = getVisibleSchedules(features);
             if (visible.length === 0) return '';
 
@@ -87,11 +88,24 @@
             window.currentSchedules = features.schedules;
 
             return `
+                <div class="schedule-section">
+                    <div class="schedule-section-title">🕒 Zeitpläne</div>
+                    ${visible.map(def => renderScheduleWeek(def, features.schedules[def.feature])).join('')}
+                </div>
+            `;
+        }
+
+        // Standalone card, used when the device has no hot water card
+        function renderDhwSchedules(features) {
+            const section = renderDhwScheduleSection(features);
+            if (!section) return '';
+
+            return `
                 <div class="card">
                     <div class="card-header">
                         <h2>🕒 Warmwasser-Zeitpläne</h2>
                     </div>
-                    ${visible.map(def => renderScheduleWeek(def, features.schedules[def.feature])).join('')}
+                    ${section}
                 </div>
             `;
         }

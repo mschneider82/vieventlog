@@ -1208,7 +1208,7 @@
             return html;
         }
 
-        function renderHotWater(kf) {
+        function renderHotWater(kf, scheduleHtml = '') {
             if (!kf.dhwTemp && !kf.dhwTarget && !kf.dhwStatus) return '';
 
             // Map API modes to user-friendly labels and vice versa
@@ -1313,6 +1313,7 @@
                             🔥 Einmalige Warmwassererwärmung starten
                         </button>
                     </div>
+                    ${scheduleHtml}
                 </div>
             `;
         }
