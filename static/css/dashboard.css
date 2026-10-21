@@ -1928,3 +1928,28 @@
         align-items: flex-start;
     }
 }
+
+.schedule-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-header + .schedule-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.schedule-section-title {
+    color: #a0a0b0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.card-header + .schedule-section .schedule-section-title {
+    display: none;
+}

@@ -242,10 +242,9 @@
                 }
 
                 // Hot water card
-                html += renderHotWater(keyFeatures);
-
-                // Hot water / circulation pump schedules
-                html += renderDhwSchedules(features);
+                // Hot water card incl. hot water / circulation pump schedules
+                const hotWaterHtml = renderHotWater(keyFeatures, renderDhwScheduleSection(features));
+                html += hotWaterHtml || renderDhwSchedules(features);
 
                 // Heating curve & settings - only show if no heating circuit cards were rendered
                 if (circuits.length === 0) {
