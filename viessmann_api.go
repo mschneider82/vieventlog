@@ -282,11 +282,18 @@ func parseFeatures(features []Feature, installationID, gatewayID, deviceID strin
 		DHW:            make(map[string]FeatureValue),
 		Circuits:       make(map[string]FeatureValue),
 		Other:          make(map[string]FeatureValue),
+		Schedules:      make(map[string]ScheduleInfo),
 		RawFeatures:    features,
 		LastUpdate:     time.Now(),
 	}
 
-	for _, feature := range features {
+	for i, feature := range features {
+		if schedule, ok := parseSchedule(feature); ok {
+			df.Schedules[feature.Feature] = schedule
+		}
+		// Commands are only needed for parsing - keep the response small
+		features[i].Commands = nil
+
 		// Extract value from properties
 		value := extractFeatureValue(feature.Properties)
 		featureName := feature.Feature
@@ -306,6 +313,50 @@ func parseFeatures(features []Feature, installationID, gatewayID, deviceID strin
 	}
 
 	return df
+}
+
+// parseSchedule extracts a schedule feature (entries + setSchedule constraints).
+// Returns false for non-schedule features or schedules without entries.
+func parseSchedule(feature Feature) (ScheduleInfo, bool) {
+	if !strings.HasSuffix(feature.Feature, ".schedule") {
+		return ScheduleInfo{}, false
+	}
+	entriesProp, ok := feature.Properties["entries"].(map[string]interface{})
+	if !ok {
+		return ScheduleInfo{}, false
+	}
+
+	// Re-marshal the generic value into typed entries
+	raw, err := json.Marshal(entriesProp["value"])
+	if err != nil {
+		return ScheduleInfo{}, false
+	}
+	var entries map[string][]ScheduleEntry
+	if err := json.Unmarshal(raw, &entries); err != nil || entries == nil {
+		return ScheduleInfo{}, false
+	}
+
+	info := ScheduleInfo{Entries: entries}
+	if activeProp, ok := feature.Properties["active"].(map[string]interface{}); ok {
+		if active, ok := activeProp["value"].(bool); ok {
+			info.Active = &active
+		}
+	}
+
+	if cmd, ok := feature.Commands["setSchedule"]; ok {
+		info.Writable = cmd.IsExecutable
+		if param, ok := cmd.Params["newSchedule"]; ok && param.Constraints != nil {
+			raw, err := json.Marshal(param.Constraints)
+			if err == nil {
+				var constraints ScheduleConstraints
+				if json.Unmarshal(raw, &constraints) == nil {
+					info.Constraints = &constraints
+				}
+			}
+		}
+	}
+
+	return info, true
 }
 
 // fetchFeaturesWithCache fetches features with caching support (default 5 minutes)

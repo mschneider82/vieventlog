@@ -85,6 +85,17 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		useOtherRefrigerantPicPtr = &defaultFalse
 	}
 
+	// Schedules are shown by default
+	defaultTrue := true
+	showDhwSchedulePtr := &defaultTrue
+	if settings.ShowDhwSchedule != nil {
+		showDhwSchedulePtr = settings.ShowDhwSchedule
+	}
+	showCirculationSchedulePtr := &defaultTrue
+	if settings.ShowCirculationSchedule != nil {
+		showCirculationSchedulePtr = settings.ShowCirculationSchedule
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DeviceSettingsResponse{
 		Success:                         true,
@@ -98,6 +109,8 @@ func deviceSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		ShowCyclesPerDay:                showCyclesPerDayPtr,
 		ShowRefrigerantVisual:           showRefrigerantVisualPtr,
 		UseOtherRefrigerantPic:          useOtherRefrigerantPicPtr,
+		ShowDhwSchedule:                 showDhwSchedulePtr,
+		ShowCirculationSchedule:         showCirculationSchedulePtr,
 	})
 }
 
@@ -166,6 +179,12 @@ func deviceSettingsSetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UseOtherRefrigerantPic != nil {
 		settings.UseOtherRefrigerantPic = req.UseOtherRefrigerantPic
+	}
+	if req.ShowDhwSchedule != nil {
+		settings.ShowDhwSchedule = req.ShowDhwSchedule
+	}
+	if req.ShowCirculationSchedule != nil {
+		settings.ShowCirculationSchedule = req.ShowCirculationSchedule
 	}
 	if err := SetDeviceSettings(req.AccountID, deviceKey, settings); err != nil {
 		w.Header().Set("Content-Type", "application/json")

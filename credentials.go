@@ -48,6 +48,8 @@ type DeviceSettings struct {
 	ShowCyclesPerDay                bool                      `json:"showCyclesPerDay,omitempty"`             // Show/hide cycles per day in dashboard
 	ShowRefrigerantVisual           *bool                     `json:"showRefrigerantVisual,omitempty"`        // Show/hide refrigerant circuit visualization (default: true)
 	UseOtherRefrigerantPic          *bool                     `json:"useOtherRefrigerantPic,omitempty"`       // use different picture for refrigerant visual (default: false)
+	ShowDhwSchedule                 *bool                     `json:"showDhwSchedule,omitempty"`              // Show/hide DHW schedule in hot water card (default: true)
+	ShowCirculationSchedule         *bool                     `json:"showCirculationSchedule,omitempty"`      // Show/hide DHW circulation pump schedule (default: true)
 }
 
 type HybridProControlSettings struct {
