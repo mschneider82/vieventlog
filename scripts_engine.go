@@ -20,6 +20,7 @@ import (
 const (
 	scriptMaxActionsPerRun = 10
 	scriptRepeatGuard      = 15 * time.Minute // An identical action is not repeated within this time
+	scriptDataMaxAge       = 30 * time.Minute // Cached live values / snapshots up to this age are used without an API call
 )
 
 // scriptFunc describes a function available in scripts. The documentation is generated from this table.
@@ -78,6 +79,9 @@ type scriptRunResult struct {
 var (
 	scriptRecentActions   = map[string]time.Time{} // scriptID|action signature -> time
 	scriptRecentActionsMu sync.Mutex
+
+	scriptLastFetch   = map[string]time.Time{} // device cache key -> last API fetch triggered by scripts
+	scriptLastFetchMu sync.Mutex
 )
 
 // --- Value helpers ---
@@ -128,21 +132,103 @@ func sameNumber(a any, b float64) bool {
 
 // --- Feature access ---
 
+// loadFeatures returns live values without burdening the API quota: the shared features cache
+// (filled by temperature logger and dashboard) is used if it is younger than scriptDataMaxAge.
+// Only if there is no recent data, scripts fetch themselves, at most once per device per scriptDataMaxAge.
 func (rc *scriptRun) loadFeatures() (*DeviceFeatures, error) {
 	if rc.features != nil {
 		return rc.features, nil
 	}
+	key := fmt.Sprintf("%s:%s:%s", rc.device.InstallationID, rc.device.GatewaySerial, rc.device.DeviceID)
+	featuresCacheMutex.RLock()
+	cached := featuresCache[key]
+	featuresCacheMutex.RUnlock()
+	if cached != nil && time.Since(cached.LastUpdate) < scriptDataMaxAge {
+		rc.features = cached
+		return cached, nil
+	}
+
+	scriptLastFetchMu.Lock()
+	allowed := time.Since(scriptLastFetch[key]) >= scriptDataMaxAge
+	if allowed {
+		scriptLastFetch[key] = time.Now()
+	}
+	scriptLastFetchMu.Unlock()
+	if !allowed {
+		if cached != nil {
+			rc.features = cached
+			return cached, nil
+		}
+		return nil, fmt.Errorf("keine aktuellen Live-Daten im Cache (API-Abruf durch Skripte max. alle %d Minuten, Temperatur-Logging aktivieren)", int(scriptDataMaxAge.Minutes()))
+	}
+
 	token, ok := getValidAccountToken(rc.device.AccountID)
 	if !ok {
 		return nil, fmt.Errorf("Account %s nicht angemeldet", rc.device.AccountID)
 	}
-	// Shared 5-minute cache with dashboard and temperature logger keeps API usage low
+	rc.logs = append(rc.logs, "Hinweis: keine aktuellen Daten im Cache, Live-Werte von Viessmann abgerufen")
 	features, err := fetchFeaturesWithCache(rc.device.InstallationID, rc.device.GatewaySerial, rc.device.DeviceID, token.AccessToken)
 	if err != nil {
 		return nil, err
 	}
 	rc.features = features
 	return features, nil
+}
+
+// cachedValue reads a feature property only if recent data is cached (never calls the API)
+func (rc *scriptRun) cachedValue(prop string, names ...string) any {
+	if rc.features == nil {
+		key := fmt.Sprintf("%s:%s:%s", rc.device.InstallationID, rc.device.GatewaySerial, rc.device.DeviceID)
+		featuresCacheMutex.RLock()
+		cached := featuresCache[key]
+		featuresCacheMutex.RUnlock()
+		if cached == nil || time.Since(cached.LastUpdate) >= scriptDataMaxAge {
+			return nil
+		}
+		rc.features = cached
+	}
+	for _, n := range names {
+		if v, _ := rc.featureProp(n, prop); v != nil {
+			return v
+		}
+	}
+	return nil
+}
+
+// snapshotValue reads the latest value of a temperature_snapshots column (temperature logger)
+func (rc *scriptRun) snapshotValue(column string) any {
+	db, err := aiReadOnlyDB()
+	if err != nil || !scriptHistoryColumn.MatchString(column) {
+		return nil
+	}
+	since := time.Now().Add(-scriptDataMaxAge).UTC().Format(time.RFC3339)
+	var v any
+	err = db.QueryRowContext(rc.ctx, fmt.Sprintf(`SELECT %s FROM temperature_snapshots WHERE installation_id = ? AND gateway_id = ?
+		AND device_id = ? AND timestamp >= ? AND %s IS NOT NULL ORDER BY timestamp DESC LIMIT 1`, column, column),
+		rc.device.InstallationID, rc.device.GatewaySerial, rc.device.DeviceID, since).Scan(&v)
+	if err != nil {
+		return nil
+	}
+	return v
+}
+
+// value reads a measured value: features cache, then latest logger snapshot, then (rate-limited) API fetch
+func (rc *scriptRun) value(column string, prop string, names ...string) (any, error) {
+	if v := rc.cachedValue(prop, names...); v != nil {
+		return v, nil
+	}
+	if column != "" {
+		if v := rc.snapshotValue(column); v != nil {
+			return v, nil
+		}
+	}
+	for _, n := range names {
+		v, err := rc.featureProp(n, prop)
+		if err != nil || v != nil {
+			return v, err
+		}
+	}
+	return nil, nil
 }
 
 func (rc *scriptRun) findFeature(name string) (*Feature, error) {
@@ -248,7 +334,6 @@ func (rc *scriptRun) action(fn string, args []any, unchanged bool, h http.Handle
 	scriptRecentActionsMu.Lock()
 	scriptRecentActions[sig] = time.Now()
 	scriptRecentActionsMu.Unlock()
-	rc.features = nil // Handlers invalidate the cache, re-read on next access
 	return true, nil
 }
 
@@ -267,15 +352,15 @@ func scriptFunctions() []scriptFunc {
 
 	return []scriptFunc{
 		// --- Values ---
-		{Name: "outsideTemp", Category: "Werte", Sig: "outsideTemp()", Desc: "Außentemperatur in °C (Live-Wert, bis zu 5 Minuten alt).",
+		{Name: "outsideTemp", Category: "Werte", Sig: "outsideTemp()", Desc: "Außentemperatur in °C.",
 			Example: "outsideTemp() > 18",
 			Impl: func(rc *scriptRun, args []any) (any, error) {
-				return rc.firstFeatureValue("heating.sensors.temperature.outside")
+				return rc.value("outside_temp", "value", "heating.sensors.temperature.outside")
 			}},
 		{Name: "dhwTemp", Category: "Werte", Sig: "dhwTemp()", Desc: "Aktuelle Warmwasser-Speichertemperatur in °C.",
 			Example: "dhwTemp() < 45",
 			Impl: func(rc *scriptRun, args []any) (any, error) {
-				return rc.firstFeatureValue("heating.dhw.sensors.temperature.dhwCylinder", "heating.dhw.sensors.temperature.hotWaterStorage")
+				return rc.value("dhw_temp", "value", "heating.dhw.sensors.temperature.dhwCylinder", "heating.dhw.sensors.temperature.hotWaterStorage")
 			}},
 		{Name: "dhwTarget", Category: "Werte", Sig: "dhwTarget()", Desc: "Eingestellte Warmwasser-Solltemperatur in °C.",
 			Example: "dhwTarget() == 53",
@@ -285,19 +370,23 @@ func scriptFunctions() []scriptFunc {
 		{Name: "supplyTemp", Category: "Werte", Sig: "supplyTemp(circuit)", Desc: "Vorlauftemperatur eines Heizkreises in °C (circuit 0 = erster Heizkreis).",
 			Example: "supplyTemp(0)",
 			Impl: func(rc *scriptRun, args []any) (any, error) {
-				name, _, err := circuitFeature(args, 0, "heating.circuits.%d.sensors.temperature.supply")
+				name, c, err := circuitFeature(args, 0, "heating.circuits.%d.sensors.temperature.supply")
 				if err != nil {
 					return nil, err
 				}
-				return rc.firstFeatureValue(name)
+				return rc.value(fmt.Sprintf("heating_circuit_%d_supply_temp", c), "value", name)
 			}},
 		{Name: "returnTemp", Category: "Werte", Sig: "returnTemp()", Desc: "Rücklauftemperatur in °C.",
 			Impl: func(rc *scriptRun, args []any) (any, error) {
-				return rc.firstFeatureValue("heating.sensors.temperature.return")
+				return rc.value("return_temp", "value", "heating.sensors.temperature.return")
 			}},
 		{Name: "compressorActive", Category: "Werte", Sig: "compressorActive()", Desc: "true, wenn der Verdichter der Wärmepumpe läuft.",
 			Impl: func(rc *scriptRun, args []any) (any, error) {
-				return rc.featureProp("heating.compressors.0", "active")
+				v, err := rc.value("compressor_active", "active", "heating.compressors.0")
+				if n, ok := toFloat(v); ok {
+					return n != 0, err // Snapshot stores 0/1
+				}
+				return v, err
 			}},
 		{Name: "heatingMode", Category: "Werte", Sig: "heatingMode(circuit)", Desc: "Betriebsart eines Heizkreises, z.B. \"heating\", \"standby\", \"cooling\".",
 			Example: "heatingMode(0) == \"heating\"",

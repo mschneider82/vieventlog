@@ -110,3 +110,31 @@ func TestScriptDocsUpToDate(t *testing.T) {
 		}
 	}
 }
+
+func TestScriptFetchIsRateLimited(t *testing.T) {
+	device := scriptDevice{AccountID: "a", InstallationID: "inst-ratelimit", GatewaySerial: "gw", DeviceID: "0"}
+	key := "inst-ratelimit:gw:0"
+	scriptLastFetchMu.Lock()
+	scriptLastFetch[key] = time.Now() // A script fetched just now
+	scriptLastFetchMu.Unlock()
+
+	rc := &scriptRun{ctx: context.Background(), device: device, dryRun: true, now: time.Now(), state: map[string]any{}, stateSet: map[string]bool{}}
+	if _, err := rc.loadFeatures(); err == nil || !strings.Contains(err.Error(), "keine aktuellen Live-Daten") {
+		t.Fatalf("expected throttling error without API call, got %v", err)
+	}
+
+	// Recent cache entry is used without fetching
+	featuresCacheMutex.Lock()
+	featuresCache[key] = &DeviceFeatures{LastUpdate: time.Now().Add(-20 * time.Minute),
+		RawFeatures: []Feature{{Feature: "heating.dhw.temperature.main", Properties: value(48.0)}}}
+	featuresCacheMutex.Unlock()
+	defer func() {
+		featuresCacheMutex.Lock()
+		delete(featuresCache, key)
+		featuresCacheMutex.Unlock()
+	}()
+	rc = &scriptRun{ctx: context.Background(), device: device, dryRun: true, now: time.Now(), state: map[string]any{}, stateSet: map[string]bool{}}
+	if v, err := rc.firstFeatureValue("heating.dhw.temperature.main"); err != nil || !sameNumber(v, 48) {
+		t.Fatalf("expected cached value 48, got %v, %v", v, err)
+	}
+}

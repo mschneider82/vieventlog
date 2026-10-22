@@ -6,7 +6,7 @@ import (
 )
 
 // scriptDocs returns the script documentation as Markdown. It is generated from the function table,
-// served in the UI and to the AI assistant, and written to docs/SCRIPTS.md (see scripts_docs_test.go).
+// served in the UI and to the AI assistant, and written to docs/SCRIPTS.md (see TestScriptDocsUpToDate).
 func scriptDocs() string {
 	var sb strings.Builder
 	sb.WriteString(`# ViEventLog Skripte
@@ -20,8 +20,11 @@ Zeitplan (Cron) im Hintergrund ausgeführt. Jedes Skript gehört zu genau einem 
 - **Zeitplan** im Cron-Format mit 5 Feldern ` + "`Minute Stunde Tag Monat Wochentag`" + ` (lokale Zeit):
   ` + "`* * * * *`" + ` = jede Minute, ` + "`*/15 * * * *`" + ` = alle 15 Minuten, ` + "`0 17 * * *`" + ` = täglich 17:00,
   ` + "`0 6 * * 1-5`" + ` = werktags 6:00. Kurzformen: ` + "`@every 5m`" + `, ` + "`@hourly`" + `, ` + "`@daily`" + `.
-- **Live-Werte** (z.B. ` + "`outsideTemp()`" + `) kommen aus der Viessmann-Cloud und werden bis zu 5 Minuten zwischengespeichert
-  (gemeinsam mit Dashboard und Temperatur-Logging). Ein Skript jede Minute verursacht dadurch höchstens alle 5 Minuten einen API-Aufruf.
+- **Datenquelle**: Skripte rufen die Viessmann-API für Werte praktisch nie selbst ab, damit das API-Limit (ca. 1450 Aufrufe/Tag)
+  auch bei minütlichen Skripten hält. Werte kommen aus dem Live-Daten-Cache, den Temperatur-Logging und Dashboard füllen,
+  bzw. aus dem letzten Eintrag der Temperatur-Historie (SQLite), solange sie höchstens 30 Minuten alt sind.
+  Nur wenn keine aktuellen Daten vorliegen, holt ein Skript sie selbst – höchstens einmal pro Gerät alle 30 Minuten.
+  **Empfehlung:** Temperatur-Logging aktivieren; dann verursachen Skripte für Werte keine zusätzlichen API-Aufrufe.
 - **Aktionen** (` + "`set...`" + `, ` + "`start...`" + `) prüfen zuerst den aktuellen Wert und rufen die API nur auf, wenn sich etwas ändert.
   Sie geben ` + "`true`" + ` zurück, wenn etwas geändert wurde, sonst ` + "`false`" + `. Eine identische Aktion wird innerhalb von 15 Minuten
   nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Maximal 10 Aktionen pro Lauf.
