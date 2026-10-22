@@ -13,7 +13,7 @@ import (
 const aiMaxToolRounds = 25
 
 // aiSystemPrompt describes the assistant's role. Shared by the chat UI and MCP (as server instructions).
-func aiSystemPrompt(settings *AISettings, allowWrite bool) string {
+func aiSystemPrompt(settings *AISettings, allowWrite, autoApprove bool) string {
 	now := time.Now()
 	var sb strings.Builder
 	sb.WriteString(`Du bist der ViEventLog-Assistent: ein Experte für Viessmann-Heizungsanlagen (Wärmepumpen, Gas-/Hybridheizungen, Thermostate, Lüftung) und Energieeffizienz.
@@ -28,7 +28,11 @@ Arbeitsweise:
 - Antworte in der Sprache des Benutzers, prägnant, mit Markdown (Tabellen für Zahlen).
 - Diagramme: Gib einen Codeblock mit Sprache "echarts" und einer gültigen ECharts-Option als reines JSON (keine Funktionen) aus, er wird im Chat gerendert. Nur verwenden, wenn ein Diagramm wirklich hilft.
 `)
-	if allowWrite {
+	if allowWrite && autoApprove {
+		sb.WriteString(`- Einstellungen änderst du nur mit den set_*/start_*-Tools und nur, wenn der Benutzer es wünscht. Lies vorher den aktuellen Wert (get_live_features) und nenne alten und neuen Wert.
+  Änderungen werden SOFORT ohne weitere Bestätigung ausgeführt. Wenn der Benutzer eine Änderung verlangt, führe sie direkt aus. Bei eigenen Empfehlungen frage immer vorher, ob du sie umsetzen sollst.
+`)
+	} else if allowWrite {
 		sb.WriteString(`- Einstellungen änderst du nur mit den set_*/start_*-Tools und nur, wenn der Benutzer es wünscht. Lies vorher den aktuellen Wert (get_live_features) und nenne alten und neuen Wert.
   Wenn der Benutzer eine Änderung verlangt, rufe das Tool direkt auf, ohne im Chat nachzufragen: Jeder Aufruf wird dem Benutzer automatisch zur Bestätigung vorgelegt. Bei eigenen Empfehlungen frage vorher, ob du sie umsetzen sollst.
 `)
@@ -194,6 +198,9 @@ func aiChatHandler(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case !ok:
 				result = toJSON(map[string]string{"error": "Unbekanntes oder deaktiviertes Tool: " + call.Function.Name})
+			case tool.Write && settings.AutoApproveWrite:
+				log.Printf("AI: executing write tool %s without confirmation (auto-approve) %s", call.Function.Name, call.Function.Arguments)
+				result = aiRunTool(ctx, tool, call.Function.Arguments)
 			case tool.Write:
 				approved, decided := req.Confirmations[call.ID]
 				if !decided {
@@ -225,7 +232,7 @@ func aiChatHandler(w http.ResponseWriter, r *http.Request) {
 			break // Final answer reached
 		}
 
-		llmMessages := append([]aiMessage{{Role: "system", Content: aiSystemPrompt(settings, settings.AllowWrite)}}, aiCloseOpenToolCalls(messages)...)
+		llmMessages := append([]aiMessage{{Role: "system", Content: aiSystemPrompt(settings, settings.AllowWrite, settings.AutoApproveWrite)}}, aiCloseOpenToolCalls(messages)...)
 		reply, err := aiStreamChat(ctx, provider, model, llmMessages, aiToolSpecs(tools), func(text string) {
 			send("delta", map[string]string{"text": text})
 		})

@@ -74,6 +74,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, m
 .badge { font-size: 12px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
 .badge.read { background: rgba(76, 175, 80, 0.15); color: var(--ok); }
 .badge.write { background: rgba(240, 173, 78, 0.15); color: var(--warn); }
+.badge.yolo { background: rgba(224, 93, 93, 0.18); color: var(--danger); }
 
 .messages { flex: 1; overflow-y: auto; padding: 24px 20px; }
 .messages > * { max-width: 900px; margin-left: auto; margin-right: auto; }
@@ -209,6 +210,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, m
 .hint code { background: rgba(255, 255, 255, 0.08); padding: 1px 4px; border-radius: 3px; }
 .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 8px 0; cursor: pointer; }
 .check input { margin-top: 3px; }
+.check.sub { margin-left: 24px; }
+.check.disabled { opacity: .5; cursor: default; }
 .field { display: block; font-size: 13px; color: var(--muted); margin: 10px 0; }
 .field .input, .field .row { margin-top: 4px; }
 .row { display: flex; gap: 8px; align-items: center; }

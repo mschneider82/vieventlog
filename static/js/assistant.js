@@ -555,8 +555,9 @@
         state.settings = await api('/api/ai/settings');
         fillModelSelect(els.modelSelect, true);
         const w = state.settings.allowWrite;
-        els.writeBadge.textContent = w ? '✎ Schreiben mit Bestätigung' : '👁 Nur lesen';
-        els.writeBadge.className = 'badge ' + (w ? 'write' : 'read');
+        const yolo = w && state.settings.autoApproveWrite;
+        els.writeBadge.textContent = yolo ? '⚡ Schreiben ohne Bestätigung' : (w ? '✎ Schreiben mit Bestätigung' : '👁 Nur lesen');
+        els.writeBadge.className = 'badge ' + (yolo ? 'yolo' : (w ? 'write' : 'read'));
     }
 
     function fillModelSelect(select, useStoredDefault) {
@@ -597,6 +598,8 @@
         draft.providers.forEach((p) => { p.apiKey = ''; });
         $('persistChats').checked = s.persistChats;
         $('allowWrite').checked = s.allowWrite;
+        $('autoApproveWrite').checked = s.autoApproveWrite;
+        updateWriteOptions();
         $('customPrompt').value = s.customPrompt || '';
         $('mcpEnabled').checked = s.mcpEnabled;
         $('mcpAllowWrite').checked = s.mcpAllowWrite;
@@ -673,6 +676,12 @@
         for (const o of select.options) { if (o.value === current) select.value = current; }
     }
 
+    function updateWriteOptions() {
+        const enabled = $('allowWrite').checked;
+        $('autoApproveWrite').disabled = !enabled;
+        $('autoApproveWrite').parentElement.classList.toggle('disabled', !enabled);
+    }
+
     function updateMcpDetails() {
         const enabled = $('mcpEnabled').checked;
         $('mcpDetails').hidden = !enabled || !$('mcpToken').value;
@@ -692,6 +701,7 @@
             defaultModel: def.model || '',
             persistChats: $('persistChats').checked,
             allowWrite: $('allowWrite').checked,
+            autoApproveWrite: $('allowWrite').checked && $('autoApproveWrite').checked,
             customPrompt: $('customPrompt').value,
             mcpEnabled: $('mcpEnabled').checked,
             mcpToken: $('mcpToken').value,
@@ -750,6 +760,7 @@
     };
     $('saveSettingsBtn').onclick = saveSettings;
     $('mcpEnabled').onchange = updateMcpDetails;
+    $('allowWrite').onchange = updateWriteOptions;
     $('mcpRegenBtn').onclick = () => { $('mcpToken').value = ''; $('settingsStatus').textContent = 'Neues Token wird beim Speichern erzeugt.'; };
     document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = closeSettings; });
     $('settingsModal').addEventListener('click', (e) => { if (e.target.id === 'settingsModal') closeSettings(); });

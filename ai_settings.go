@@ -26,12 +26,13 @@ type AISettings struct {
 	Providers         []AIProvider `json:"providers"`
 	DefaultProviderID string       `json:"defaultProviderId"`
 	DefaultModel      string       `json:"defaultModel"`
-	PersistChats      bool         `json:"persistChats"`  // Store conversations in SQLite
-	AllowWrite        bool         `json:"allowWrite"`    // Allow tools that change device settings (always with confirmation)
-	CustomPrompt      string       `json:"customPrompt"`  // Additional instructions appended to the system prompt
-	MCPEnabled        bool         `json:"mcpEnabled"`    // Expose tools via MCP at /mcp
-	MCPToken          string       `json:"mcpToken"`      // Bearer token for /mcp
-	MCPAllowWrite     bool         `json:"mcpAllowWrite"` // Expose write tools via MCP
+	PersistChats      bool         `json:"persistChats"`     // Store conversations in SQLite
+	AllowWrite        bool         `json:"allowWrite"`       // Allow tools that change device settings
+	AutoApproveWrite  bool         `json:"autoApproveWrite"` // Execute write tools without asking for confirmation in the chat
+	CustomPrompt      string       `json:"customPrompt"`     // Additional instructions appended to the system prompt
+	MCPEnabled        bool         `json:"mcpEnabled"`       // Expose tools via MCP at /mcp
+	MCPToken          string       `json:"mcpToken"`         // Bearer token for /mcp
+	MCPAllowWrite     bool         `json:"mcpAllowWrite"`    // Expose write tools via MCP
 }
 
 // GetAISettings returns the AI settings, or defaults if not configured
@@ -105,6 +106,7 @@ func aiSettingsGetHandler(w http.ResponseWriter, r *http.Request) {
 		"defaultModel":      settings.DefaultModel,
 		"persistChats":      settings.PersistChats,
 		"allowWrite":        settings.AllowWrite,
+		"autoApproveWrite":  settings.AutoApproveWrite,
 		"customPrompt":      settings.CustomPrompt,
 		"mcpEnabled":        settings.MCPEnabled,
 		"mcpToken":          settings.MCPToken,

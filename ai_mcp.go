@@ -87,7 +87,7 @@ func mcpDispatch(r *http.Request, settings *AISettings, req *mcpRequest) (interf
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]interface{}{"tools": map[string]interface{}{"listChanged": false}},
 			"serverInfo":      map[string]interface{}{"name": "vieventlog", "title": "ViEventLog", "version": version},
-			"instructions":    aiSystemPrompt(settings, settings.MCPAllowWrite),
+			"instructions":    aiSystemPrompt(settings, settings.MCPAllowWrite, true),
 		}, nil
 
 	case "ping":
