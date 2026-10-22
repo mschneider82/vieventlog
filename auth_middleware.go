@@ -21,7 +21,8 @@ func BasicAuthMiddleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Allow Kubernetes (or any other) probes to reach /health without credentials
-		if r.URL.Path == "/health" {
+		// /mcp is secured by its own bearer token (MCP clients can't send Basic Auth and a token at once)
+		if r.URL.Path == "/health" || r.URL.Path == "/mcp" {
 			next.ServeHTTP(w, r)
 			return
 		}

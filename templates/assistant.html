@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KI-Assistent - ViEventLog</title>
+    <link rel="stylesheet" href="/static/css/assistant.css">
+    <script src="/static/js/echarts.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="row" style="justify-content: space-between">
+                    <a href="/" class="back-link">← Events</a>
+                    <a href="/scripts" class="back-link">⚙️ Skripte</a>
+                </div>
+                <button class="btn btn-primary btn-block" id="newChatBtn">+ Neuer Chat</button>
+            </div>
+            <div class="conv-section-title">Unterhaltungen</div>
+            <div class="conv-list" id="convList"></div>
+            <div class="sidebar-bottom">
+                <button class="btn btn-ghost btn-block" id="settingsBtn">⚙️ Einstellungen</button>
+                <div class="version">ViEventLog {{.Version}}</div>
+            </div>
+        </aside>
+
+        <main class="chat">
+            <header class="chat-header">
+                <button class="btn btn-ghost sidebar-toggle" id="sidebarToggle" title="Unterhaltungen">☰</button>
+                <h1>🤖 KI-Assistent</h1>
+                <select id="modelSelect" class="model-select" title="Modell"></select>
+                <span class="badge" id="writeBadge" title="Schreibzugriff"></span>
+            </header>
+
+            <div class="messages" id="messages"></div>
+
+            <form class="composer" id="composer">
+                <textarea id="input" rows="1" placeholder="Frag etwas zu deiner Anlage … (Enter senden, Shift+Enter neue Zeile)"></textarea>
+                <button type="submit" class="btn btn-primary" id="sendBtn">Senden</button>
+                <button type="button" class="btn btn-danger" id="stopBtn" hidden>Stopp</button>
+            </form>
+        </main>
+    </div>
+
+    <!-- Settings dialog -->
+    <div class="modal" id="settingsModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Assistent-Einstellungen</h2>
+                <button class="btn btn-ghost" data-close>✕</button>
+            </div>
+            <div class="modal-body">
+                <section>
+                    <h3>KI-Anbieter (OpenAI-kompatible API)</h3>
+                    <p class="hint">z.B. OpenRouter <code>https://openrouter.ai/api/v1</code>, OpenAI <code>https://api.openai.com/v1</code>,
+                        Ollama <code>http://localhost:11434/v1</code>. Das Modell muss Tool-Calling unterstützen.</p>
+                    <div id="providerList"></div>
+                    <button class="btn btn-ghost" id="addProviderBtn">+ Anbieter hinzufügen</button>
+                </section>
+
+                <section>
+                    <h3>Standardmodell</h3>
+                    <select id="defaultModelSelect" class="input"></select>
+                </section>
+
+                <section>
+                    <h3>Verhalten</h3>
+                    <label class="check"><input type="checkbox" id="persistChats"> Unterhaltungen in der SQLite-Datenbank speichern</label>
+                    <label class="check"><input type="checkbox" id="allowWrite"> Einstellungen ändern erlauben (jede Änderung muss im Chat bestätigt werden)</label>
+                    <label class="check sub"><input type="checkbox" id="autoApproveWrite"> Ohne Bestätigung ausführen („YOLO-Modus“) – der Assistent ändert Einstellungen sofort</label>
+                    <label class="field">Zusätzliche Hinweise für den Assistenten (optional)
+                        <textarea id="customPrompt" class="input" rows="3" placeholder="z.B. Strompreis 0,28 €/kWh, Haus Baujahr 1995, 140 m², Fußbodenheizung"></textarea>
+                    </label>
+                </section>
+
+                <section>
+                    <h3>MCP-Server (z.B. für Claude Desktop / Claude Code)</h3>
+                    <label class="check"><input type="checkbox" id="mcpEnabled"> MCP-Endpunkt <code>/mcp</code> aktivieren</label>
+                    <label class="check"><input type="checkbox" id="mcpAllowWrite"> Schreibende Tools auch per MCP anbieten (Bestätigung erfolgt im MCP-Client)</label>
+                    <div id="mcpDetails" hidden>
+                        <label class="field">Token
+                            <div class="row">
+                                <input type="text" id="mcpToken" class="input mono" readonly>
+                                <button class="btn btn-ghost" id="mcpRegenBtn" title="Neues Token erzeugen">↻</button>
+                            </div>
+                        </label>
+                        <p class="hint">Claude Code:</p>
+                        <pre class="snippet" id="mcpSnippetCode"></pre>
+                        <p class="hint">Claude Desktop (<code>claude_desktop_config.json</code>, benötigt Node.js):</p>
+                        <pre class="snippet" id="mcpSnippetDesktop"></pre>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <span class="status" id="settingsStatus"></span>
+                <button class="btn btn-ghost" data-close>Abbrechen</button>
+                <button class="btn btn-primary" id="saveSettingsBtn">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/markdown.js"></script>
+    <script src="/static/js/assistant.js"></script>
+</body>
+</html>

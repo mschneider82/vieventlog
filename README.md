@@ -33,6 +33,12 @@ Mit der [Abschaltung von ViGuide](https://community.viessmann.de/t5/Konnektivita
 ### Vitovent Lüftung
 ![ViEventLog Lüftung](screenshot_lueftung.png)
 
+### KI-Assistent - Fragen zu den eigenen Daten
+![ViEventLog KI-Assistent](screenshot_assistant_chat.png)
+
+### Skripte - Automatisierung mit Testlauf und KI-Hilfe
+![ViEventLog Skripte](screenshot_scripts_editor.png)
+
 
 ## Lizenz
 
@@ -707,6 +713,14 @@ Dashboard für Viessmann Vitovent Lüftungsanlagen:
 - Über den Vitovent-Button im Dashboard
 - Automatische Erkennung bei vorhandener Vitovent-Anlage
 
+### KI-Assistent
+
+Ein Chat unter `/assistant` beantwortet Fragen zu Ihren Daten (Live-Werte, Verbrauchshistorie, Ereignisprotokoll), rechnet Einsparungen aus, zeichnet Diagramme und ändert auf Wunsch Einstellungen (mit Bestätigung). Für Claude Desktop, Claude Code und andere MCP-Clients gibt es einen MCP-Server. Einrichtung und Benutzung: [KI-Assistent einrichten und benutzen](#ki-assistent-einrichten-und-benutzen).
+
+### Skripte (Automatisierung)
+
+Unter `/scripts` laufen eigene Regeln nach Zeitplan im Hintergrund, z.B. „über 18 °C Außentemperatur Warmwasser auf 50 °C“ oder „täglich um 17 Uhr Warmwasser bereiten“. Einrichtung und Benutzung: [Skripte: Automatisierung einrichten und benutzen](#skripte-automatisierung-einrichten-und-benutzen).
+
 ### Dashboard-Ansicht
 
 Das Dashboard bietet eine übersichtliche Echtzeitansicht aller wichtigen Parameter Ihrer Heizungsanlage:
@@ -782,6 +796,166 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
 - OAuth2 Token werden pro Account gecacht
 - Automatisches Token-Refresh
 
+## KI-Assistent einrichten und benutzen
+
+Der KI-Assistent unter `/assistant` (Link „🤖 KI-Assistent“ auf der Startseite und im Dashboard) beantwortet Fragen zu Ihrer Anlage in normaler Sprache, zum Beispiel:
+
+- „Wie oft hat meine Wärmepumpe in den letzten 14 Tagen pro Tag getaktet, und welche Einstellungen könnten wir ändern, um weniger Takte zu haben?“
+- „Wie viel Energie würde ich voraussichtlich sparen, wenn ich das Warmwasser 1 °C kühler einstelle?“
+- „Zeig mir Stromverbrauch, Wärme und COP der letzten 30 Tage pro Tag als Diagramm.“
+- „Welche Fehlermeldungen gab es im letzten Monat und was bedeuten sie?“
+
+Dafür hat der Assistent Werkzeuge: Er liest die Geräteliste und Live-Werte aus der Viessmann-Cloud, fragt die SQLite-Datenbank (Ereignisprotokoll, Temperatur- und Verbrauchshistorie) **nur lesend** ab, rechnet mit JavaScript statt im Kopf und zeichnet Diagramme. Jeder Werkzeugaufruf ist im Chat aufklappbar, inkl. SQL-Abfrage bzw. Berechnung und Ergebnis.
+
+![KI-Assistent mit Tabelle und Diagramm](screenshot_assistant_chat.png)
+
+### Voraussetzungen
+
+- Ein API-Zugang zu einem Sprachmodell mit **OpenAI-kompatibler API** und **Tool-Calling**, z.B.:
+
+  | Anbieter | Base-URL | Hinweis |
+  |---|---|---|
+  | [OpenRouter](https://openrouter.ai) | `https://openrouter.ai/api/v1` | Ein Key für viele Modelle (Claude, GPT, Gemini, …), empfohlen |
+  | OpenAI | `https://api.openai.com/v1` | |
+  | Ollama (lokal) | `http://localhost:11434/v1` | Kein API-Key nötig; kleine Modelle rufen Werkzeuge oft unzuverlässig auf |
+  | LM Studio (lokal) | `http://localhost:1234/v1` | |
+
+- Für Fragen zur Historie: aktiviertes **Temperatur-Logging** und/oder **Event-Archivierung** (siehe Account-Verwaltung). Ohne Historie kann der Assistent nur Live-Werte auswerten.
+
+> **Datenschutz:** Für die Antworten werden Ihre Fragen und die dafür abgerufenen Daten (Messwerte, Ereignisse, Geräte-IDs) an den gewählten KI-Anbieter gesendet. Wer das nicht möchte, nutzt ein lokales Modell (Ollama, LM Studio).
+
+### Einrichtung
+
+1. `/assistant` öffnen. Beim ersten Aufruf öffnen sich die **Einstellungen** automatisch (sonst unten links „⚙️ Einstellungen“).
+2. **„+ Anbieter hinzufügen“**: Name, Base-URL und API-Key eintragen und **Speichern**.
+3. Mit **„Modelle laden“** die Modelle des Anbieters abrufen und gewünschte Modelle hinzufügen (oder Modell-IDs direkt eintragen, eine pro Zeile, z.B. `anthropic/claude-sonnet-5`).
+4. **Standardmodell** wählen, **Speichern**. Im Chat lässt sich das Modell oben rechts jederzeit wechseln.
+
+![Assistent-Einstellungen](screenshot_assistant_settings.png)
+
+Weitere Einstellungen:
+
+| Einstellung | Bedeutung |
+|---|---|
+| Unterhaltungen speichern | Chats werden in der SQLite-Datenbank gespeichert und erscheinen links in der Liste. Ohne Haken bleiben sie nur bis zum Neuladen der Seite. |
+| Einstellungen ändern erlauben | Der Assistent darf Einstellungen ändern (Warmwasser, Heizkurve, Betriebsart, Zeitprogramme, Skripte, …). **Jede Änderung muss im Chat bestätigt werden.** Ohne Haken gibt er nur Empfehlungen. |
+| Ohne Bestätigung ausführen („YOLO-Modus“) | Änderungen werden sofort ausgeführt, ohne Rückfrage. Oben rechts erscheint dann ein rotes „⚡ Schreiben ohne Bestätigung“. Nur aktivieren, wenn Sie dem Modell vertrauen. |
+| Zusätzliche Hinweise | Wird jeder Unterhaltung mitgegeben, z.B. Strompreis, Hausgröße, Heizungsart. |
+
+API-Keys werden nie an den Browser zurückgegeben; leer gelassen bleibt der gespeicherte Key erhalten.
+
+### Benutzung
+
+- Frage eingeben und mit **Enter** senden (**Shift+Enter** für eine neue Zeile). Die Antwort erscheint live. Mit **Stopp** lässt sie sich abbrechen.
+- Auf der Startseite des Chats stehen Beispielfragen zum Anklicken.
+- **„🔧 …“-Zeilen** zeigen, welche Werkzeuge der Assistent benutzt hat. Aufklappen zeigt Argumente (z.B. die SQL-Abfrage) und Ergebnis.
+- **Einstellungen ändern:** Bittet man den Assistenten um eine Änderung, liest er zuerst den aktuellen Wert und schlägt die Änderung vor. Unter der Nachricht erscheint eine gelbe Karte mit **„Ausführen“** / **„Ablehnen“**. Erst nach „Ausführen“ wird die Änderung an die Viessmann-Cloud gesendet.
+
+![Bestätigung einer Änderung](screenshot_assistant_confirm.png)
+
+### MCP-Server für Claude Desktop, Claude Code & Co.
+
+Wer lieber seinen eigenen KI-Client verwendet, kann dieselben Werkzeuge über das [Model Context Protocol](https://modelcontextprotocol.io) nutzen. Dafür ist kein KI-Anbieter in ViEventLog nötig.
+
+1. In den Assistent-Einstellungen **„MCP-Endpunkt /mcp aktivieren“** anhaken und speichern. Es wird ein Token erzeugt.
+2. Optional **„Schreibende Tools auch per MCP anbieten“**. Die Bestätigung übernimmt dann der MCP-Client.
+3. Den passenden Befehl aus den Einstellungen kopieren:
+
+   **Claude Code:**
+   ```bash
+   claude mcp add --transport http vieventlog http://<host>:5000/mcp \
+     --header "Authorization: Bearer <token>"
+   ```
+
+   **Claude Desktop** (`claude_desktop_config.json`, benötigt Node.js):
+   ```json
+   {
+     "mcpServers": {
+       "vieventlog": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "http://<host>:5000/mcp",
+                  "--header", "Authorization: Bearer <token>", "--allow-http"]
+       }
+     }
+   }
+   ```
+
+Der MCP-Endpunkt ist durch sein eigenes Token geschützt und unabhängig von `BASIC_AUTH_USER`/`BASIC_AUTH_PASSWORD`. Mit „↻“ in den Einstellungen lässt sich das Token neu erzeugen; das alte wird dann ungültig.
+
+## Skripte: Automatisierung einrichten und benutzen
+
+Skripte sind kleine Regeln, die ViEventLog nach einem Zeitplan im Hintergrund ausführt, zum Beispiel:
+
+- über 18 °C Außentemperatur Warmwasser auf 50 °C, darunter auf 53 °C
+- täglich um 17 Uhr eine Warmwasserbereitung starten
+- nachts die Geräuschreduzierung der Wärmepumpe einschalten
+
+Die Skripte sind in der einfachen Ausdruckssprache [expr](https://expr-lang.org) geschrieben:
+
+```
+let t = history("outside_temp", 120, "avg") ?? outsideTemp();
+if t > 18.5 {
+  setDhwTemperature(50)
+} else if t < 17.5 {
+  setDhwTemperature(53)
+} else {
+  false // Schaltlücke: nichts ändern
+}
+```
+
+![Skript-Editor mit Testlauf und KI-Hilfe](screenshot_scripts_editor.png)
+
+### Voraussetzungen
+
+- **Temperatur-Logging aktivieren** (Account-Verwaltung). Skripte lesen ihre Werte aus dem Live-Daten-Cache und der Temperatur-Historie statt selbst die Viessmann-API abzufragen. Mit aktivem Logging verursachen Skripte für das Lesen keine zusätzlichen API-Aufrufe, auch wenn sie jede Minute laufen. Ohne Logging holt ein Skript die Werte selbst, höchstens einmal pro Gerät alle 30 Minuten.
+- Für `history(...)` (z.B. Mittelwerte) wird die Temperatur-Historie benötigt.
+
+### Ein Skript anlegen
+
+1. `/scripts` öffnen (Link „⚙️ Skripte“ auf der Startseite, im Dashboard oder im Assistenten).
+2. Eine **Vorlage** wählen (Warmwasser nach Außentemperatur, Warmwasser um 17 Uhr, Nachts leiser) oder ein leeres Skript.
+3. **Gerät** auswählen. Alle Funktionen im Skript beziehen sich auf dieses Gerät.
+4. **Zeitplan** im Cron-Format eintragen oder aus „Vorlage …“ wählen:
+
+   | Zeitplan | Bedeutung |
+   |---|---|
+   | `* * * * *` | jede Minute |
+   | `*/5 * * * *` | alle 5 Minuten |
+   | `0 17 * * *` | täglich um 17:00 |
+   | `0 6 * * 1-5` | werktags um 6:00 |
+   | `@every 10m` | alle 10 Minuten |
+
+   Unter dem Feld stehen die nächsten Ausführungszeiten.
+5. Code anpassen und **„▶ Testlauf (ohne Aktionen)“** klicken. Das Skript läuft mit echten Werten, ändert aber nichts. Das Ergebnis zeigt, welche Aktionen **ausgeführt würden**, die Log-Ausgaben und das Ergebnis.
+6. **Aktiv** anhaken und **Speichern**. Ab jetzt läuft das Skript nach Zeitplan.
+
+Mit **„⚡ Jetzt ausführen“** wird die gespeicherte Version sofort ausgeführt, inklusive Aktionen. Im **Protokoll** stehen alle Läufe mit Fehlern oder ausgeführten Änderungen (mit Haken auch alle anderen).
+
+### Wie Aktionen ausgeführt werden
+
+- Eine Aktion wie `setDhwTemperature(50)` prüft zuerst den aktuellen Wert und ruft die Viessmann-API **nur auf, wenn sich etwas ändert**. Ein Skript, das jede Minute läuft, setzt den Wert also nur einmal.
+- Eine identische Aktion wird innerhalb von 15 Minuten nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Pro Lauf sind höchstens 10 Aktionen möglich.
+- Gegen ständiges Hin- und Herschalten helfen Mittelwerte (`history(...)`) und eine Schaltlücke (siehe Beispiel oben).
+
+### KI-Hilfe im Editor
+
+Im Bereich **„🤖 KI-Hilfe zu diesem Skript“** (benötigt einen eingerichteten KI-Anbieter, siehe oben):
+
+- **💡 Erklären** – beschreibt in einfachen Worten, was das Skript macht, wann es läuft und was es ändert
+- **🔍 Prüfen & testen** – sucht Fehler und Risiken und macht einen Testlauf
+- **✨ Verbessern** – schlägt eine robustere Version vor
+- eigene Fragen oder Änderungswünsche, z.B. „nur am Wochenende“
+
+Vorgeschlagener Code lässt sich mit **„↳ In Editor übernehmen“** übernehmen. Die KI-Hilfe kann nichts speichern oder ausführen; das bleibt Ihnen überlassen.
+
+Alternativ schreibt der KI-Assistent ganze Skripte: „Erstelle ein Skript, das bei über 18 °C Außentemperatur das Warmwasser auf 50 °C stellt.“ Er liest die Dokumentation, testet das Skript und speichert es nach Ihrer Bestätigung.
+
+### Dokumentation aller Funktionen
+
+Alle Funktionen (Werte, Zeit, Variablen, Aktionen), die Syntax und weitere Beispiele stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md) und im Editor unter **„📖 Dokumentation“**.
+
+![Skript-Dokumentation](screenshot_scripts_docs.png)
+
 ## API Endpoints
 
 ### Hauptseiten
@@ -790,6 +964,8 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
 - `GET /login` - Login-Seite
 - `GET /accounts` - Account-Verwaltung
 - `GET /dashboard` - Dashboard-Ansicht mit Live-Daten
+- `GET /assistant` - KI-Assistent
+- `GET /scripts` - Skripte (Automatisierung)
 
 ### API
 
@@ -926,6 +1102,23 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
   ```
 
 Alle Steuerungs-Endpoints invalidieren automatisch den Feature-Cache und geben bei Erfolg `{"success": true}` zurück.
+
+#### KI-Assistent
+- `GET /api/ai/settings` / `POST /api/ai/settings/set` - Einstellungen (API-Keys werden nicht zurückgegeben)
+- `GET /api/ai/models?providerId=...` - Modelle eines Anbieters abrufen
+- `POST /api/ai/chat` - Chat (Server-Sent Events: `delta`, `message`, `confirm`, `error`, `done`)
+- `GET /api/ai/conversations`, `GET /api/ai/conversations/get?id=...`, `POST /api/ai/conversations/delete` - Gespeicherte Unterhaltungen
+- `POST /mcp` - MCP-Server (Streamable HTTP, `Authorization: Bearer <token>`)
+
+#### Skripte
+- `GET /api/scripts` - Alle Skripte inkl. nächster Ausführungszeiten
+- `POST /api/scripts/save` - Skript anlegen/ändern (Syntax und Zeitplan werden geprüft)
+- `POST /api/scripts/delete` - Skript löschen (`{"id": "..."}`)
+- `POST /api/scripts/test` - Testlauf ohne Aktionen (`code`, `accountId`, `installationId`, `gatewaySerial`, `deviceId`)
+- `POST /api/scripts/run` - Gespeichertes Skript sofort ausführen (`{"id": "..."}`)
+- `GET /api/scripts/runs?id=...&all=1` - Ausführungsprotokoll
+- `GET /api/scripts/docs` - Dokumentation (Markdown)
+- `GET /api/scripts/devices` - Geräte, an die Skripte gebunden werden können
 
 ## Technische Details
 

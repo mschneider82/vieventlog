@@ -120,6 +120,8 @@ func main() {
 	http.HandleFunc("/vitovent", vitoventPageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)
 	http.HandleFunc("/apitest", apiTestPageHandler)
+	http.HandleFunc("/assistant", assistantPageHandler)
+	http.HandleFunc("/scripts", scriptsPageHandler)
 
 	// Static files handler
 	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
@@ -215,6 +217,29 @@ func main() {
 	// Consumption statistics endpoint
 	http.HandleFunc("/api/consumption/stats", HandleConsumptionStats)
 
+	// AI assistant endpoints
+	http.HandleFunc("/api/ai/settings", aiSettingsGetHandler)
+	http.HandleFunc("/api/ai/settings/set", aiSettingsSetHandler)
+	http.HandleFunc("/api/ai/models", aiModelsHandler)
+	http.HandleFunc("/api/ai/tools", aiToolsInfoHandler)
+	http.HandleFunc("/api/ai/chat", aiChatHandler)
+	http.HandleFunc("/api/ai/conversations", aiConversationsHandler)
+	http.HandleFunc("/api/ai/conversations/get", aiConversationGetHandler)
+	http.HandleFunc("/api/ai/conversations/delete", aiConversationDeleteHandler)
+
+	// Automation scripts
+	http.HandleFunc("/api/scripts", scriptsListHandler)
+	http.HandleFunc("/api/scripts/save", scriptsSaveHandler)
+	http.HandleFunc("/api/scripts/delete", scriptsDeleteHandler)
+	http.HandleFunc("/api/scripts/test", scriptsTestHandler)
+	http.HandleFunc("/api/scripts/run", scriptsRunHandler)
+	http.HandleFunc("/api/scripts/runs", scriptsRunsHandler)
+	http.HandleFunc("/api/scripts/docs", scriptsDocsHandler)
+	http.HandleFunc("/api/scripts/devices", scriptsDevicesHandler)
+
+	// MCP endpoint for external AI clients (secured by its own bearer token)
+	http.HandleFunc("/mcp", mcpHandler)
+
 	// Health check endpoint (verifies DB writability for Kubernetes probes)
 	http.HandleFunc("/health", healthHandler)
 
@@ -233,6 +258,9 @@ func main() {
 		if err != nil {
 			log.Printf("Temperature scheduler initialization: %v", err)
 		}
+
+		// Start automation scripts
+		StartScriptScheduler()
 	}()
 
 	// Get bind address from environment, with backward compatibility for PORT
@@ -282,6 +310,9 @@ func main() {
 
 	log.Println("Stopping temperature scheduler...")
 	StopTemperatureScheduler()
+
+	log.Println("Stopping script scheduler...")
+	StopScriptScheduler()
 
 	// Give schedulers time to finish current operations
 	time.Sleep(500 * time.Millisecond)
