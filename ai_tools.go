@@ -183,6 +183,8 @@ func aiTools() []aiTool {
 	}
 	circuit := map[string]interface{}{"type": "integer", "description": "Heizkreis (0 = erster Heizkreis)"}
 
+	tools = append(tools, aiScriptTools()...)
+
 	tools = append(tools,
 		writeTool("set_dhw_temperature", "Setzt die Warmwasser-Solltemperatur (°C).", dhwTemperatureSetHandler,
 			map[string]interface{}{"temperature": map[string]interface{}{"type": "number"}}, "temperature"),
@@ -545,4 +547,124 @@ func aiRunTool(ctx context.Context, tool *aiTool, rawArgs string) string {
 		result = result[:aiMaxToolResult] + "\n… [Ergebnis gekürzt – Abfrage eingrenzen oder aggregieren]"
 	}
 	return result
+}
+
+// --- Automation script tools ---
+
+func aiScriptTools() []aiTool {
+	str := func(desc string) map[string]interface{} {
+		return map[string]interface{}{"type": "string", "description": desc}
+	}
+	scriptProps := aiWithDevice(map[string]interface{}{
+		"id":          str("ID eines bestehenden Skripts zum Ändern, leer für ein neues Skript"),
+		"name":        str("Kurzer Name"),
+		"description": str("Was das Skript macht"),
+		"schedule":    str("Cron-Zeitplan (5 Felder, lokale Zeit), z.B. \"*/5 * * * *\" oder \"0 17 * * *\""),
+		"enabled":     map[string]interface{}{"type": "boolean", "description": "Skript aktiv (wird nach Zeitplan ausgeführt)"},
+		"code":        str("Skript-Code in expr-Syntax (siehe get_script_docs)"),
+	})
+
+	return []aiTool{
+		{
+			Name: "get_script_docs",
+			Description: "Dokumentation der Automatisierungs-Skripte: Syntax (expr), alle Funktionen, Zeitplan-Format und Beispiele. " +
+				"Vor dem Schreiben eines Skripts immer lesen.",
+			Parameters: aiSchema(map[string]interface{}{}),
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				return scriptDocs(), nil
+			},
+		},
+		{
+			Name:        "list_scripts",
+			Description: "Listet alle gespeicherten Automatisierungs-Skripte mit Code, Zeitplan, Gerät und letztem Ergebnis.",
+			Parameters:  aiSchema(map[string]interface{}{}),
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				scripts, err := listScripts()
+				if err != nil {
+					return "", err
+				}
+				return toJSON(scripts), nil
+			},
+		},
+		{
+			Name: "test_script",
+			Description: "Testlauf eines Skripts für ein Gerät mit echten Live-Werten, ohne Aktionen auszuführen. " +
+				"Zeigt Ergebnis, Logs und welche Aktionen ausgeführt würden. Vor save_script immer testen.",
+			Parameters: aiSchema(aiWithDevice(map[string]interface{}{
+				"code":     str("Skript-Code"),
+				"scriptId": str("Optional: ID eines gespeicherten Skripts, um dessen Variablen zu verwenden"),
+			}), "accountId", "installationId", "gatewaySerial", "deviceId", "code"),
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				device := scriptDevice{
+					AccountID:      argString(args, "accountId", ""),
+					InstallationID: argString(args, "installationId", ""),
+					GatewaySerial:  argString(args, "gatewaySerial", ""),
+					DeviceID:       argString(args, "deviceId", "0"),
+				}
+				return toJSON(runScript(ctx, argString(args, "scriptId", ""), device, argString(args, "code", ""), true)), nil
+			},
+		},
+		{
+			Name:        "get_script_runs",
+			Description: "Ausführungsprotokoll eines Skripts (Standard: nur Fehler, manuelle Läufe und ausgeführte Aktionen).",
+			Parameters: aiSchema(map[string]interface{}{
+				"id":  str("Skript-ID"),
+				"all": map[string]interface{}{"type": "boolean", "description": "Auch Läufe ohne Änderung anzeigen"},
+			}, "id"),
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				all, _ := args["all"].(bool)
+				runs, err := scriptRuns(argString(args, "id", ""), 30, !all)
+				if err != nil {
+					return "", err
+				}
+				return toJSON(runs), nil
+			},
+		},
+		{
+			Name: "save_script",
+			Description: "Speichert ein Automatisierungs-Skript (neu oder Änderung). Aktive Skripte ändern die Anlage automatisch nach Zeitplan. " +
+				"Vorher mit test_script prüfen.",
+			Parameters: aiSchema(scriptProps, "name", "schedule", "enabled", "code", "accountId", "installationId", "gatewaySerial", "deviceId"),
+			Write:      true,
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				enabled, _ := args["enabled"].(bool)
+				s := &Script{
+					ID: argString(args, "id", ""), Name: argString(args, "name", ""), Description: argString(args, "description", ""),
+					Schedule: argString(args, "schedule", ""), Enabled: enabled, Code: argString(args, "code", ""),
+					scriptDevice: scriptDevice{
+						AccountID:      argString(args, "accountId", ""),
+						InstallationID: argString(args, "installationId", ""),
+						GatewaySerial:  argString(args, "gatewaySerial", ""),
+						DeviceID:       argString(args, "deviceId", "0"),
+					},
+				}
+				saved, err := saveScript(s)
+				if err != nil {
+					return "", err
+				}
+				return toJSON(map[string]interface{}{"success": true, "script": saved, "nextRuns": scriptNextRuns(saved.Schedule, 3)}), nil
+			},
+		},
+		{
+			Name:        "delete_script",
+			Description: "Löscht ein Automatisierungs-Skript inkl. Variablen und Protokoll.",
+			Parameters:  aiSchema(map[string]interface{}{"id": str("Skript-ID")}, "id"),
+			Write:       true,
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				if err := deleteScript(argString(args, "id", "")); err != nil {
+					return "", err
+				}
+				return `{"success":true}`, nil
+			},
+		},
+		{
+			Name:        "run_script_now",
+			Description: "Führt ein gespeichertes Skript sofort aus (inkl. Aktionen).",
+			Parameters:  aiSchema(map[string]interface{}{"id": str("Skript-ID")}, "id"),
+			Write:       true,
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				return toJSON(executeScript(argString(args, "id", ""), "manual")), nil
+			},
+		},
+	}
 }

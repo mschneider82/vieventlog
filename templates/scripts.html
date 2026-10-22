@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skripte - ViEventLog</title>
+    <link rel="stylesheet" href="/static/css/assistant.css">
+    <link rel="stylesheet" href="/static/css/scripts.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="row nav-links">
+                    <a href="/" class="back-link">← Events</a>
+                    <a href="/assistant" class="back-link">🤖 Assistent</a>
+                </div>
+                <button class="btn btn-primary btn-block" id="newScriptBtn">+ Neues Skript</button>
+            </div>
+            <div class="conv-section-title">Skripte</div>
+            <div class="conv-list" id="scriptList"></div>
+            <div class="sidebar-bottom">
+                <button class="btn btn-ghost btn-block" id="docsBtn">📖 Dokumentation</button>
+                <div class="version">ViEventLog {{.Version}}</div>
+            </div>
+        </aside>
+
+        <main class="chat">
+            <header class="chat-header">
+                <button class="btn btn-ghost sidebar-toggle" id="sidebarToggle" title="Skripte">☰</button>
+                <h1>⚙️ Automatisierung</h1>
+                <a class="btn btn-ghost" id="aiBtn" href="/assistant">🤖 Mit KI erstellen</a>
+            </header>
+
+            <div class="editor-wrap" id="editorWrap">
+                <div class="empty" id="emptyState">
+                    <h2>Skripte automatisieren deine Anlage</h2>
+                    <p>z.B. „Außentemperatur &gt; 18 °C → Warmwasser 50 °C“ oder „täglich um 17 Uhr Warmwasser bereiten“.</p>
+                    <div class="examples">
+                        <div class="example" data-template="outside">🌡️ Warmwasser nach Außentemperatur</div>
+                        <div class="example" data-template="charge">⏰ Täglich 17 Uhr Warmwasser bereiten</div>
+                        <div class="example" data-template="noise">🌙 Nachts Geräuschreduzierung</div>
+                        <div class="example" data-template="blank">📝 Leeres Skript</div>
+                    </div>
+                </div>
+
+                <form class="editor" id="editor" hidden autocomplete="off">
+                    <div class="editor-grid">
+                        <label class="field">Name<input class="input" id="fName" required></label>
+                        <label class="field">Gerät<select class="input" id="fDevice"></select></label>
+                        <label class="field full">Beschreibung<input class="input" id="fDescription" placeholder="optional"></label>
+                        <label class="field">Zeitplan (Cron)
+                            <div class="row">
+                                <input class="input mono" id="fSchedule" placeholder="*/5 * * * *">
+                                <select class="input preset" id="fPreset" title="Vorlagen">
+                                    <option value="">Vorlage …</option>
+                                    <option value="* * * * *">jede Minute</option>
+                                    <option value="*/5 * * * *">alle 5 Minuten</option>
+                                    <option value="*/15 * * * *">alle 15 Minuten</option>
+                                    <option value="0 * * * *">stündlich</option>
+                                    <option value="0 17 * * *">täglich 17:00</option>
+                                    <option value="0 6 * * 1-5">werktags 6:00</option>
+                                </select>
+                            </div>
+                            <span class="hint" id="nextRuns"></span>
+                        </label>
+                        <label class="check enabled-check"><input type="checkbox" id="fEnabled"> Aktiv (läuft automatisch nach Zeitplan)</label>
+                    </div>
+
+                    <label class="field">Code (<a href="#" id="docsLink">Funktionen &amp; Syntax</a>)
+                        <textarea class="input mono code" id="fCode" spellcheck="false" rows="12"></textarea>
+                    </label>
+
+                    <div class="editor-actions">
+                        <button type="button" class="btn btn-ghost" id="testBtn">▶ Testlauf (ohne Aktionen)</button>
+                        <button type="submit" class="btn btn-primary" id="saveBtn">Speichern</button>
+                        <button type="button" class="btn btn-ghost" id="runBtn" title="Gespeicherte Version sofort mit Aktionen ausführen">⚡ Jetzt ausführen</button>
+                        <span class="status" id="editorStatus"></span>
+                        <button type="button" class="btn btn-ghost danger-text" id="deleteBtn">Löschen</button>
+                    </div>
+
+                    <div class="result" id="result" hidden></div>
+
+                    <details class="ai-panel" id="aiPanel">
+                        <summary>🤖 KI-Hilfe zu diesem Skript</summary>
+                        <div class="ai-body">
+                            <div class="ai-quick">
+                                <button type="button" class="btn btn-ghost btn-small" data-ask="explain">💡 Erklären</button>
+                                <button type="button" class="btn btn-ghost btn-small" data-ask="check">🔍 Prüfen &amp; testen</button>
+                                <button type="button" class="btn btn-ghost btn-small" data-ask="improve">✨ Verbessern</button>
+                                <select class="input ai-model" id="aiModel" title="Modell"></select>
+                            </div>
+                            <div class="ai-messages md" id="aiMessages"></div>
+                            <div class="row ai-input">
+                                <input class="input" id="aiQuestion" placeholder="Frage oder Änderungswunsch, z.B. „nur am Wochenende“ …">
+                                <button type="button" class="btn btn-primary" id="aiSend">Fragen</button>
+                                <button type="button" class="btn btn-danger" id="aiStop" hidden>Stopp</button>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="runs-header">
+                        <h3>Protokoll</h3>
+                        <label class="check"><input type="checkbox" id="runsAll"> auch Läufe ohne Änderung</label>
+                    </div>
+                    <div class="runs" id="runs"></div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="docsModal" hidden>
+        <div class="modal-content docs-content">
+            <div class="modal-header">
+                <h2>Skript-Dokumentation</h2>
+                <button class="btn btn-ghost" data-close>✕</button>
+            </div>
+            <div class="modal-body md" id="docsBody">Lade …</div>
+        </div>
+    </div>
+
+    <script src="/static/js/markdown.js"></script>
+    <script src="/static/js/scripts.js"></script>
+</body>
+</html>

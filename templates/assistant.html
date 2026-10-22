@@ -11,7 +11,10 @@
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top">
-                <a href="/" class="back-link">← Events</a>
+                <div class="row" style="justify-content: space-between">
+                    <a href="/" class="back-link">← Events</a>
+                    <a href="/scripts" class="back-link">⚙️ Skripte</a>
+                </div>
                 <button class="btn btn-primary btn-block" id="newChatBtn">+ Neuer Chat</button>
             </div>
             <div class="conv-section-title">Unterhaltungen</div>
@@ -97,6 +100,7 @@
         </div>
     </div>
 
+    <script src="/static/js/markdown.js"></script>
     <script src="/static/js/assistant.js"></script>
 </body>
 </html>

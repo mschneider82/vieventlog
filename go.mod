@@ -4,6 +4,8 @@ go 1.26.0
 
 require (
 	github.com/dop251/goja v0.0.0-20261021140635-64adc8bb4d51
+	github.com/expr-lang/expr v1.17.8
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/zalando/go-keyring v0.2.6
 	modernc.org/sqlite v1.53.0
 )

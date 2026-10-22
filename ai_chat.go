@@ -26,6 +26,9 @@ Arbeitsweise:
 - Taktung: Verdichterstarts pro Tag aus compressor_starts (Zählerdifferenz) oder aus Wechseln von compressor_active 0->1. Typische Stellschrauben: Heizkurve (Neigung/Niveau), Hysterese, Warmwasser-Soll und -Hysterese, Zeitprogramme, max. Vorlauftemperatur, Pufferspeicher.
 - Energieschätzungen z.B. für Warmwasser: Energie der Warmwasserphasen aus der Historie bestimmen, Einfluss der Temperatur über Speicherverluste (proportional zur Temperaturdifferenz zur Umgebung) und COP-Änderung (ca. 2–3 % pro Kelvin Vorlauf) abschätzen.
 - Antworte in der Sprache des Benutzers, prägnant, mit Markdown (Tabellen für Zahlen).
+- Automatisierungen (z.B. "wenn Außentemperatur > 18 °C, dann Warmwasser 50 °C" oder "täglich um 17 Uhr ..."): Das geht mit ViEventLog-Skripten.
+  Lies get_script_docs, schreibe das Skript, prüfe es mit test_script und speichere es mit save_script (bzw. zeige den Code, wenn Schreibzugriff deaktiviert ist).
+  Achte auf Hysterese/Mittelwerte gegen ständiges Umschalten und wähle einen sparsamen Zeitplan.
 - Diagramme: Gib einen Codeblock mit Sprache "echarts" und einer gültigen ECharts-Option als reines JSON (keine Funktionen) aus, er wird im Chat gerendert. Nur verwenden, wenn ein Diagramm wirklich hilft.
 `)
 	if allowWrite && autoApprove {
@@ -78,6 +81,30 @@ type aiChatRequest struct {
 	Model          string          `json:"model"`
 	Messages       []aiMessage     `json:"messages"`      // Complete history without system prompt
 	Confirmations  map[string]bool `json:"confirmations"` // tool_call_id -> approved, for pending write tools
+	ScriptContext  *Script         `json:"scriptContext"` // Script editor assistant: read-only tools, not persisted
+}
+
+// aiScriptAssistPrompt is appended to the system prompt when the assistant is used inside the script editor
+func aiScriptAssistPrompt(s *Script) string {
+	return fmt.Sprintf(`
+
+Du hilfst gerade im Skript-Editor von ViEventLog. Der Benutzer bearbeitet dieses (evtl. ungespeicherte) Skript:
+- Name: %s
+- Beschreibung: %s
+- Zeitplan: %s (aktiv: %v)
+- Gerät: accountId=%s installationId=%s gatewaySerial=%s deviceId=%s
+
+`+"```expr\n%s\n```"+`
+
+Regeln:
+- Antworte knapp und verständlich, auch für Laien.
+- Du kannst nichts speichern oder ausführen, nur lesen und mit test_script (Trockenlauf, gleiches Gerät) prüfen.
+- Wenn du Code vorschlägst, gib das VOLLSTÄNDIGE Skript in genau einem Codeblock mit Sprache "expr" aus. Der Benutzer übernimmt ihn per Klick in den Editor.
+  Teste vorgeschlagenen Code vorher mit test_script. Schlägst du einen anderen Zeitplan vor, nenne ihn ausdrücklich.
+
+Skript-Dokumentation:
+
+%s`, s.Name, s.Description, s.Schedule, s.Enabled, s.AccountID, s.InstallationID, s.GatewaySerial, s.DeviceID, s.Code, scriptDocs())
 }
 
 // aiChatHandler handles POST /api/ai/chat and streams Server-Sent Events:
@@ -147,7 +174,9 @@ func aiChatHandler(w http.ResponseWriter, r *http.Request) {
 	conv := &aiConversation{ID: req.ConversationID, Title: aiConversationTitle(req.Messages), ProviderID: provider.ID, Model: model}
 
 	messages := req.Messages
-	tools := aiAvailableTools(settings.AllowWrite)
+	scriptAssist := req.ScriptContext != nil
+	persist := settings.PersistChats && !scriptAssist
+	tools := aiAvailableTools(settings.AllowWrite && !scriptAssist)
 	toolByName := map[string]*aiTool{}
 	for i := range tools {
 		toolByName[tools[i].Name] = &tools[i]
@@ -159,12 +188,12 @@ func aiChatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	finish := func() {
 		conv.Messages = messages
-		if settings.PersistChats {
+		if persist {
 			if err := aiSaveConversation(conv); err != nil {
 				log.Printf("AI: failed to save conversation: %v", err)
 			}
 		}
-		send("done", map[string]interface{}{"conversationId": conv.ID, "title": conv.Title, "persisted": settings.PersistChats})
+		send("done", map[string]interface{}{"conversationId": conv.ID, "title": conv.Title, "persisted": persist})
 	}
 
 	// runToolCalls executes the tool calls of the last assistant message that have no result yet.
@@ -232,7 +261,11 @@ func aiChatHandler(w http.ResponseWriter, r *http.Request) {
 			break // Final answer reached
 		}
 
-		llmMessages := append([]aiMessage{{Role: "system", Content: aiSystemPrompt(settings, settings.AllowWrite, settings.AutoApproveWrite)}}, aiCloseOpenToolCalls(messages)...)
+		systemPrompt := aiSystemPrompt(settings, settings.AllowWrite, settings.AutoApproveWrite)
+		if scriptAssist {
+			systemPrompt = aiSystemPrompt(settings, false, false) + aiScriptAssistPrompt(req.ScriptContext)
+		}
+		llmMessages := append([]aiMessage{{Role: "system", Content: systemPrompt}}, aiCloseOpenToolCalls(messages)...)
 		reply, err := aiStreamChat(ctx, provider, model, llmMessages, aiToolSpecs(tools), func(text string) {
 			send("delta", map[string]string{"text": text})
 		})

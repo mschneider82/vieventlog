@@ -707,6 +707,34 @@ Dashboard für Viessmann Vitovent Lüftungsanlagen:
 - Über den Vitovent-Button im Dashboard
 - Automatische Erkennung bei vorhandener Vitovent-Anlage
 
+### KI-Assistent
+
+Unter `/assistant` beantwortet ein KI-Assistent Fragen zu deinen Daten, z.B. „Wie oft taktet meine Wärmepumpe und was kann ich dagegen tun?“ oder „Was spare ich, wenn ich das Warmwasser 1 °C kühler einstelle?“.
+
+- Beliebige OpenAI-kompatible Anbieter (OpenRouter, OpenAI, Ollama, LM Studio, …); das Modell muss Tool-Calling unterstützen
+- Zugriff auf Live-Werte, Temperatur-/Verbrauchshistorie und Ereignisprotokoll (SQL nur lesend), Berechnungen per JavaScript, Diagramme
+- Einstellungen ändern optional: jede Änderung muss im Chat bestätigt werden (abschaltbar)
+- Unterhaltungen optional in der SQLite-Datenbank speichern
+- **MCP-Server** unter `/mcp` (Bearer-Token) für Claude Desktop, Claude Code und andere MCP-Clients; die Einrichtungsbefehle stehen in den Assistent-Einstellungen
+
+Einrichtung: `/assistant` öffnen → ⚙️ Einstellungen → Anbieter mit Base-URL, API-Key und Modellen anlegen.
+
+### Skripte (Automatisierung)
+
+Unter `/scripts` lassen sich Automatisierungen hinterlegen, die nach Zeitplan (Cron) im Hintergrund laufen, z.B. „über 18 °C Außentemperatur Warmwasser auf 50 °C, darunter 53 °C“ oder „täglich um 17 Uhr Warmwasser bereiten“.
+
+```
+let t = history("outside_temp", 120, "avg") ?? outsideTemp();
+if t > 18.5 { setDhwTemperature(50) } else if t < 17.5 { setDhwTemperature(53) } else { false }
+```
+
+- Sprache: [expr](https://expr-lang.org); Funktionen für Live-Werte, Historie, Uhrzeit, Variablen und Aktionen
+- Aktionen rufen die Viessmann-API nur auf, wenn sich der Wert wirklich ändert (schont das API-Kontingent)
+- Testlauf ohne Aktionen, Ausführungsprotokoll, KI-Hilfe im Editor („Erklären“, „Prüfen & testen“, „Verbessern“)
+- Der KI-Assistent kann Skripte schreiben, testen und (nach Bestätigung) speichern
+
+Alle Funktionen und Beispiele: [docs/SCRIPTS.md](docs/SCRIPTS.md) (auch im Editor unter „📖 Dokumentation“).
+
 ### Dashboard-Ansicht
 
 Das Dashboard bietet eine übersichtliche Echtzeitansicht aller wichtigen Parameter Ihrer Heizungsanlage:
