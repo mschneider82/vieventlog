@@ -1,6 +1,7 @@
 /* Scripts page (builds on assistant.css) */
 .nav-links { justify-content: space-between; }
 .chat-header .btn { text-decoration: none; }
+.editor .field a { color: var(--accent); }
 
 .editor-wrap { flex: 1; overflow-y: auto; padding: 20px; }
 .editor-wrap > * { max-width: 980px; margin-left: auto; margin-right: auto; }

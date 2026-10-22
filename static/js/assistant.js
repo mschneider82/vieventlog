@@ -84,6 +84,8 @@
 
     function renderCharts(container) {
         if (typeof echarts === 'undefined') return;
+        // Wait until the container is attached, otherwise ECharts measures a size of 0
+        if (!container.isConnected) { requestAnimationFrame(() => renderCharts(container)); return; }
         container.querySelectorAll('.chart[data-chart]').forEach((div) => {
             const code = div.getAttribute('data-chart');
             div.removeAttribute('data-chart');
@@ -516,7 +518,7 @@
                 '<label>Name<input class="input" data-f="name" placeholder="OpenRouter"></label>' +
                 '<label>Base-URL<input class="input mono" data-f="baseUrl" placeholder="https://openrouter.ai/api/v1"></label>' +
                 '<label class="full">API-Key<input class="input mono" type="password" data-f="apiKey" autocomplete="off"></label>' +
-                '<label class="full">Modelle (eins pro Zeile, z.B. anthropic/claude-sonnet-5)<textarea class="input mono" rows="3" data-f="models"></textarea></label>' +
+                '<label class="full">Modelle (eins pro Zeile, z.B. anthropic/claude-sonnet-5)<textarea class="input mono" rows="4" data-f="models"></textarea></label>' +
                 '</div>' +
                 '<div class="actions"><span class="hint load-status"></span>' +
                 '<select class="input model-pick" hidden style="max-width:320px"></select>' +

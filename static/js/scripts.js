@@ -437,6 +437,8 @@
     (async function init() {
         const [devices] = await Promise.all([api('/api/scripts/devices'), loadScripts(), loadAiModels()]);
         state.devices = devices.success ? devices.devices : [];
+        // A script opened while the device list was loading gets the proper device names now
+        if (state.current) fillDevices(state.current.id ? state.current : null);
         const id = new URLSearchParams(location.search).get('id');
         const s = id && state.scripts.find((x) => x.id === id);
         if (s) openScript(s);
