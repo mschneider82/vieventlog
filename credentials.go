@@ -95,6 +95,7 @@ type EventArchiveSettings struct {
 type AccountStore struct {
 	Accounts             map[string]*Account   `json:"accounts"`             // Key is account ID
 	EventArchiveSettings *EventArchiveSettings `json:"eventArchiveSettings"` // Global event archive settings
+	AISettings           *AISettings           `json:"aiSettings,omitempty"` // AI assistant settings (LLM providers, MCP)
 }
 
 // SaveCredentials stores credentials using the configured storage backend

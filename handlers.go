@@ -65,6 +65,15 @@ func dashboardPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, newTemplateData())
 }
 
+func assistantPageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFS(templatesFS, "templates/assistant.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, newTemplateData())
+}
+
 func accountsPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFS(templatesFS, "templates/accounts.html")
 	if err != nil {

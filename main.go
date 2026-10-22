@@ -120,6 +120,7 @@ func main() {
 	http.HandleFunc("/vitovent", vitoventPageHandler)
 	http.HandleFunc("/vitocharge", vitochargePageHandler)
 	http.HandleFunc("/apitest", apiTestPageHandler)
+	http.HandleFunc("/assistant", assistantPageHandler)
 
 	// Static files handler
 	http.Handle("/static/", http.FileServer(http.FS(staticFS)))
@@ -214,6 +215,19 @@ func main() {
 
 	// Consumption statistics endpoint
 	http.HandleFunc("/api/consumption/stats", HandleConsumptionStats)
+
+	// AI assistant endpoints
+	http.HandleFunc("/api/ai/settings", aiSettingsGetHandler)
+	http.HandleFunc("/api/ai/settings/set", aiSettingsSetHandler)
+	http.HandleFunc("/api/ai/models", aiModelsHandler)
+	http.HandleFunc("/api/ai/tools", aiToolsInfoHandler)
+	http.HandleFunc("/api/ai/chat", aiChatHandler)
+	http.HandleFunc("/api/ai/conversations", aiConversationsHandler)
+	http.HandleFunc("/api/ai/conversations/get", aiConversationGetHandler)
+	http.HandleFunc("/api/ai/conversations/delete", aiConversationDeleteHandler)
+
+	// MCP endpoint for external AI clients (secured by its own bearer token)
+	http.HandleFunc("/mcp", mcpHandler)
 
 	// Health check endpoint (verifies DB writability for Kubernetes probes)
 	http.HandleFunc("/health", healthHandler)
