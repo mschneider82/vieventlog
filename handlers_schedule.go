@@ -161,9 +161,7 @@ func scheduleSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accountsMutex.RLock()
-	token, exists := accountTokens[req.AccountID]
-	accountsMutex.RUnlock()
+	token, exists := getValidAccountToken(req.AccountID)
 
 	if !exists {
 		writeScheduleResult(w, "Account not found or not authenticated")

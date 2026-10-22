@@ -112,6 +112,22 @@ func ensureAccountAuthenticated(account *Account) (*AccountToken, error) {
 	return token, nil
 }
 
+// getValidAccountToken returns a non-expired token for the account, re-authenticating if necessary.
+// Used by control commands, which otherwise would send an expired token (401 "EXPIRED TOKEN")
+// until the next scheduler run refreshes it.
+func getValidAccountToken(accountID string) (*AccountToken, bool) {
+	account, err := GetAccount(accountID)
+	if err != nil {
+		return nil, false
+	}
+	token, err := ensureAccountAuthenticated(account)
+	if err != nil {
+		log.Printf("Failed to authenticate account %s for command: %v\n", account.Email, err)
+		return nil, false
+	}
+	return token, true
+}
+
 // ensureAuthenticated ensures the current credentials are authenticated (legacy support)
 func ensureAuthenticated() error {
 	if currentCreds == nil {
