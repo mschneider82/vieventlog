@@ -733,7 +733,7 @@ Das Dashboard bietet eine übersichtliche Echtzeitansicht aller wichtigen Parame
 - Einmalige Warmwassererwärmung starten: Einmaliges Aufheizen per Knopfdruck
 
 **Heizkreis-Steuerung:**
-- Betriebsart ändern: Heizen oder Standby
+- Betriebsart ändern: Heizen, Standby, Kühlen oder Heizen/Kühlen (Kühlen nur bei Anlagen mit Kühlfunktion)
 - Heizkurve anpassen:
   - Steigung: 0,2-3,5 in 0,1er Schritten
   - Niveau: -13 bis +40 in 1er Schritten
@@ -897,7 +897,8 @@ Ihre Zugangsdaten werden sicher im System-Keyring gespeichert, nicht auf der Fes
     "mode": "heating"
   }
   ```
-  Gültige Modi: `heating` (Heizen), `standby` (Standby)
+  Gültige Modi: `heating` (Heizen), `standby` (Standby), `cooling` (Kühlen), `heatingCooling` (Heizen/Kühlen)
+  `cooling` und `heatingCooling` nur bei Anlagen mit Kühlfunktion (z.B. Vitocal 222-S)
 
 - `POST /api/heating/curve/set` - Heizkurve anpassen
   ```json

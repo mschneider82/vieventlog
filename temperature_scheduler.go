@@ -409,18 +409,29 @@ func extractTemperatureSnapshot(features *DeviceFeatures, installationID, gatewa
 	}
 
 	// Extract data from raw features
+	fallbacks := &powerFallbacks{}
 	for _, feature := range features.RawFeatures {
-		extractFeatureIntoSnapshot(feature, snapshot)
+		extractFeatureIntoSnapshot(feature, snapshot, fallbacks)
 	}
 
 	// Calculate derived values
-	calculateDerivedValues(snapshot)
+	calculateDerivedValues(snapshot, fallbacks)
 
 	return snapshot
 }
 
+// powerFallbacks collects lowest-priority power values during feature extraction.
+// They are applied in calculateDerivedValues only if no other source is available,
+// independent of the order in which the API returns the features.
+type powerFallbacks struct {
+	hasCompressor          bool     // heating.compressors.0 exists (excludes gas-only devices)
+	systemPowerW           *float64 // heating.power.consumption.current
+	systemHeatProductionKW *float64 // heating.heat.production.current
+	cooling                bool     // heating.secondaryCircuit.operation.state currentValue == "cooling"
+}
+
 // extractFeatureIntoSnapshot extracts a single feature into the snapshot
-func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) {
+func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot, fallbacks *powerFallbacks) {
 	featureName := feature.Feature
 
 	// Temperature sensors
@@ -513,6 +524,7 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 
 	// Compressor data
 	case "heating.compressors.0":
+		fallbacks.hasCompressor = true
 		snapshot.CompressorActive = getBoolValue(feature.Properties)
 	case "heating.compressors.0.speed.current":
 		snapshot.CompressorSpeed = getFloatValue(feature.Properties)
@@ -536,9 +548,12 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 		// Extract starts from nested structure
 		if props, ok := feature.Properties["starts"].(map[string]interface{}); ok { snapshot.CompressorStarts = getFloatValue(props) }
 		
-		case "heating.inverters.0.sensors.power.output":
+	case "heating.inverters.0.sensors.power.output":
 		// Instantaneous electrical power output from inverter (Watt)
-		snapshot.CompressorPower = getFloatValue(feature.Properties)
+		// Some devices report this as "notConnected" without a value - don't overwrite a fallback then
+		if wValue := getFloatValue(feature.Properties); wValue != nil {
+			snapshot.CompressorPower = wValue
+		}
 	case "heating.compressors.0.power.consumption.current":
 		// Fallback for Oplink devices: direct current power consumption (kilowatt)
 		// Only set if CompressorPower is not already set from inverter
@@ -557,6 +572,24 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 				// Convert from W to kW
 				kwValue := *wValue / 1000.0
 				snapshot.ThermalPower = &kwValue
+			}
+		}
+	case "heating.power.consumption.current":
+		// Last fallback, e.g. Vitocal 222-S/252 (VC252): electrical power of compressor incl. heating rod,
+		// exactly 0 while compressor and heating rod are off. Applied in calculateDerivedValues.
+		if kwValue := getPowerValueKW(feature.Properties); kwValue != nil {
+			w := *kwValue * 1000.0
+			fallbacks.systemPowerW = &w
+		}
+	case "heating.heat.production.current":
+		// Last fallback, e.g. Vitocal 222-S/252 (VC252): current heat production (also positive in cooling mode).
+		// Applied in calculateDerivedValues.
+		fallbacks.systemHeatProductionKW = getPowerValueKW(feature.Properties)
+	case "heating.secondaryCircuit.operation.state":
+		// Actual state of the heat pump (e.g. VC252): "heating" (also for DHW), "cooling", "standby"
+		if cv, ok := feature.Properties["currentValue"].(map[string]interface{}); ok {
+			if state, ok := cv["value"].(string); ok && state == "cooling" {
+				fallbacks.cooling = true
 			}
 		}
 	case "heating.power.consumption.total":
@@ -596,9 +629,9 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot) 
 
 	// Operating state
 
-//remove, will not be used because string content
-	//case "heating.valves.fourThreeWay.position": //heating.compressors.0.refrigerant.fourWayValve":
-	//	snapshot.FourWayValve = getStringValue(feature.Properties)
+	// String position, e.g. "climateCircuitOne", "domesticHotWater", "climatCircuitTwoDefrost" (stored only, not charted)
+	case "heating.valves.fourThreeWay.position":
+		snapshot.FourWayValve = getStringValue(feature.Properties)
 	case "heating.burners.0.modulation":
 		snapshot.BurnerModulation = getFloatValue(feature.Properties)
 
@@ -634,6 +667,22 @@ func getFloatValue(properties map[string]interface{}) *float64 {
 	}
 
 	return nil
+}
+
+// getPowerValueKW extracts a power value in kW, honoring properties.value.unit ("watt" or "kilowatt").
+// Values without unit are assumed to be kW.
+func getPowerValueKW(properties map[string]interface{}) *float64 {
+	val := getFloatValue(properties)
+	if val == nil {
+		return nil
+	}
+	if valueMap, ok := properties["value"].(map[string]interface{}); ok {
+		if unit, ok := valueMap["unit"].(string); ok && unit == "watt" {
+			kw := *val / 1000.0
+			return &kw
+		}
+	}
+	return val
 }
 
 // getBoolValue extracts a bool value from feature properties
@@ -692,7 +741,7 @@ func getPumpStatus(properties map[string]interface{}) *bool {
 
 // calculateDerivedValues computes thermal power from flow and temperature
 // Uses the same logic as the dashboard for consistency
-func calculateDerivedValues(snapshot *TemperatureSnapshot) {
+func calculateDerivedValues(snapshot *TemperatureSnapshot, fallbacks *powerFallbacks) {
 	// Get device settings to determine which temperatures to use
 	hasHotWaterBuffer := true // Default to true (use secondary circuit)
 	deviceKey := fmt.Sprintf("%s_%s", snapshot.InstallationID, snapshot.DeviceID)
@@ -793,6 +842,27 @@ func calculateDerivedValues(snapshot *TemperatureSnapshot) {
 			// kW = Flow * ΔT * 0.001163
 			thermalPowerKW := *snapshot.VolumetricFlow * deltaT * 0.001163
 			snapshot.ThermalPower = &thermalPowerKW
+		}
+	}
+
+	// Last fallbacks for heat pumps without inverter/Oplink power values (e.g. Vitocal 222-S/252).
+	// Devices with these sources keep their previous values.
+	if fallbacks.hasCompressor {
+		if snapshot.CompressorPower == nil && fallbacks.systemPowerW != nil {
+			snapshot.CompressorPower = fallbacks.systemPowerW
+			// System power includes the heating rod, so take the matching system heat production instead of
+			// the flow-based value: that one misses the heating rod, reads ~30% low for DHW (VC252) and shows
+			// power while only the pump is running after the compressor stopped.
+			if fallbacks.systemHeatProductionKW != nil {
+				snapshot.ThermalPower = fallbacks.systemHeatProductionKW
+			}
+		}
+		if snapshot.ThermalPower == nil && snapshot.VolumetricFlow == nil && fallbacks.systemHeatProductionKW != nil {
+			snapshot.ThermalPower = fallbacks.systemHeatProductionKW
+		}
+		// heating.heat.production.current is positive while cooling; keep cooling power out of the heat statistics
+		if fallbacks.cooling && snapshot.ThermalPower == fallbacks.systemHeatProductionKW {
+			snapshot.ThermalPower = nil
 		}
 	}
 
