@@ -691,12 +691,24 @@ func scriptFunctions() []scriptFunc {
 				if err != nil {
 					return nil, err
 				}
-				cur, err := rc.featureProp(fmt.Sprintf("heating.circuits.%d.operating.programs.%s", int(c), program), "temperature")
-				if err != nil {
-					return nil, err
+				// Many devices expose e.g. "normalHeating" instead of "normal" (like the dashboard does)
+				var cur any
+				resolved := program
+				for _, cand := range []string{program, program + "Heating"} {
+					f, err := rc.findFeature(fmt.Sprintf("heating.circuits.%d.operating.programs.%s", int(c), cand))
+					if err != nil {
+						return nil, err
+					}
+					if f != nil {
+						resolved = cand
+						if p, ok := f.Properties["temperature"].(map[string]any); ok {
+							cur = p["value"]
+						}
+						break
+					}
 				}
 				return rc.action("setRoomTemperature", args, sameNumber(cur, t), roomTempSetHandler,
-					map[string]any{"circuit": int(c), "program": program, "temperature": int(t)})
+					map[string]any{"circuit": int(c), "program": resolved, "temperature": int(t)})
 			}},
 		{Name: "setNoiseReductionMode", Category: "Aktionen", Action: true, Sig: "setNoiseReductionMode(mode)", Desc: "Setzt die Geräuschreduzierung: \"notReduced\", \"slightlyReduced\", \"maxReduced\".",
 			Example: "setNoiseReductionMode(timeBetween(\"22:00\", \"06:00\") ? \"maxReduced\" : \"notReduced\")",
