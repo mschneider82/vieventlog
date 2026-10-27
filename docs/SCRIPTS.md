@@ -14,6 +14,10 @@ Zeitplan (Cron) im Hintergrund ausgeführt. Jedes Skript gehört zu genau einem 
   bzw. aus dem letzten Eintrag der Temperatur-Historie (SQLite), solange sie höchstens 30 Minuten alt sind.
   Nur wenn keine aktuellen Daten vorliegen, holt ein Skript sie selbst – höchstens einmal pro Gerät alle 30 Minuten.
   **Empfehlung:** Temperatur-Logging aktivieren; dann verursachen Skripte für Werte keine zusätzlichen API-Aufrufe.
+- **Wetter**: Die Wetter-Funktionen nutzen [OpenWeatherMap](https://openweathermap.org/api) (kostenloser API-Key). Einrichten auf der
+  Skript-Seite unter **🌤️ Wetter** (API-Key, PLZ oder Ort, Land). ViEventLog ruft das Wetter im Hintergrund ab (Standard stündlich,
+  2 API-Aufrufe), Skripte lesen nur aus diesem Cache. Die Vorhersage reicht 5 Tage in 3-Stunden-Schritten; ein Schritt gilt für
+  1,5 Stunden vor bis 1,5 Stunden nach seiner Uhrzeit (der Wert für 16:00 also für 14:30–17:30). Alle Zeiten sind lokale Zeit.
 - **Aktionen** (`set...`, `start...`) prüfen zuerst den aktuellen Wert und rufen die API nur auf, wenn sich etwas ändert.
   Sie geben `true` zurück, wenn etwas geändert wurde, sonst `false`. Eine identische Aktion wird innerhalb von 15 Minuten
   nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Maximal 10 Aktionen pro Lauf.
@@ -52,6 +56,20 @@ stehen ebenfalls zur Verfügung (siehe expr-Dokumentation). Schleifen gibt es ni
 | `feature(name)` | Wert (properties.value) eines beliebigen Viessmann-Features oder nil. Feature-Namen siehe Dashboard / /api/features. | `feature("heating.circuits.0.heating.curve") ?? 0` |
 | `featureProp(name, property)` | Beliebige Eigenschaft eines Features, z.B. slope der Heizkurve oder active des Verdichters. | `featureProp("heating.circuits.0.heating.curve", "slope")` |
 | `history(column, minutes, agg)` | Aggregat einer Spalte der Temperatur-Historie dieses Geräts über die letzten Minuten. agg: "avg", "min", "max", "sum", "count", "last". Spalten wie outside_temp, dhw_temp, supply_temp, compressor_power (W), thermal_power (kW), compressor_active. Benötigt aktiviertes Temperatur-Logging. | `history("outside_temp", 120, "avg") > 18` |
+
+## Wetter
+
+| Funktion | Beschreibung | Beispiel |
+|---|---|---|
+| `weather()` | Aktuelles Wetter als Map: temp, feelsLike (°C), humidity (%), clouds (Bewölkung %), wind (m/s), rain, snow (mm in der letzten Stunde), condition ("Clear", "Clouds", "Rain", "Drizzle", "Thunderstorm", "Snow", "Mist" …), description (z.B. "leichter Regen"), daylight, sunny, city. | `weather().temp < 0 or weather().condition == "Snow"` |
+| `forecast(field, hours, agg)` | Aggregat der Vorhersage für die nächsten Stunden. field: temp, feelsLike, humidity, clouds, pop (Regenwahrscheinlichkeit %), rain, snow (mm je 3 h), wind. agg: "avg", "min", "max", "sum". nil, wenn keine Vorhersage vorliegt. | `forecast("temp", 24, "avg") > 16` |
+| `sunny(hours[, maxClouds])` | true, wenn es in den nächsten Stunden überwiegend sonnig ist: mittlere Bewölkung bei Tageslicht ≤ maxClouds % (Standard 30). Ohne Tageslicht (nachts) false. | `sunny(3) ? startDhwOneTimeCharge() : false` |
+| `sunnyBetween(from, to[, maxClouds])` | true, wenn es im Zeitfenster ("HH:MM", wie timeBetween) sonnig ist: mittlere Bewölkung bei Tageslicht ≤ maxClouds % (Standard 30). Gemeint ist das nächste Vorkommen: heute, oder morgen, wenn das Fenster heute schon vorbei ist; ein laufendes Fenster ab jetzt. Ohne Tageslicht false. | `setDhwTemperature(sunnyBetween("12:00", "16:00") ? 45 : 50)` |
+| `rainy(hours[, minPop])` | true, wenn in den nächsten Stunden Niederschlag erwartet wird: Regenwahrscheinlichkeit mindestens minPop % (Standard 50). | `rainy(6)` |
+| `dayForecast(day)` | Tageswerte als Map, day 0 = heute (restliche Stunden), 1 = morgen … 5: min, max, avg (°C), clouds (Bewölkung tagsüber %), sunHours (geschätzte Sonnenstunden), sunny, rain, snow (mm), pop (max. Regenwahrscheinlichkeit %), wind (max. m/s), condition, description. nil, wenn für den Tag keine Vorhersage vorliegt (heute ab ca. 22 Uhr). | `(dayForecast(1)?.max ?? 0) > 25` |
+| `forecastList(hours)` | Vorhersage der nächsten Stunden als Liste von 3-Stunden-Schritten mit den Feldern von weather() plus time ("HH:MM"), date und pop. Für eigene Auswertungen mit any(), all(), filter(), map(). | `any(forecastList(12), .temp < 0)` |
+| `sunrise()` | Sonnenaufgang heute als "HH:MM". | `timeBetween(sunrise(), sunset())` |
+| `sunset()` | Sonnenuntergang heute als "HH:MM". |  |
 
 ## Zeit
 
@@ -105,6 +123,33 @@ if t > 18.5 {
 
 ```
 startDhwOneTimeCharge()
+```
+
+**Warmwasser mit Sonnenstrom**: mittags bei sonniger Vorhersage einmal täglich Warmwasser bereiten,
+z.B. für PV-Überschuss (Zeitplan `0 11-14 * * *`, benötigt Wetter-Einstellungen):
+
+```
+let today = now().Format("2006-01-02");
+if sunny(3) && get("sunCharge") != today {
+  startDhwOneTimeCharge(); set("sunCharge", today)
+} else {
+  false
+}
+```
+
+**Heizung nach Wetterprognose** (Zeitplan `0 */3 * * *`): Standby, wenn die nächsten 24 Stunden im Mittel
+warm werden, mit Schaltlücke gegen ständiges Umschalten:
+
+```
+let t = forecast("temp", 24, "avg") ?? outsideTemp();
+log("Prognose 24 h:", t, "°C, morgen:", dayForecast(1)?.description);
+if t > 16 {
+  setHeatingMode(0, "standby")
+} else if t < 14 {
+  setHeatingMode(0, "heating")
+} else {
+  false
+}
 ```
 
 **Nachts leiser** (Zeitplan `*/10 * * * *`):

@@ -58,6 +58,7 @@ type scriptRun struct {
 	dryRun   bool
 	now      time.Time
 	features *DeviceFeatures
+	weather  *weatherData
 	logs     []string
 	actions  []scriptAction
 	state    map[string]any
@@ -350,7 +351,7 @@ func scriptFunctions() []scriptFunc {
 		return fmt.Sprintf(pattern, int(c)), int(c), nil
 	}
 
-	return []scriptFunc{
+	funcs := []scriptFunc{
 		// --- Values ---
 		{Name: "outsideTemp", Category: "Werte", Sig: "outsideTemp()", Desc: "Außentemperatur in °C.",
 			Example: "outsideTemp() > 18",
@@ -724,6 +725,7 @@ func scriptFunctions() []scriptFunc {
 				return rc.action("setNoiseReductionMode", args, cur == mode, noiseReductionModeSetHandler, map[string]any{"mode": mode})
 			}},
 	}
+	return append(funcs, scriptWeatherFunctions()...)
 }
 
 // scriptCompileOptions builds the expr options; rc is nil for syntax checks only

@@ -25,6 +25,10 @@ Zeitplan (Cron) im Hintergrund ausgeführt. Jedes Skript gehört zu genau einem 
   bzw. aus dem letzten Eintrag der Temperatur-Historie (SQLite), solange sie höchstens 30 Minuten alt sind.
   Nur wenn keine aktuellen Daten vorliegen, holt ein Skript sie selbst – höchstens einmal pro Gerät alle 30 Minuten.
   **Empfehlung:** Temperatur-Logging aktivieren; dann verursachen Skripte für Werte keine zusätzlichen API-Aufrufe.
+- **Wetter**: Die Wetter-Funktionen nutzen [OpenWeatherMap](https://openweathermap.org/api) (kostenloser API-Key). Einrichten auf der
+  Skript-Seite unter **🌤️ Wetter** (API-Key, PLZ oder Ort, Land). ViEventLog ruft das Wetter im Hintergrund ab (Standard stündlich,
+  2 API-Aufrufe), Skripte lesen nur aus diesem Cache. Die Vorhersage reicht 5 Tage in 3-Stunden-Schritten; ein Schritt gilt für
+  1,5 Stunden vor bis 1,5 Stunden nach seiner Uhrzeit (der Wert für 16:00 also für 14:30–17:30). Alle Zeiten sind lokale Zeit.
 - **Aktionen** (` + "`set...`" + `, ` + "`start...`" + `) prüfen zuerst den aktuellen Wert und rufen die API nur auf, wenn sich etwas ändert.
   Sie geben ` + "`true`" + ` zurück, wenn etwas geändert wurde, sonst ` + "`false`" + `. Eine identische Aktion wird innerhalb von 15 Minuten
   nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Maximal 10 Aktionen pro Lauf.
@@ -49,7 +53,7 @@ Eingebaute expr-Funktionen wie ` + "`abs()`, `round()`, `min()`, `max()`, `now()
 stehen ebenfalls zur Verfügung (siehe expr-Dokumentation). Schleifen gibt es nicht; Skripte laufen höchstens 60 Sekunden.
 `)
 
-	categories := []string{"Werte", "Zeit", "Variablen & Ausgabe", "Aktionen"}
+	categories := []string{"Werte", "Wetter", "Zeit", "Variablen & Ausgabe", "Aktionen"}
 	funcs := scriptFunctions()
 	for _, cat := range categories {
 		sb.WriteString("\n## " + cat + "\n\n| Funktion | Beschreibung | Beispiel |\n|---|---|---|\n")
@@ -86,6 +90,33 @@ if t > 18.5 {
 
 ` + "```" + `
 startDhwOneTimeCharge()
+` + "```" + `
+
+**Warmwasser mit Sonnenstrom**: mittags bei sonniger Vorhersage einmal täglich Warmwasser bereiten,
+z.B. für PV-Überschuss (Zeitplan ` + "`0 11-14 * * *`" + `, benötigt Wetter-Einstellungen):
+
+` + "```" + `
+let today = now().Format("2006-01-02");
+if sunny(3) && get("sunCharge") != today {
+  startDhwOneTimeCharge(); set("sunCharge", today)
+} else {
+  false
+}
+` + "```" + `
+
+**Heizung nach Wetterprognose** (Zeitplan ` + "`0 */3 * * *`" + `): Standby, wenn die nächsten 24 Stunden im Mittel
+warm werden, mit Schaltlücke gegen ständiges Umschalten:
+
+` + "```" + `
+let t = forecast("temp", 24, "avg") ?? outsideTemp();
+log("Prognose 24 h:", t, "°C, morgen:", dayForecast(1)?.description);
+if t > 16 {
+  setHeatingMode(0, "standby")
+} else if t < 14 {
+  setHeatingMode(0, "heating")
+} else {
+  false
+}
 ` + "```" + `
 
 **Nachts leiser** (Zeitplan ` + "`*/10 * * * *`" + `):

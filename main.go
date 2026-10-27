@@ -102,7 +102,7 @@ func canBind(host string, port int) bool {
 
 func main() {
 	// Create application-wide context for graceful shutdown coordination
-	_, cancel := context.WithCancel(context.Background())
+	appCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Initialize account management
@@ -237,6 +237,10 @@ func main() {
 	http.HandleFunc("/api/scripts/docs", scriptsDocsHandler)
 	http.HandleFunc("/api/scripts/devices", scriptsDevicesHandler)
 
+	// Weather for scripts (OpenWeatherMap)
+	http.HandleFunc("/api/weather", weatherHandler)
+	http.HandleFunc("/api/weather/settings/set", weatherSettingsSetHandler)
+
 	// MCP endpoint for external AI clients (secured by its own bearer token)
 	http.HandleFunc("/mcp", mcpHandler)
 
@@ -261,6 +265,9 @@ func main() {
 
 		// Start automation scripts
 		StartScriptScheduler()
+
+		// Keep the weather cache for scripts up to date
+		StartWeatherRefresh(appCtx)
 	}()
 
 	// Get bind address from environment, with backward compatibility for PORT

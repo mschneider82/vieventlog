@@ -60,7 +60,21 @@ textarea.code {
 .docs-content table { font-size: 13px; }
 .docs-content td:first-child { white-space: nowrap; }
 
+/* Weather settings */
+.modal-body a { color: var(--accent); }
+.weather-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0 12px; }
+.weather-now { font-size: 14px; margin-bottom: 10px; }
+#weatherModal .modal-footer { flex-wrap: wrap; }
+.weather-scroll { overflow-x: auto; }
+.weather-days { width: 100%; border-collapse: collapse; font-size: 13px; }
+.weather-days td { white-space: nowrap; }
+.weather-days th { text-align: left; font-weight: normal; color: var(--muted); font-size: 12px; }
+.weather-days th, .weather-days td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--border); }
+.weather-days td { font-variant-numeric: tabular-nums; }
+
 @media (max-width: 800px) {
+    .weather-grid { grid-template-columns: 1fr 1fr; }
+    .weather-grid .field:first-child { grid-column: 1 / -1; }
     .editor-grid { grid-template-columns: 1fr; }
     .enabled-check { margin-top: 4px; }
     .editor-wrap { padding: 12px; }

@@ -20,6 +20,7 @@
             <div class="conv-section-title">Skripte</div>
             <div class="conv-list" id="scriptList"></div>
             <div class="sidebar-bottom">
+                <button class="btn btn-ghost btn-block" id="weatherBtn">🌤️ Wetter</button>
                 <button class="btn btn-ghost btn-block" id="docsBtn">📖 Dokumentation</button>
                 <div class="version">ViEventLog {{.Version}}</div>
             </div>
@@ -40,6 +41,7 @@
                         <div class="example" data-template="outside">🌡️ Warmwasser nach Außentemperatur</div>
                         <div class="example" data-template="charge">⏰ Täglich 17 Uhr Warmwasser bereiten</div>
                         <div class="example" data-template="noise">🌙 Nachts Geräuschreduzierung</div>
+                        <div class="example" data-template="sun">☀️ Warmwasser bei Sonne (Wetter)</div>
                         <div class="example" data-template="blank">📝 Leeres Skript</div>
                     </div>
                 </div>
@@ -116,6 +118,40 @@
                 <button class="btn btn-ghost" data-close>✕</button>
             </div>
             <div class="modal-body md" id="docsBody">Lade …</div>
+        </div>
+    </div>
+
+    <div class="modal" id="weatherModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🌤️ Wetter für Skripte</h2>
+                <button class="btn btn-ghost" data-close>✕</button>
+            </div>
+            <div class="modal-body">
+                <section>
+                    <p class="hint">Wetterdaten von <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap</a>
+                        für Funktionen wie <code>sunny(3)</code>, <code>forecast("temp", 24, "avg")</code> oder <code>dayForecast(1)</code>.
+                        Benötigt einen kostenlosen API-Key (Konto anlegen, unter „API keys“ kopieren). Neue Keys sind erst nach bis zu 2 Stunden aktiv.</p>
+                    <label class="field">API-Key<input type="password" class="input mono" id="wApiKey" autocomplete="off"></label>
+                    <div class="weather-grid">
+                        <label class="field">PLZ oder Ort<input class="input" id="wLocation" placeholder="z.B. 80331 oder München"></label>
+                        <label class="field">Land<input class="input" id="wCountry" placeholder="DE" maxlength="2"></label>
+                        <label class="field">Abruf alle … Minuten<input type="number" class="input" id="wRefresh" min="15" step="15"></label>
+                    </div>
+                    <p class="hint">ViEventLog ruft das Wetter im Hintergrund ab (2 API-Aufrufe je Abruf, bei 60 Minuten 48 pro Tag).
+                        Skripte lesen nur aus diesem Cache und belasten die Wetter-API nicht, egal wie oft sie laufen.</p>
+                </section>
+                <section id="wDataSection" hidden>
+                    <h3 id="wTitle"></h3>
+                    <div id="wData"></div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <span class="status" id="wStatus"></span>
+                <button class="btn btn-ghost danger-text" id="wRemoveBtn" hidden>Entfernen</button>
+                <button class="btn btn-ghost" data-close>Schließen</button>
+                <button class="btn btn-primary" id="wSaveBtn">Speichern &amp; abrufen</button>
+            </div>
         </div>
     </div>
 

@@ -160,6 +160,20 @@ func aiTools() []aiTool {
 			}, "code"),
 			Run: aiToolJavaScript,
 		},
+		{
+			Name: "get_weather",
+			Description: "Wetter am Standort aus den Wetter-Einstellungen (OpenWeatherMap, aus dem Cache): aktuelles Wetter, " +
+				"3-Stunden-Vorhersage der nächsten 24 h und Tageswerte (min/max °C, Bewölkung, geschätzte Sonnenstunden, Regen) für bis zu 5 Tage. " +
+				"Dieselben Daten nutzen die Wetter-Funktionen der Skripte.",
+			Parameters: aiSchema(map[string]interface{}{}),
+			Run: func(ctx context.Context, args map[string]interface{}) (string, error) {
+				d, err := getWeather(ctx)
+				if err != nil {
+					return "", err
+				}
+				return toJSON(weatherOverview(d, time.Now())), nil
+			},
+		},
 	}
 
 	// Write tools reuse the existing control handlers (same validation and API calls as the dashboard)

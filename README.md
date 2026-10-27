@@ -889,6 +889,7 @@ Skripte sind kleine Regeln, die ViEventLog nach einem Zeitplan im Hintergrund au
 - über 18 °C Außentemperatur Warmwasser auf 50 °C, darunter auf 53 °C
 - täglich um 17 Uhr eine Warmwasserbereitung starten
 - nachts die Geräuschreduzierung der Wärmepumpe einschalten
+- mittags bei sonniger Wettervorhersage Warmwasser mit PV-Strom bereiten
 
 Die Skripte sind in der einfachen Ausdruckssprache [expr](https://expr-lang.org) geschrieben:
 
@@ -913,7 +914,7 @@ if t > 18.5 {
 ### Ein Skript anlegen
 
 1. `/scripts` öffnen (Link „⚙️ Skripte“ auf der Startseite, im Dashboard oder im Assistenten).
-2. Eine **Vorlage** wählen (Warmwasser nach Außentemperatur, Warmwasser um 17 Uhr, Nachts leiser) oder ein leeres Skript.
+2. Eine **Vorlage** wählen (Warmwasser nach Außentemperatur, Warmwasser um 17 Uhr, Nachts leiser, Warmwasser bei Sonne) oder ein leeres Skript.
 3. **Gerät** auswählen. Alle Funktionen im Skript beziehen sich auf dieses Gerät.
 4. **Zeitplan** im Cron-Format eintragen oder aus „Vorlage …“ wählen:
 
@@ -937,6 +938,25 @@ Mit **„⚡ Jetzt ausführen“** wird die gespeicherte Version sofort ausgefü
 - Eine identische Aktion wird innerhalb von 15 Minuten nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Pro Lauf sind höchstens 10 Aktionen möglich.
 - Gegen ständiges Hin- und Herschalten helfen Mittelwerte (`history(...)`) und eine Schaltlücke (siehe Beispiel oben).
 
+### Wetter in Skripten
+
+Skripte können die Wettervorhersage nutzen, z.B. `sunny(3)` („wird es die nächsten 3 Stunden sonnig?“), `sunnyBetween("15:00", "17:00")` („wird es heute zwischen 15 und 17 Uhr sonnig?“, auch schon früh morgens abfragbar), `forecast("temp", 24, "avg")` (Mittel der nächsten 24 Stunden), `rainy(6)` oder `dayForecast(1).max` (Höchstwert morgen). Die Daten kommen von [OpenWeatherMap](https://openweathermap.org/api) (kostenloser Plan).
+
+1. Auf [openweathermap.org](https://openweathermap.org/api) ein kostenloses Konto anlegen und unter „API keys“ den Key kopieren. Neue Keys sind erst nach bis zu 2 Stunden aktiv.
+2. Auf der Skript-Seite links unten **„🌤️ Wetter“** öffnen, API-Key, **PLZ oder Ort** und **Land** (z.B. `DE`) eintragen und **„Speichern & abrufen“** klicken. Der Dialog zeigt dann das aktuelle Wetter und die Vorhersage für die nächsten Tage.
+
+ViEventLog ruft das Wetter im Hintergrund ab (Standard stündlich, je Abruf 2 API-Aufrufe, also 48 pro Tag). Skripte und der KI-Assistent (Tool `get_weather`) lesen nur aus diesem Cache und verursachen keine weiteren Aufrufe, auch wenn sie jede Minute laufen.
+
+```
+// Mittags bei Sonne einmal täglich Warmwasser bereiten (Zeitplan 0 11-14 * * *)
+let today = now().Format("2006-01-02");
+if sunny(3) && get("sunCharge") != today {
+  startDhwOneTimeCharge(); set("sunCharge", today)
+} else {
+  false
+}
+```
+
 ### KI-Hilfe im Editor
 
 Im Bereich **„🤖 KI-Hilfe zu diesem Skript“** (benötigt einen eingerichteten KI-Anbieter, siehe oben):
@@ -952,7 +972,7 @@ Alternativ schreibt der KI-Assistent ganze Skripte: „Erstelle ein Skript, das 
 
 ### Dokumentation aller Funktionen
 
-Alle Funktionen (Werte, Zeit, Variablen, Aktionen), die Syntax und weitere Beispiele stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md) und im Editor unter **„📖 Dokumentation“**.
+Alle Funktionen (Werte, Wetter, Zeit, Variablen, Aktionen), die Syntax und weitere Beispiele stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md) und im Editor unter **„📖 Dokumentation“**.
 
 ![Skript-Dokumentation](screenshot_scripts_docs.png)
 
@@ -1119,6 +1139,8 @@ Alle Steuerungs-Endpoints invalidieren automatisch den Feature-Cache und geben b
 - `GET /api/scripts/runs?id=...&all=1` - Ausführungsprotokoll
 - `GET /api/scripts/docs` - Dokumentation (Markdown)
 - `GET /api/scripts/devices` - Geräte, an die Skripte gebunden werden können
+- `GET /api/weather` - Wetter-Einstellungen (ohne API-Key) und Wetter aus dem Cache
+- `POST /api/weather/settings/set` - Wetter-Einstellungen speichern und Wetter abrufen (`apiKey`, `location`, `country`, `refreshMinutes`; leerer `apiKey` behält den gespeicherten, `{"remove": true}` entfernt die Einstellungen)
 
 ## Technische Details
 

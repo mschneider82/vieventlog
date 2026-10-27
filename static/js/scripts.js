@@ -35,6 +35,21 @@
             schedule: '*/10 * * * *',
             code: 'setNoiseReductionMode(timeBetween("22:00", "06:00") ? "maxReduced" : "notReduced")',
         },
+        sun: {
+            name: 'Warmwasser bei Sonne',
+            description: 'Mittags bei sonniger Vorhersage einmal täglich Warmwasser bereiten (z.B. mit PV-Strom)',
+            schedule: '0 11-14 * * *',
+            code: [
+                '// Benötigt die Wetter-Einstellungen (🌤️ Wetter links unten)',
+                'let today = now().Format("2006-01-02");',
+                'log("Wetter:", weather().description, "– sonnig in den nächsten 3 h:", sunny(3));',
+                'if sunny(3) && get("sunCharge") != today {',
+                '  startDhwOneTimeCharge(); set("sunCharge", today)',
+                '} else {',
+                '  false',
+                '}',
+            ].join('\n'),
+        },
         blank: { name: 'Neues Skript', description: '', schedule: '*/5 * * * *', code: 'log("Außen:", outsideTemp())' },
     };
 
@@ -387,6 +402,77 @@
     }
 
     // ------------------------------------------------------------------
+    // Weather settings
+    // ------------------------------------------------------------------
+    const WEATHER_ICONS = { Clear: '☀️', Drizzle: '🌦️', Rain: '🌧️', Thunderstorm: '⛈️', Snow: '🌨️' };
+
+    function weatherIcon(w) {
+        if (w.condition === 'Clear') return w.daylight === false ? '🌙' : '☀️';
+        if (w.condition === 'Clouds') return w.clouds !== null && w.clouds < 50 ? '⛅' : '☁️';
+        return WEATHER_ICONS[w.condition] || '🌫️';
+    }
+
+    function num(v, unit) {
+        return v === null || v === undefined ? '–' : v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + (unit || '');
+    }
+
+    function dayLabel(date, i) {
+        if (i === 0) return 'Heute';
+        if (i === 1) return 'Morgen';
+        return new Date(date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    }
+
+    function renderWeather(data) {
+        if (!data.success) { $('wStatus').textContent = '⚠️ ' + data.error; return; }
+        const s = data.settings;
+        $('wApiKey').value = '';
+        $('wApiKey').placeholder = s.hasApiKey ? '•••••• gespeichert (leer lassen = unverändert)' : 'API-Key von openweathermap.org';
+        $('wLocation').value = s.location || '';
+        $('wCountry').value = s.country || '';
+        $('wRefresh').value = s.refreshMinutes;
+        $('wRemoveBtn').hidden = !s.hasApiKey && !s.location;
+
+        const w = data.weather;
+        $('wStatus').textContent = data.weatherError ? '⚠️ ' + data.weatherError :
+            (w ? '✓ Abgerufen ' + fmtTime(w.fetchedAt) : 'Noch nicht eingerichtet');
+        $('wDataSection').hidden = !w;
+        if (!w) return;
+        const c = w.current;
+        $('wTitle').textContent = w.location;
+        let html = '<p class="weather-now">' + weatherIcon(c) + ' <b>' + num(c.temp, ' °C') + '</b> (gefühlt ' + num(c.feelsLike, ' °C') + ') · ' +
+            esc(c.description) + ' · Bewölkung ' + num(c.clouds, ' %') + ' · Wind ' + num(c.wind, ' m/s') +
+            (w.sunrise ? ' · ☀ ' + esc(w.sunrise) + '–' + esc(w.sunset) : '') + '</p>';
+        html += '<div class="weather-scroll"><table class="weather-days"><thead><tr><th>Tag</th><th>Wetter</th><th>Temperatur</th><th>Bewölkung</th><th>Sonne</th><th>Niederschlag</th></tr></thead><tbody>' +
+            w.days.map((d, i) => '<tr><td>' + esc(dayLabel(d.date, i)) + '</td><td>' + weatherIcon(d) + ' ' + esc(d.description) + '</td>' +
+                '<td>' + num(d.min) + ' – ' + num(d.max, ' °C') + '</td><td>' + num(d.clouds, ' %') + '</td><td>' + num(d.sunHours, ' h') + '</td>' +
+                '<td>' + num(d.rain + d.snow, ' mm') + ' (' + num(d.pop, ' %') + ')</td></tr>').join('') + '</tbody></table></div>';
+        html += '<p class="hint">Heute: nur die restlichen Stunden. Sonnenstunden geschätzt aus der Bewölkung. ' +
+            'Testen im Editor z.B. mit <code>[weather(), dayForecast(1)]</code>.</p>';
+        $('wData').innerHTML = html;
+    }
+
+    async function openWeather() {
+        $('weatherModal').hidden = false;
+        $('wStatus').textContent = 'Lade …';
+        renderWeather(await api('/api/weather'));
+    }
+
+    async function saveWeather() {
+        $('wStatus').textContent = 'Speichere und rufe Wetter ab …';
+        renderWeather(await api('/api/weather/settings/set', {
+            apiKey: $('wApiKey').value.trim(),
+            location: $('wLocation').value,
+            country: $('wCountry').value,
+            refreshMinutes: parseInt($('wRefresh').value, 10) || 0,
+        }));
+    }
+
+    async function removeWeather() {
+        if (!confirm('Wetter-Einstellungen inkl. API-Key entfernen? Skripte mit Wetter-Funktionen schlagen dann fehl.')) return;
+        renderWeather(await api('/api/weather/settings/set', { remove: true }));
+    }
+
+    // ------------------------------------------------------------------
     // Init
     // ------------------------------------------------------------------
     $('newScriptBtn').onclick = () => {
@@ -408,10 +494,14 @@
     $('fPreset').onchange = () => { if ($('fPreset').value) { $('fSchedule').value = $('fPreset').value; state.dirty = true; } $('fPreset').value = ''; };
     $('docsBtn').onclick = openDocs;
     $('docsLink').onclick = openDocs;
+    $('weatherBtn').onclick = openWeather;
+    $('wSaveBtn').onclick = saveWeather;
+    $('wRemoveBtn').onclick = removeWeather;
     $('sidebarToggle').onclick = () => $('sidebar').classList.toggle('open');
-    document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => { $('docsModal').hidden = true; }; });
-    $('docsModal').addEventListener('click', (e) => { if (e.target.id === 'docsModal') $('docsModal').hidden = true; });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('docsModal').hidden = true; });
+    const modals = document.querySelectorAll('.modal');
+    document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => { b.closest('.modal').hidden = true; }; });
+    modals.forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) m.hidden = true; }));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modals.forEach((m) => { m.hidden = true; }); });
     $('aiBtn').onclick = (e) => {
         e.preventDefault();
         const q = state.current && state.current.code
