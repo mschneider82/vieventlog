@@ -50,6 +50,25 @@
                 '}',
             ].join('\n'),
         },
+        pv: {
+            name: 'PV-Überschuss → Warmwasser (evcc)',
+            description: 'Warmwasser bereiten, wenn evcc seit 30 Minuten mehr als 2 kW Einspeisung meldet',
+            schedule: '*/5 * * * *',
+            code: [
+                '// IP-Adresse durch die des evcc-Rechners ersetzen.',
+                '// grid.power: positiv = Netzbezug, negativ = Einspeisung (W)',
+                'let grid = httpGet("http://192.168.1.10:7070/api/state", "grid.power");',
+                'let since = grid != nil && grid < -2000 ? get("surplusSince", now().Unix()) : nil;',
+                'set("surplusSince", since); // Beginn des Überschusses merken, nil = kein Überschuss',
+                'let minutes = since == nil ? 0 : (now().Unix() - since) / 60;',
+                'log("Netz:", grid, "W, Überschuss seit", round(minutes), "min");',
+                'if minutes >= 30 && (dhwTemp() ?? 99) < 45 {',
+                '  startDhwOneTimeCharge()',
+                '} else {',
+                '  false',
+                '}',
+            ].join('\n'),
+        },
         blank: { name: 'Neues Skript', description: '', schedule: '*/5 * * * *', code: 'log("Außen:", outsideTemp())' },
     };
 

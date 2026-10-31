@@ -552,6 +552,7 @@ services:
 | `VICARE_ACCOUNT_NAME` | Anzeigename für Account | `Mein Haus` | E-Mail |
 | `VICARE_CONFIG_DIR` | Config-Verzeichnis für accounts.json | `/config` | `/config` |
 | `VICARE_ACCOUNTS` | Multi-Account als JSON | `{"accounts":{...}}` | - |
+| `SCRIPT_FILES_DIR` | Verzeichnis, aus dem Skripte mit `readFile()` lesen dürfen | `/data/sensoren` | `/config/script-files` |
 | `BASIC_AUTH_USER` | Basic Auth Benutzername | `admin` | - |
 | `BASIC_AUTH_PASSWORD` | Basic Auth Passwort | `geheim123` | - |
 
@@ -890,6 +891,7 @@ Skripte sind kleine Regeln, die ViEventLog nach einem Zeitplan im Hintergrund au
 - täglich um 17 Uhr eine Warmwasserbereitung starten
 - nachts die Geräuschreduzierung der Wärmepumpe einschalten
 - mittags bei sonniger Wettervorhersage Warmwasser mit PV-Strom bereiten
+- bei PV-Überschuss (z.B. aus evcc oder Home Assistant) Warmwasser bereiten
 
 Die Skripte sind in der einfachen Ausdruckssprache [expr](https://expr-lang.org) geschrieben:
 
@@ -914,7 +916,7 @@ if t > 18.5 {
 ### Ein Skript anlegen
 
 1. `/scripts` öffnen (Link „⚙️ Skripte“ auf der Startseite, im Dashboard oder im Assistenten).
-2. Eine **Vorlage** wählen (Warmwasser nach Außentemperatur, Warmwasser um 17 Uhr, Nachts leiser, Warmwasser bei Sonne) oder ein leeres Skript.
+2. Eine **Vorlage** wählen (Warmwasser nach Außentemperatur, Warmwasser um 17 Uhr, Nachts leiser, Warmwasser bei Sonne, PV-Überschuss aus evcc) oder ein leeres Skript.
 3. **Gerät** auswählen. Alle Funktionen im Skript beziehen sich auf dieses Gerät.
 4. **Zeitplan** im Cron-Format eintragen oder aus „Vorlage …“ wählen:
 
@@ -957,6 +959,32 @@ if sunny(3) && get("sunCharge") != today {
 }
 ```
 
+### Externe Werte in Skripten (evcc, Home Assistant, Dateien)
+
+Skripte können Werte aus anderen Systemen im Heimnetz lesen, z.B. die Einspeiseleistung aus [evcc](https://evcc.io), einen Raumsensor aus Home Assistant oder eine JSON-Datei, die ein anderes Programm schreibt. So lässt sich z.B. PV-Überschuss in Warmwasser umsetzen, auch ohne SG-Ready.
+
+- `httpGet(url, path)` ruft eine URL ab und zieht mit dem **Pfad** einen Wert aus der JSON-Antwort: `httpGet("http://192.168.1.10:7070/api/state", "grid.power")`. Pfade wie `grid.power`, `loadpoints[0].vehicleSoc` oder `$.grid.power` (jq/JSONPath-Schreibweise). Ohne Pfad kommt die ganze Antwort als Map/Liste zurück.
+- `readFile(name, path, maxAge)` liest eine Datei aus dem Verzeichnis für Skript-Dateien (`SCRIPT_FILES_DIR`, Standard `script-files` im Config-Verzeichnis, im Container `/config/script-files`). Mit `maxAge` (Minuten) ist der Wert `nil`, wenn die Datei nicht mehr aktualisiert wird.
+- `toNumber()` macht aus Text wie `"21.5"` (Home Assistant) eine Zahl, `regexFind()` sucht Werte in Antworten, die kein JSON sind.
+- Ist eine Quelle nicht erreichbar, ist der Wert `nil` und der Grund steht im Log. Mit `??` einen Ersatzwert angeben.
+
+```
+// PV-Überschuss aus evcc (Zeitplan */5 * * * *): nach 30 Minuten mit mehr als 2 kW Einspeisung Warmwasser bereiten
+let grid = httpGet("http://192.168.1.10:7070/api/state", "grid.power");   // negativ = Einspeisung
+let since = grid != nil && grid < -2000 ? get("surplusSince", now().Unix()) : nil;
+set("surplusSince", since);
+let minutes = since == nil ? 0 : (now().Unix() - since) / 60;
+if minutes >= 30 && (dhwTemp() ?? 99) < 45 {
+  startDhwOneTimeCharge()
+} else {
+  false
+}
+```
+
+Für Home Assistant den Token als Header mitgeben: `toNumber(httpGet("http://homeassistant:8123/api/states/sensor.wohnzimmer", "state", {"Authorization": "Bearer TOKEN"}))`. Weitere Beispiele und die Pfad-Syntax stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md#pfade-werte-aus-externen-daten-herausziehen).
+
+Docker: Dateien für `readFile` z.B. per Volume einbinden: `./sensoren:/config/script-files:ro`.
+
 ### KI-Hilfe im Editor
 
 Im Bereich **„🤖 KI-Hilfe zu diesem Skript“** (benötigt einen eingerichteten KI-Anbieter, siehe oben):
@@ -972,7 +1000,7 @@ Alternativ schreibt der KI-Assistent ganze Skripte: „Erstelle ein Skript, das 
 
 ### Dokumentation aller Funktionen
 
-Alle Funktionen (Werte, Wetter, Zeit, Variablen, Aktionen), die Syntax und weitere Beispiele stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md) und im Editor unter **„📖 Dokumentation“**.
+Alle Funktionen (Werte, Wetter, Externe Daten, Zeit, Variablen, Aktionen), die Syntax und weitere Beispiele stehen in [docs/SCRIPTS.md](docs/SCRIPTS.md) und im Editor unter **„📖 Dokumentation“**.
 
 ![Skript-Dokumentation](screenshot_scripts_docs.png)
 

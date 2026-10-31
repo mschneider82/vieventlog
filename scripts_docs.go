@@ -29,6 +29,9 @@ Zeitplan (Cron) im Hintergrund ausgeführt. Jedes Skript gehört zu genau einem 
   Skript-Seite unter **🌤️ Wetter** (API-Key, PLZ oder Ort, Land). ViEventLog ruft das Wetter im Hintergrund ab (Standard stündlich,
   2 API-Aufrufe), Skripte lesen nur aus diesem Cache. Die Vorhersage reicht 5 Tage in 3-Stunden-Schritten; ein Schritt gilt für
   1,5 Stunden vor bis 1,5 Stunden nach seiner Uhrzeit (der Wert für 16:00 also für 14:30–17:30). Alle Zeiten sind lokale Zeit.
+- **Externe Daten**: ` + "`httpGet`" + ` liest Werte aus anderen Systemen im Heimnetz (evcc, Home Assistant, Shelly, Tasmota, ioBroker …),
+  ` + "`readFile`" + ` aus Dateien, die ein anderes Programm schreibt. Ist eine Quelle nicht erreichbar, ist der Wert ` + "`nil`" + `
+  und der Grund steht im Log; das Skript läuft weiter. Einzelne Werte werden mit einem **Pfad** herausgezogen (siehe unten).
 - **Aktionen** (` + "`set...`" + `, ` + "`start...`" + `) prüfen zuerst den aktuellen Wert und rufen die API nur auf, wenn sich etwas ändert.
   Sie geben ` + "`true`" + ` zurück, wenn etwas geändert wurde, sonst ` + "`false`" + `. Eine identische Aktion wird innerhalb von 15 Minuten
   nicht wiederholt (die Cloud übernimmt neue Werte verzögert). Maximal 10 Aktionen pro Lauf.
@@ -53,7 +56,7 @@ Eingebaute expr-Funktionen wie ` + "`abs()`, `round()`, `min()`, `max()`, `now()
 stehen ebenfalls zur Verfügung (siehe expr-Dokumentation). Schleifen gibt es nicht; Skripte laufen höchstens 60 Sekunden.
 `)
 
-	categories := []string{"Werte", "Wetter", "Zeit", "Variablen & Ausgabe", "Aktionen"}
+	categories := []string{"Werte", "Wetter", "Externe Daten", "Zeit", "Variablen & Ausgabe", "Aktionen"}
 	funcs := scriptFunctions()
 	for _, cat := range categories {
 		sb.WriteString("\n## " + cat + "\n\n| Funktion | Beschreibung | Beispiel |\n|---|---|---|\n")
@@ -70,6 +73,44 @@ stehen ebenfalls zur Verfügung (siehe expr-Dokumentation). Schleifen gibt es ni
 	}
 
 	sb.WriteString(`
+## Pfade: Werte aus externen Daten herausziehen
+
+` + "`httpGet`, `readFile` und `jsonPath`" + ` ziehen mit einem Pfad einen einzelnen Wert aus einer JSON-Antwort. Beispiel-Antwort
+von evcc (` + "`http://evcc:7070/api/state`" + `, gekürzt):
+
+` + "```" + `
+{"grid": {"power": -2592.3}, "pvPower": 5400, "homePower": 650,
+ "loadpoints": [{"title": "Garage", "chargePower": 0, "vehicleSoc": 64}]}
+` + "```" + `
+
+| Pfad | Ergebnis | Bedeutung |
+|---|---|---|
+| ` + "`grid.power`" + ` | ` + "`-2592.3`" + ` | Schlüssel mit Punkt verbinden |
+| ` + "`.grid.power`" + ` oder ` + "`$.grid.power`" + ` | ` + "`-2592.3`" + ` | Schreibweise wie jq bzw. JSONPath geht auch |
+| ` + "`loadpoints[0].vehicleSoc`" + ` | ` + "`64`" + ` | Listen-Element, 0 = erstes |
+| ` + "`loadpoints.0.vehicleSoc`" + ` | ` + "`64`" + ` | dasselbe |
+| ` + "`loadpoints[-1].title`" + ` | ` + "`\"Garage\"`" + ` | negativ = vom Ende, -1 = letztes |
+| ` + "`[\"grid\"][\"power\"]`" + ` | ` + "`-2592.3`" + ` | Schlüssel mit Punkten, Leerzeichen oder Bindestrichen in Anführungszeichen |
+| ` + "`gridPower`" + ` | ` + "`nil`" + ` | gibt es nicht: ` + "`nil`" + `, mit ` + "`??`" + ` einen Ersatzwert angeben |
+| leer | ganze Antwort | als Map/Liste zum Weiterverarbeiten |
+
+Ohne Pfad kommt die ganze Antwort zurück; auf sie lässt sich auch direkt mit ` + "`.`" + ` zugreifen und Listen lassen sich mit den
+expr-Funktionen auswerten:
+
+` + "```" + `
+let s = httpGet("http://evcc:7070/api/state");
+let laden = sum(map(s?.loadpoints ?? [], .chargePower));       // Ladeleistung aller Ladepunkte
+let garage = find(s?.loadpoints ?? [], .title == "Garage")?.vehicleSoc;
+s?.grid?.power ?? 0                                             // ?. liefert nil statt eines Fehlers, wenn s nil ist
+` + "```" + `
+
+Werte, die als Text kommen (z.B. ` + "`\"state\": \"21.5\"`" + ` bei Home Assistant), mit ` + "`toNumber()`" + ` in eine Zahl umwandeln.
+Antworten, die kein JSON sind (HTML, Prometheus-Metriken), kommen als Text zurück; dort hilft ` + "`regexFind()`" + `.
+
+**Dateien**: ` + "`readFile`" + ` liest nur aus dem Verzeichnis für Skript-Dateien, Unterordner sind erlaubt. Es wird mit der
+Umgebungsvariable ` + "`SCRIPT_FILES_DIR`" + ` festgelegt, Standard ist der Unterordner ` + "`script-files`" + ` im Config-Verzeichnis
+(Container: ` + "`/config/script-files`" + `). Im Container z.B. per Volume einbinden: ` + "`./sensoren:/config/script-files:ro`" + `.
+
 ## Beispiele
 
 **Warmwasser abhängig von der Außentemperatur** (Zeitplan ` + "`*/5 * * * *`" + `). Der Mittelwert über 2 Stunden und
@@ -102,6 +143,50 @@ if sunny(3) && get("sunCharge") != today {
 } else {
   false
 }
+` + "```" + `
+
+**PV-Überschuss aus evcc** (Zeitplan ` + "`*/5 * * * *`" + `): Warmwasser bereiten, wenn seit 30 Minuten mehr als 2 kW
+eingespeist werden. ` + "`grid.power`" + ` ist positiv bei Netzbezug und negativ bei Einspeisung; die IP durch die des evcc-Rechners ersetzen:
+
+` + "```" + `
+let grid = httpGet("http://192.168.1.10:7070/api/state", "grid.power");
+let since = grid != nil && grid < -2000 ? get("surplusSince", now().Unix()) : nil;
+set("surplusSince", since);                    // Beginn des Überschusses merken, nil = kein Überschuss
+let minutes = since == nil ? 0 : (now().Unix() - since) / 60;
+log("Netz:", grid, "W, Überschuss seit", round(minutes), "min");
+if minutes >= 30 && (dhwTemp() ?? 99) < 45 {
+  startDhwOneTimeCharge()
+} else {
+  false
+}
+` + "```" + `
+
+**Raumtemperatur aus Home Assistant** (Zeitplan ` + "`*/10 * * * *`" + `): Token unter Profil → Sicherheit → „Langlebige Zugangstoken“ erstellen.
+Home Assistant liefert den Zustand als Text, daher ` + "`toNumber`" + `:
+
+` + "```" + `
+let ha = {"Authorization": "Bearer DEIN_TOKEN"};
+let raum = toNumber(httpGet("http://homeassistant:8123/api/states/sensor.wohnzimmer_temperatur", "state", ha));
+log("Wohnzimmer:", raum, "°C");
+if raum == nil {
+  false // Sensor nicht verfügbar
+} else if raum > 22.5 {
+  setRoomTemperature(0, "normal", 20)
+} else if raum < 21 {
+  setRoomTemperature(0, "normal", 21)
+} else {
+  false
+}
+` + "```" + `
+
+**Werte aus einer Datei**, die ein anderes Programm schreibt, z.B. ` + "`sensors.json`" + ` im Verzeichnis für Skript-Dateien mit
+` + "`{\"timestamp\": \"2026-10-26T12:00:00+01:00\", \"sensor_1\": 22.1}`" + `. Mit maxAge 15 ist der Wert ` + "`nil`" + `, wenn die Datei
+seit mehr als 15 Minuten nicht aktualisiert wurde:
+
+` + "```" + `
+let t = readFile("sensors.json", "sensor_1", 15);
+log("Sensor 1:", t ?? "nicht verfügbar");
+false
 ` + "```" + `
 
 **Heizung nach Wetterprognose** (Zeitplan ` + "`0 */3 * * *`" + `): Standby, wenn die nächsten 24 Stunden im Mittel

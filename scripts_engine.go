@@ -52,17 +52,18 @@ type scriptAction struct {
 
 // scriptRun holds the state of a single script execution
 type scriptRun struct {
-	ctx      context.Context
-	scriptID string
-	device   scriptDevice
-	dryRun   bool
-	now      time.Time
-	features *DeviceFeatures
-	weather  *weatherData
-	logs     []string
-	actions  []scriptAction
-	state    map[string]any
-	stateSet map[string]bool
+	ctx       context.Context
+	scriptID  string
+	device    scriptDevice
+	dryRun    bool
+	now       time.Time
+	features  *DeviceFeatures
+	weather   *weatherData
+	httpCache map[string]any // httpGet responses of this run, by URL and headers
+	logs      []string
+	actions   []scriptAction
+	state     map[string]any
+	stateSet  map[string]bool
 }
 
 // scriptRunResult is returned by runScript and stored in the run log
@@ -510,6 +511,57 @@ func scriptFunctions() []scriptFunc {
 				}
 				return cur >= from || cur < to, nil
 			}},
+		// Replaces the expr builtin date(), which fails with the Timezone option (expr v1.17.8 dereferences the location)
+		{Name: "date", Category: "Zeit", Sig: "date(value[, layout[, timezone]])",
+			Desc: "Zeitpunkt aus Text oder Unix-Zeitstempel (Sekunden oder Millisekunden), z.B. für Zeitstempel externer Daten. Erkennt " +
+				"\"2026-10-26T12:00:00+01:00\" (RFC3339), \"2026-10-26 12:00:00\", \"2026-10-26\" und \"12:00:00\", sonst ein Go-Layout angeben. " +
+				"Ohne Zeitzone gilt lokale Zeit. now() - date(...) ergibt eine Dauer. nil, wenn value nil ist.",
+			Example: "now() - date(ts) < duration(\"15m\")",
+			Impl: func(rc *scriptRun, args []any) (any, error) {
+				if len(args) == 0 {
+					return nil, fmt.Errorf("Parameter value fehlt")
+				}
+				if args[0] == nil {
+					return nil, nil
+				}
+				loc := time.Local
+				if len(args) > 2 {
+					name, err := argStr(args, 2, "timezone")
+					if err != nil {
+						return nil, err
+					}
+					if loc, err = time.LoadLocation(name); err != nil {
+						return nil, fmt.Errorf("unbekannte Zeitzone %q", name)
+					}
+				}
+				if n, ok := toFloat(args[0]); ok {
+					if math.Abs(n) > 1e11 { // Milliseconds
+						return time.UnixMilli(int64(n)).In(loc), nil
+					}
+					sec, frac := math.Modf(n)
+					return time.Unix(int64(sec), int64(frac*1e9)).In(loc), nil
+				}
+				s, err := argStr(args, 0, "value")
+				if err != nil {
+					return nil, err
+				}
+				s = strings.TrimSpace(s)
+				layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02 15:04", "2006-01-02", "15:04:05",
+					time.RFC1123Z, time.RFC1123, time.RFC822Z, time.RFC822, time.RFC850}
+				if len(args) > 1 {
+					layout, err := argStr(args, 1, "layout")
+					if err != nil {
+						return nil, err
+					}
+					layouts = []string{layout}
+				}
+				for _, layout := range layouts {
+					if t, err := time.ParseInLocation(layout, s, loc); err == nil {
+						return t, nil
+					}
+				}
+				return nil, fmt.Errorf("Zeitpunkt %q nicht erkannt, Layout angeben, z.B. date(text, \"02.01.2006 15:04\")", s)
+			}},
 
 		// --- State & output ---
 		{Name: "get", Category: "Variablen & Ausgabe", Sig: "get(key[, default])", Desc: "Liest eine dauerhaft gespeicherte Variable dieses Skripts (bleibt zwischen Läufen erhalten).",
@@ -725,7 +777,8 @@ func scriptFunctions() []scriptFunc {
 				return rc.action("setNoiseReductionMode", args, cur == mode, noiseReductionModeSetHandler, map[string]any{"mode": mode})
 			}},
 	}
-	return append(funcs, scriptWeatherFunctions()...)
+	funcs = append(funcs, scriptWeatherFunctions()...)
+	return append(funcs, scriptExternalFunctions()...)
 }
 
 // scriptCompileOptions builds the expr options; rc is nil for syntax checks only
