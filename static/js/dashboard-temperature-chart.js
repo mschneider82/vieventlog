@@ -21,6 +21,40 @@ var x2 = 100;
 var step_w = 33.34; // step size when panning
 var step_n = 16.67;  // _n= narrow step _w= wide Step
 
+// Snapshot fields of the circulation pumps, index = heating circuit number (#287)
+const circulationPumpFields = ['circulation_pump_active', 'heating_circuit_1_pump_active',
+                               'heating_circuit_2_pump_active', 'heating_circuit_3_pump_active'];
+
+// Name of a heating circuit as delivered by the API (heating.circuits.N.name), null if not set
+function getHeatingCircuitName(circuit) {
+    const features = window.currentFeaturesData;
+    if (!features) return null;
+    const featureName = `heating.circuits.${circuit}.name`;
+
+    let name = features.rawFeatures?.find(f => f.feature === featureName)?.properties?.name?.value;
+    if (typeof name !== 'string') {
+        for (const category of [features.circuits, features.other]) {
+            let value = category?.[featureName]?.value;
+            if (value?.name?.value !== undefined) value = value.name.value;
+            if (typeof value === 'string') {
+                name = value;
+                break;
+            }
+        }
+    }
+    if (typeof name !== 'string') return null;
+    name = name.replace(/[<>]/g, '').trim();
+    return name || null;
+}
+
+// Label of a circulation pump: API circuit name if available, circuit number only if there are several pumps
+function getCirculationPumpLabel(circuit) {
+    const name = getHeatingCircuitName(circuit);
+    if (name) return `Umwälzpumpe ${name}`;
+    const multiplePumps = circulationPumpFields.filter(f => availableDataFields.has(f)).length > 1;
+    return multiplePumps ? `Umwälzpumpe Heizkreis ${circuit}` : 'Umwälzpumpe';
+}
+
 // Initialize temperature chart section
 async function initTemperatureChart() {
     // First check if temperature logging is enabled
@@ -585,7 +619,10 @@ function renderFilters() {
         'compressor_power': '⚡ Leistungsaufnahme',
 
         // Pumps
-        'circulation_pump_active': '🔄 Umwälzpumpe',
+        'circulation_pump_active': `🔄 ${getCirculationPumpLabel(0)}`,
+        'heating_circuit_1_pump_active': `🔄 ${getCirculationPumpLabel(1)}`,
+        'heating_circuit_2_pump_active': `🔄 ${getCirculationPumpLabel(2)}`,
+        'heating_circuit_3_pump_active': `🔄 ${getCirculationPumpLabel(3)}`,
         'dhw_pump_active': '🚿 WW-Pumpe',
         'internal_pump_active': '🔄 Interne Pumpe',
 
@@ -615,7 +652,7 @@ function renderFilters() {
         'Kompressor': ['compressor_active', 'compressor_speed', 'compressor_current', 'compressor_pressure',
                       'compressor_oil_temp', 'compressor_motor_temp', 'compressor_inlet_temp', 'compressor_outlet_temp',
                       'compressor_hours', 'compressor_starts', 'compressor_power'],
-        'Info': ['circulation_pump_active', 'dhw_pump_active', 'internal_pump_active', 'four_way_valve_target', 'four_way_valve_current'],
+        'Info': [...circulationPumpFields, 'dhw_pump_active', 'internal_pump_active', 'four_way_valve_target', 'four_way_valve_current'],
         'Energie': ['volumetric_flow', 'thermal_power', 'cop'],
         'Betrieb': ['burner_modulation', 'secondary_heat_generator_status']
     };
@@ -739,6 +776,9 @@ function renderTemperatureChart(data) {
         // Boolean states (secondary axis)
         'compressor_active': { type: 'line', yAxisIndex: 1, color: '#f4b400', step: 'end' },
         'circulation_pump_active': { type: 'line', yAxisIndex: 1, color: '#0f9d58', step: 'end' },
+        'heating_circuit_1_pump_active': { type: 'line', yAxisIndex: 1, color: '#00acc1', step: 'end' },
+        'heating_circuit_2_pump_active': { type: 'line', yAxisIndex: 1, color: '#c0ca33', step: 'end' },
+        'heating_circuit_3_pump_active': { type: 'line', yAxisIndex: 1, color: '#f06292', step: 'end' },
         'dhw_pump_active': { type: 'line', yAxisIndex: 1, color: '#4285f4', step: 'end' },
         'internal_pump_active': { type: 'line', yAxisIndex: 1, color: '#9c27b0', step: 'end' },
 
@@ -810,7 +850,10 @@ function renderTemperatureChart(data) {
 		'four_way_valve_current': 'V ist',
 		'four_way_valve_target': 'V soll',
 		// other info
-        'circulation_pump_active': 'Umwälzpumpe',
+        'circulation_pump_active': getCirculationPumpLabel(0),
+        'heating_circuit_1_pump_active': getCirculationPumpLabel(1),
+        'heating_circuit_2_pump_active': getCirculationPumpLabel(2),
+        'heating_circuit_3_pump_active': getCirculationPumpLabel(3),
         'dhw_pump_active': 'WW-Pumpe',
         'internal_pump_active': 'Int. Pumpe',
 		// Power/COP/Flow
@@ -819,6 +862,9 @@ function renderTemperatureChart(data) {
         'cop': 'AZ',
         'burner_modulation': 'Brenner Mod.'
     };
+
+    // Series with on/off states (names may contain user-defined circuit names)
+    const booleanSeries = new Set();
 
     // Create series for selected fields
     selectedFields.forEach(field => {
@@ -830,6 +876,7 @@ function renderTemperatureChart(data) {
             // Convert boolean to number for chart
             let numValue;
             if (typeof value === 'boolean') {
+                booleanSeries.add(fieldNames[field] || field);
                 numValue = value ? 1 : 0;
             } else {
                 numValue = value;
@@ -878,7 +925,7 @@ function renderTemperatureChart(data) {
 
                     if (value !== null && value !== undefined) {
                         // Format boolean values
-                        const displayValue = param.seriesName.includes('aktiv') || param.seriesName.includes('Pumpe')
+                        const displayValue = booleanSeries.has(param.seriesName) || param.seriesName.includes('aktiv') || param.seriesName.includes('Pumpe')
                             ? (value === 1 ? 'AN' : 'AUS')
                             : (typeof value === 'number' ? value.toFixed(2) : value);
                         result += `${param.marker} ${param.seriesName}: <strong>${displayValue}</strong><br/>`;

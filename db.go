@@ -648,7 +648,49 @@ func runSchemaMigrations() error {
 		log.Println("Migration 8 completed: Optimized temperature_snapshots indices")
 	}
 
+	// Migration 9: Add circulation pump status for heating circuits 1-3 (#287)
+	// Circuit 0 stays in the existing circulation_pump_active column (backward compatible).
+	if !migrationApplied("add_heating_circuit_pump_active") {
+		log.Println("Running migration 9: Adding per-circuit circulation pump fields")
+
+		for i := 1; i <= 3; i++ {
+			colName := fmt.Sprintf("heating_circuit_%d_pump_active", i)
+			if !columnExists("temperature_snapshots", colName) {
+				_, err := eventDB.Exec(fmt.Sprintf("ALTER TABLE temperature_snapshots ADD COLUMN %s INTEGER", colName))
+				if err != nil {
+					return fmt.Errorf("migration 9 failed (%s): %v", colName, err)
+				}
+			}
+		}
+
+		if err := recordMigration(9, "add_heating_circuit_pump_active", "Add circulation pump status for heating circuits 1-3 (#287)"); err != nil {
+			return fmt.Errorf("failed to record migration 9: %v", err)
+		}
+		log.Println("Migration 9 completed: Added heating_circuit_1-3_pump_active fields")
+	}
+
 	return nil
+}
+
+// boolToNullInt converts a bool pointer to a nullable int (SQLite has no bool type)
+func boolToNullInt(b *bool) *int {
+	if b == nil {
+		return nil
+	}
+	val := 0
+	if *b {
+		val = 1
+	}
+	return &val
+}
+
+// nullIntToBool converts a nullable int back to a bool pointer
+func nullIntToBool(i *int) *bool {
+	if i == nil {
+		return nil
+	}
+	val := *i == 1
+	return &val
 }
 
 // columnExists checks if a column exists in a table
@@ -1000,8 +1042,9 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply,
+			heating_circuit_1_pump_active, heating_circuit_2_pump_active, heating_circuit_3_pump_active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := eventDB.Exec(insertSQL,
@@ -1058,6 +1101,9 @@ func SaveTemperatureSnapshot(snapshot *TemperatureSnapshot) error {
 		snapshot.FourWayValveCurrent,
 		snapshot.FourWayValveTarget,
 		snapshot.PressureSupply,
+		boolToNullInt(snapshot.HeatingCircuit1PumpActive),
+		boolToNullInt(snapshot.HeatingCircuit2PumpActive),
+		boolToNullInt(snapshot.HeatingCircuit3PumpActive),
 	)
 
 	if err != nil {
@@ -1091,7 +1137,8 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			circulation_pump_active, dhw_pump_active, internal_pump_active,
 			volumetric_flow, thermal_power, cop,
 			heating_circuit_0_delta_t, heating_circuit_1_delta_t, heating_circuit_2_delta_t, heating_circuit_3_delta_t,
-			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply
+			four_way_valve, burner_modulation, secondary_heat_generator_status,four_way_valve_current,four_way_valve_target,pressure_supply,
+			heating_circuit_1_pump_active, heating_circuit_2_pump_active, heating_circuit_3_pump_active
 		FROM temperature_snapshots
 		WHERE installation_id = ? AND timestamp >= ? AND timestamp <= ?
 	`
@@ -1127,6 +1174,7 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 		var snapshot TemperatureSnapshot
 		var timestampStr string
 		var compressorActiveInt, circulationPumpActiveInt, dhwPumpActiveInt, internalPumpActiveInt *int
+		var circuit1PumpActiveInt, circuit2PumpActiveInt, circuit3PumpActiveInt *int
 
 		err := rows.Scan(
 			&timestampStr,
@@ -1181,6 +1229,9 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			&snapshot.FourWayValveCurrent,
 			&snapshot.FourWayValveTarget,
 			&snapshot.PressureSupply,
+			&circuit1PumpActiveInt,
+			&circuit2PumpActiveInt,
+			&circuit3PumpActiveInt,
 		)
 
 		if err != nil {
@@ -1213,6 +1264,9 @@ func GetTemperatureSnapshots(installationID, gatewayID, deviceID string, startTi
 			val := *internalPumpActiveInt == 1
 			snapshot.InternalPumpActive = &val
 		}
+		snapshot.HeatingCircuit1PumpActive = nullIntToBool(circuit1PumpActiveInt)
+		snapshot.HeatingCircuit2PumpActive = nullIntToBool(circuit2PumpActiveInt)
+		snapshot.HeatingCircuit3PumpActive = nullIntToBool(circuit3PumpActiveInt)
 
 		snapshots = append(snapshots, snapshot)
 	}

@@ -372,9 +372,12 @@ type TemperatureSnapshot struct {
 	CompressorPower      *float64 `json:"compressor_power,omitempty"`
 
 	// Pump status
-	CirculationPumpActive *bool `json:"circulation_pump_active,omitempty"`
-	DHWPumpActive         *bool `json:"dhw_pump_active,omitempty"`
-	InternalPumpActive    *bool `json:"internal_pump_active,omitempty"`
+	CirculationPumpActive     *bool `json:"circulation_pump_active,omitempty"` // heating.circuits.0.circulation.pump
+	HeatingCircuit1PumpActive *bool `json:"heating_circuit_1_pump_active,omitempty"`
+	HeatingCircuit2PumpActive *bool `json:"heating_circuit_2_pump_active,omitempty"`
+	HeatingCircuit3PumpActive *bool `json:"heating_circuit_3_pump_active,omitempty"`
+	DHWPumpActive             *bool `json:"dhw_pump_active,omitempty"`
+	InternalPumpActive        *bool `json:"internal_pump_active,omitempty"`
 
 	// Flow/Energy
 	VolumetricFlow *float64 `json:"volumetric_flow,omitempty"`

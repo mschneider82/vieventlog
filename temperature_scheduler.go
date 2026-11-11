@@ -603,6 +603,12 @@ func extractFeatureIntoSnapshot(feature Feature, snapshot *TemperatureSnapshot, 
 	// Pump status
 	case "heating.circuits.0.circulation.pump":
 		snapshot.CirculationPumpActive = getPumpStatus(feature.Properties)
+	case "heating.circuits.1.circulation.pump":
+		snapshot.HeatingCircuit1PumpActive = getPumpStatus(feature.Properties)
+	case "heating.circuits.2.circulation.pump":
+		snapshot.HeatingCircuit2PumpActive = getPumpStatus(feature.Properties)
+	case "heating.circuits.3.circulation.pump":
+		snapshot.HeatingCircuit3PumpActive = getPumpStatus(feature.Properties)
 	case "heating.dhw.pumps.circulation":
 		snapshot.DHWPumpActive = getPumpStatus(feature.Properties)
 	case "heating.boiler.pumps.internal":  // changed to use vaild keyword "heating.pumps.primary":
