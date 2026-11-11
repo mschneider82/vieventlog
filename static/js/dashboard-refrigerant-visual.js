@@ -89,7 +89,10 @@ function renderRefrigerantCircuitVisual(keyFeatures) {
     // Check if electric heater (Heizstab) is active
     // This would typically be a secondary heater or backup heater
     const heaterActive = keyFeatures.secondaryHeater?.value === 'on' ||
+                        keyFeatures.secondaryHeater?.value === 'heating' ||
                         keyFeatures.secondaryHeater?.value === true ||
+                        keyFeatures.secondaryHeaterState?.value === 'on' ||
+                        keyFeatures.secondaryHeaterState?.value === true ||
                         keyFeatures.secondaryHeatGeneratorStatus?.value === 'on';
 
     // Calculate compressor speed with percentage if device settings available

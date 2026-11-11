@@ -1843,11 +1843,31 @@
             // Secondary Heater (only show if it has an actual value)
             if (kf.secondaryHeater?.value) {
                 const heaterStatus = kf.secondaryHeater.value;
-                const isActive = heaterStatus !== 'off' && heaterStatus !== 'standby';
+                const heaterState = kf.secondaryHeaterState?.value;
+                const isInactive = (v) => !v || v === 'off' || v === 'standby';
+                // Active if either status or state reports activity
+                const isActive = !isInactive(heaterStatus) || !isInactive(heaterState);
+                const heaterLabels = {
+                    'heating': 'Heizen',
+                    'standby': 'Standby',
+                    'on': 'Ein',
+                    'off': 'Aus'
+                };
+                const heaterValue = isInactive(heaterStatus) && isActive ? heaterState : heaterStatus;
+                const heaterDisplay = heaterLabels[heaterValue] || heaterValue;
                 sensors += `
                     <div class="status-item">
                         <span class="status-label">Zusatzheizung</span>
-                        <span class="status-value">${isActive ? '🟢' : '⚪'} ${heaterStatus}</span>
+                        <span class="status-value">${isActive ? '🟢' : '⚪'} ${heaterDisplay}</span>
+                    </div>
+                `;
+            }
+
+            if (typeof kf.secondaryHeaterTemp?.value === 'number') {
+                sensors += `
+                    <div class="status-item">
+                        <span class="status-label">Zusatzheizung Temperatur</span>
+                        <span class="status-value">${formatNum(kf.secondaryHeaterTemp.value)} °C</span>
                     </div>
                 `;
             }

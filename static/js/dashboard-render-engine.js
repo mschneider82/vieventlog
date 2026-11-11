@@ -507,7 +507,10 @@
 
                 // Valves and auxiliary systems
                 fourWayValve: find(['heating.valves.fourThreeWay.position']),
-                secondaryHeater: find(['heating.secondaryHeatGenerator.state', 'heating.secondaryHeatGenerator.status']),
+                // status (standby/heating) reflects the real operation, state may stay "off" (#291)
+                secondaryHeater: find(['heating.secondaryHeatGenerator.status', 'heating.secondaryHeatGenerator.state']),
+                secondaryHeaterState: find(['heating.secondaryHeatGenerator.state']),
+                secondaryHeaterTemp: find(['heating.secondaryHeatGenerator.temperature.current']),
                 secondaryHeatGeneratorStatus: find(['heating.secondaryHeatGenerator.status']),
                 fanRing: findNested('heating.heater.fanRing', 'active'),
                 condensatePan: findNested('heating.heater.condensatePan', 'active'),
