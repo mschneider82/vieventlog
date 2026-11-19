@@ -317,7 +317,7 @@ func (rc *scriptRun) action(fn string, args []any, unchanged bool, h http.Handle
 	body["installationId"] = rc.device.InstallationID
 	body["gatewaySerial"] = rc.device.GatewaySerial
 	body["deviceId"] = rc.device.DeviceID
-	status, resp := aiCallHandler(h, http.MethodPost, "/", body)
+	status, resp := aiCallHandler(requireHeatingCommandTarget(h), http.MethodPost, "/", body)
 	var parsed struct {
 		Success bool   `json:"success"`
 		Error   string `json:"error"`

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,72 @@ import (
 	"strings"
 	"time"
 )
+
+func isHeatingCommandTarget(token *AccountToken, installationID, gatewaySerial, deviceID string) bool {
+	if token == nil || installationID == "" || deviceID == "" {
+		return false
+	}
+	installation, ok := token.Installations[installationID]
+	if !ok || installation == nil {
+		return false
+	}
+
+	matches := 0
+	for _, gateway := range installation.Gateways {
+		if gatewaySerial != "" && gateway.Serial != gatewaySerial {
+			continue
+		}
+		for _, device := range gateway.Devices {
+			if device.DeviceID != deviceID {
+				continue
+			}
+			matches++
+			if device.DeviceType != "heating" {
+				return false
+			}
+		}
+	}
+	return matches == 1
+}
+
+func requireHeatingCommandTarget(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request", http.StatusBadRequest)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		var target struct {
+			AccountID      string `json:"accountId"`
+			InstallationID string `json:"installationId"`
+			GatewaySerial  string `json:"gatewaySerial"`
+			DeviceID       string `json:"deviceId"`
+		}
+		if json.Unmarshal(body, &target) != nil || target.AccountID == "" || target.InstallationID == "" || target.DeviceID == "" {
+			next(w, r)
+			return
+		}
+
+		token, exists := getValidAccountToken(target.AccountID)
+		if !exists {
+			next(w, r)
+			return
+		}
+		if !isHeatingCommandTarget(token, target.InstallationID, target.GatewaySerial, target.DeviceID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Commands are only available for supported heating devices",
+			})
+			return
+		}
+
+		next(w, r)
+	}
+}
 
 // Device Settings Handlers
 

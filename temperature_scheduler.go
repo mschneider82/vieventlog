@@ -27,6 +27,13 @@ var (
 	apiLimit24Hr  = 1400      // Conservative limit (1450 - buffer)
 )
 
+func shouldCollectTemperatureDevice(device GatewayDevice) bool {
+	if device.DeviceType == "heating" {
+		return device.DeviceID == "0"
+	}
+	return device.DeviceType == "systemController" || device.DeviceType == "outdoorUnit"
+}
+
 // StartTemperatureScheduler starts the background job for periodic temperature logging
 func StartTemperatureScheduler() error {
 	tempSchedulerMutex.Lock()
@@ -225,13 +232,10 @@ func temperatureLoggingJob() {
 				continue
 			}
 
-			lastGateway := ""
-
 			// Process each gateway and device
 			for _, gateway := range installation.Gateways {
 				for _, device := range gateway.Devices {
-					// Only collect from device ID "0" to avoid duplicates
-					if device.DeviceID != "0" {
+					if !shouldCollectTemperatureDevice(device) {
 						continue
 					}
 
@@ -265,11 +269,8 @@ func temperatureLoggingJob() {
 						continue
 					}
 
-					if lastGateway != gateway.Serial {
-						snapshotCount++
-						log.Printf("Saved temperature snapshot for installation %s (account: %s)", installationID, account.Name)
-						lastGateway = gateway.Serial
-					}
+					snapshotCount++
+					log.Printf("Saved temperature snapshot for installation %s, device %s (account: %s)", installationID, device.DeviceID, account.Name)
 				}
 			}
 		}

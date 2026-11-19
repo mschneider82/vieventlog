@@ -187,7 +187,7 @@ func aiTools() []aiTool {
 				if args["deviceId"] == nil {
 					args["deviceId"] = "0"
 				}
-				status, body := aiCallHandler(h, http.MethodPost, "/", args)
+				status, body := aiCallHandler(requireHeatingCommandTarget(h), http.MethodPost, "/", args)
 				if status != http.StatusOK {
 					return "", fmt.Errorf("Status %d: %s", status, strings.TrimSpace(body))
 				}

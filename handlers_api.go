@@ -197,6 +197,15 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 
 // devicesHandler handles GET /api/devices
 // Returns all devices from all installations, grouped by installation
+func isSupportedDashboardDeviceType(deviceType string) bool {
+	switch deviceType {
+	case "heating", "systemController", "indoorUnit", "outdoorUnit":
+		return true
+	default:
+		return false
+	}
+}
+
 func devicesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get active accounts and ensure they're authenticated
 	activeAccounts, err := GetActiveAccounts()
@@ -256,10 +265,10 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 		// Iterate through gateways and their devices
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				// Only include heating devices (exclude SmartClimate zigbee/roomControl and Vitocharge electricityStorage devices)
+				// Keep SmartClimate and Vitocharge on their dedicated pages.
 				// SmartClimate has its own page at /smartclimate
 				// Vitocharge has its own page at /vitocharge
-				if gwDevice.DeviceType != "heating" {
+				if !isSupportedDashboardDeviceType(gwDevice.DeviceType) {
 					continue
 				}
 
@@ -283,6 +292,7 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 				devicesByInstallation[installID][key] = Device{
 					DeviceID:       gwDevice.DeviceID,
 					ModelID:        gwDevice.ModelID,
+					DeviceType:     gwDevice.DeviceType,
 					DisplayName:    displayName,
 					InstallationID: installID,
 					GatewaySerial:  gateway.Serial,
@@ -807,7 +817,7 @@ func debugDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	for installID, installation := range allInstallations {
 		for _, gateway := range installation.Gateways {
 			for _, gwDevice := range gateway.Devices {
-				isUnknown := gwDevice.DeviceType != "heating"
+				isUnknown := !isSupportedDashboardDeviceType(gwDevice.DeviceType)
 
 				// Count unknown devices
 				if isUnknown {

@@ -141,34 +141,34 @@ func main() {
 
 	// Device settings endpoints
 	http.HandleFunc("/api/device-settings/get", deviceSettingsGetHandler)
-	http.HandleFunc("/api/device-settings/set", deviceSettingsSetHandler)
-	http.HandleFunc("/api/device-settings/delete", deviceSettingsDeleteHandler)
+	http.HandleFunc("/api/device-settings/set", requireHeatingCommandTarget(deviceSettingsSetHandler))
+	http.HandleFunc("/api/device-settings/delete", requireHeatingCommandTarget(deviceSettingsDeleteHandler))
 
 	// Hybrid Pro Control endpoints
 	http.HandleFunc("/api/hybrid-pro-control/get", hybridProControlGetHandler)
-	http.HandleFunc("/api/hybrid-pro-control/set", hybridProControlSetHandler)
+	http.HandleFunc("/api/hybrid-pro-control/set", requireHeatingCommandTarget(hybridProControlSetHandler))
 
 	// DHW operating mode control
-	http.HandleFunc("/api/dhw/mode/set", dhwModeSetHandler)
-	http.HandleFunc("/api/dhw/temperature/set", dhwTemperatureSetHandler)
-	http.HandleFunc("/api/dhw/temperature2/set", dhwTemperature2SetHandler)
-	http.HandleFunc("/api/dhw/hysteresis/set", dhwHysteresisSetHandler)
-	http.HandleFunc("/api/dhw/oneTimeCharge/activate", dhwOneTimeChargeHandler)
+	http.HandleFunc("/api/dhw/mode/set", requireHeatingCommandTarget(dhwModeSetHandler))
+	http.HandleFunc("/api/dhw/temperature/set", requireHeatingCommandTarget(dhwTemperatureSetHandler))
+	http.HandleFunc("/api/dhw/temperature2/set", requireHeatingCommandTarget(dhwTemperature2SetHandler))
+	http.HandleFunc("/api/dhw/hysteresis/set", requireHeatingCommandTarget(dhwHysteresisSetHandler))
+	http.HandleFunc("/api/dhw/oneTimeCharge/activate", requireHeatingCommandTarget(dhwOneTimeChargeHandler))
 
 	// Schedule endpoints (DHW, circulation pump, heating circuits)
-	http.HandleFunc("/api/schedule/set", scheduleSetHandler)
+	http.HandleFunc("/api/schedule/set", requireHeatingCommandTarget(scheduleSetHandler))
 
 	// Noise reduction control
-	http.HandleFunc("/api/noise-reduction/mode/set", noiseReductionModeSetHandler)
+	http.HandleFunc("/api/noise-reduction/mode/set", requireHeatingCommandTarget(noiseReductionModeSetHandler))
 
 	// Fan ring heating control
-	http.HandleFunc("/api/fan-ring/toggle", fanRingToggleHandler)
+	http.HandleFunc("/api/fan-ring/toggle", requireHeatingCommandTarget(fanRingToggleHandler))
 
 	// Heating curve control
-	http.HandleFunc("/api/heating/curve/set", heatingCurveSetHandler)
-	http.HandleFunc("/api/heating/mode/set", heatingModeSetHandler)
-	http.HandleFunc("/api/heating/supplyTempMax/set", supplyTempMaxSetHandler)
-	http.HandleFunc("/api/heating/roomTemp/set", roomTempSetHandler)
+	http.HandleFunc("/api/heating/curve/set", requireHeatingCommandTarget(heatingCurveSetHandler))
+	http.HandleFunc("/api/heating/mode/set", requireHeatingCommandTarget(heatingModeSetHandler))
+	http.HandleFunc("/api/heating/supplyTempMax/set", requireHeatingCommandTarget(supplyTempMaxSetHandler))
+	http.HandleFunc("/api/heating/roomTemp/set", requireHeatingCommandTarget(roomTempSetHandler))
 
 	// Data endpoints
 	http.HandleFunc("/api/events", eventsHandler)
