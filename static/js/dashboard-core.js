@@ -22,7 +22,7 @@
                 await loadDashboard();
 
                 // Initialize temperature chart if function exists
-                if (typeof initTemperatureChart === 'function') {
+                if (window.currentDeviceType !== 'indoorUnit' && typeof initTemperatureChart === 'function') {
                     initTemperatureChart();
                 }
 
@@ -115,7 +115,17 @@
                     option.value = uniqueKey;
                     option.dataset.gatewaySerial = device.gatewaySerial || '';
                     option.dataset.deviceId = device.deviceId;
-                    option.textContent = device.displayName || `${device.modelId} (Device ${device.deviceId})`;
+                    const deviceTypeLabels = {
+                        systemController: 'System controller',
+                        indoorUnit: 'Indoor unit',
+                        outdoorUnit: 'Outdoor unit'
+                    };
+                    const defaultName = deviceTypeLabels[device.deviceType]
+                        ? `${deviceTypeLabels[device.deviceType]} (${device.modelId})`
+                        : `${device.modelId} (Device ${device.deviceId})`;
+                    option.textContent = device.displayName && device.displayName !== device.modelId
+                        ? `${deviceTypeLabels[device.deviceType] ? `${deviceTypeLabels[device.deviceType]} · ` : ''}${device.displayName}`
+                        : defaultName;
 
                     // Check if this is the currently selected device
                     const currentKey = `${currentGatewaySerial}_${currentDeviceId}`;
@@ -199,18 +209,18 @@
 
                 // Store current device info globally for RPM calculation
                 window.currentDeviceInfo = currentDevice;
+                window.currentDeviceType = currentDevice.deviceType;
 
-                // Load device settings for RPM percentage calculation
-                await loadDeviceSettings(currentDevice.installationId, currentDevice.deviceId);
-
-                // Load hybrid pro control settings if available
-                await loadSavedHybridProControlSettings(currentDevice.accountId, currentDevice.installationId, currentDevice.deviceId);
+                if (currentDevice.deviceType === 'heating') {
+                    await loadDeviceSettings(currentDevice.installationId, currentDevice.deviceId);
+                    await loadSavedHybridProControlSettings(currentDevice.accountId, currentDevice.installationId, currentDevice.deviceId);
+                }
 
                 renderDashboard(features);
                 updateLastUpdate();
 
                 // Initialize temperature chart if function exists
-                if (typeof initTemperatureChart === 'function') {
+                if (currentDevice.deviceType !== 'indoorUnit' && typeof initTemperatureChart === 'function') {
                     initTemperatureChart();
                 }
 

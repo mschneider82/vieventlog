@@ -160,7 +160,7 @@
                 <div class="schedule-block">
                     <div class="schedule-block-header">
                         <span class="schedule-block-title">${def.icon} ${def.title} ${activeBadge}</span>
-                        ${schedule.writable ? `<button class="schedule-edit-btn" onclick="openScheduleEditor('${def.feature}')">✏️ Bearbeiten</button>` : ''}
+                        ${schedule.writable && !window.currentDeviceReadOnly ? `<button class="schedule-edit-btn" onclick="openScheduleEditor('${def.feature}')">✏️ Bearbeiten</button>` : ''}
                     </div>
                     <div class="schedule-axis">
                         <span></span>

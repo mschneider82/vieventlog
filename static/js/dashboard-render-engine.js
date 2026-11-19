@@ -2,6 +2,30 @@
 // Main orchestration, feature extraction, and circuit detection
 // Part 1 of 3 - refactored from dashboard-render.js
 
+        function renderIndoorUnitInfo(deviceInfo, keyFeatures, features) {
+            const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[char]);
+            const featureNames = (features.rawFeatures || []).map(feature => feature.feature).filter(Boolean);
+            const details = [
+                ['Device type', deviceInfo.deviceType],
+                ['Model', deviceInfo.modelId],
+                ['Serial number', keyFeatures.deviceSerial?.value],
+                ['Variant', keyFeatures.deviceVariant?.value]
+            ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+
+            return `
+                <div class="card wide">
+                    <div class="card-header"><h2>${escapeHTML(deviceInfo.displayName || deviceInfo.modelId || 'Indoor unit')}</h2></div>
+                    <div class="status-list">
+                        ${details.map(([label, value]) => `<div class="status-item"><span class="status-label">${label}</span><span class="status-value">${escapeHTML(value)}</span></div>`).join('')}
+                        <div class="status-item"><span class="status-label">Available features</span><span class="status-value">${featureNames.length}</span></div>
+                    </div>
+                    ${featureNames.length ? `<div class="status-list">${featureNames.map(name => `<div class="status-item"><span class="status-value">${escapeHTML(name)}</span></div>`).join('')}</div>` : ''}
+                </div>
+            `;
+        }
+
         function renderDashboard(features) {
             const contentDiv = document.getElementById('dashboardContent');
             contentDiv.className = 'dashboard-grid';
@@ -51,6 +75,8 @@
             const deviceInfo = features.deviceInfo;
             const deviceType = deviceInfo ? deviceInfo.deviceType : null;
             const modelId = deviceInfo ? deviceInfo.modelId : null;
+            window.currentDeviceReadOnly = ['systemController', 'indoorUnit', 'outdoorUnit'].includes(deviceType);
+            window.heatingCurveData = null;
 
             console.log('Device Type:', deviceType, 'Model ID:', modelId);
 
@@ -74,6 +100,8 @@
                     html += renderDeviceHeader(deviceInfo, keyFeatures);
                     html += renderZigbeeDeviceInfo(keyFeatures);
                 }
+            } else if (deviceType === 'indoorUnit') {
+                html += renderIndoorUnitInfo(deviceInfo, keyFeatures, features);
             } else {
                 // Standard heating device (Vitocal/Vitodens)
 
@@ -302,7 +330,7 @@
 
             // Load consumption tile after temperature chart (if enabled)
             setTimeout(async () => {
-                if (typeof renderConsumptionTile === 'function') {
+                if (deviceType !== 'indoorUnit' && typeof renderConsumptionTile === 'function') {
                     await renderConsumptionTile(features.deviceInfo, features);
                 }
             }, 400);

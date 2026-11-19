@@ -2,6 +2,70 @@ package main
 
 import "testing"
 
+func TestHeatingCommandTarget(t *testing.T) {
+	token := &AccountToken{Installations: map[string]*Installation{
+		"test-installation": {Gateways: []Gateway{{
+			Serial:  "test-gateway",
+			Devices: []GatewayDevice{{DeviceID: "0", DeviceType: "heating"}},
+		}}},
+	}}
+	for _, deviceType := range []string{"heating", "systemController", "indoorUnit", "outdoorUnit", "zigbee", "unknown", ""} {
+		t.Run(deviceType, func(t *testing.T) {
+			token.Installations["test-installation"].Gateways[0].Devices[0].DeviceType = deviceType
+			if got := isHeatingCommandTarget(token, "test-installation", "test-gateway", "0"); got != (deviceType == "heating") {
+				t.Errorf("isHeatingCommandTarget() = %v for %q", got, deviceType)
+			}
+		})
+	}
+	token.Installations["test-installation"].Gateways[0].Devices[0].DeviceType = "heating"
+	if isHeatingCommandTarget(nil, "test-installation", "test-gateway", "0") ||
+		isHeatingCommandTarget(token, "missing-installation", "test-gateway", "0") ||
+		isHeatingCommandTarget(token, "test-installation", "missing-gateway", "0") ||
+		isHeatingCommandTarget(token, "test-installation", "test-gateway", "missing-device") {
+		t.Fatal("missing targets must be rejected")
+	}
+	if !isHeatingCommandTarget(token, "test-installation", "", "0") {
+		t.Fatal("a unique heating target should work without a gateway")
+	}
+	token.Installations["test-installation"].Gateways = append(token.Installations["test-installation"].Gateways, Gateway{
+		Serial: "other-test-gateway", Devices: []GatewayDevice{{DeviceID: "0", DeviceType: "heating"}},
+	})
+	if isHeatingCommandTarget(token, "test-installation", "", "0") {
+		t.Fatal("ambiguous targets must be rejected")
+	}
+	if !isHeatingCommandTarget(token, "test-installation", "test-gateway", "0") {
+		t.Fatal("an explicit gateway should resolve ambiguity")
+	}
+}
+
+func TestDashboardDeviceEligibility(t *testing.T) {
+	for _, test := range []struct {
+		deviceType string
+		deviceID   string
+		dashboard  bool
+		collect    bool
+	}{
+		{"heating", "0", true, true},
+		{"heating", "1", true, false},
+		{"systemController", "1", true, true},
+		{"outdoorUnit", "2", true, true},
+		{"indoorUnit", "3", true, false},
+		{"zigbee", "0", false, false},
+		{"roomControl", "0", false, false},
+		{"electricityStorage", "0", false, false},
+		{"unknown", "0", false, false},
+		{"", "0", false, false},
+	} {
+		if got := isSupportedDashboardDeviceType(test.deviceType); got != test.dashboard {
+			t.Errorf("dashboard eligibility for %q = %v, want %v", test.deviceType, got, test.dashboard)
+		}
+		device := GatewayDevice{DeviceID: test.deviceID, DeviceType: test.deviceType}
+		if got := shouldCollectTemperatureDevice(device); got != test.collect {
+			t.Errorf("collection eligibility for %+v = %v, want %v", device, got, test.collect)
+		}
+	}
+}
+
 func TestNormalizeSchedule(t *testing.T) {
 	dhw := &ScheduleConstraints{Modes: []string{"on"}, DefaultMode: "off", MaxEntries: 4, Resolution: 10}
 

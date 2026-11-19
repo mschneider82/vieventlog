@@ -14,6 +14,14 @@
         function renderDeviceHeader(deviceInfo, kf) {
             // Prefer device.name feature over modelId/displayName
             let deviceTitle = deviceInfo.modelId || deviceInfo.displayName;
+            const typeLabels = {
+                systemController: 'System controller',
+                indoorUnit: 'Indoor unit',
+                outdoorUnit: 'Outdoor unit'
+            };
+            if (window.currentDeviceReadOnly && typeLabels[deviceInfo.deviceType]) {
+                deviceTitle = `${typeLabels[deviceInfo.deviceType]} (${deviceInfo.modelId})`;
+            }
             if (kf.deviceName && kf.deviceName.value) {
                 deviceTitle = kf.deviceName.value;
             }
@@ -31,7 +39,7 @@
 
             // Show settings button for heat pumps (devices with compressor)
             const hasCompressor = kf.compressorSpeed || kf.compressorActive || kf.compressorHours;
-            const settingsButton = hasCompressor ? `
+            const settingsButton = hasCompressor && !window.currentDeviceReadOnly ? `
                 <button onclick="openDeviceSettingsModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">
                     ⚙️ Einstellungen
@@ -41,7 +49,7 @@
             // Check if this is a hybrid system and show Hybrid Pro Control button
             // Only consider it a hybrid if the status feature has an actual value (not null/undefined)
 			const isHybrid = kf.secondaryHeatGeneratorStatus != null && typeof kf.secondaryHeatGeneratorStatus?.value === 'string';
-            const hybridProControlButton = isHybrid ? `
+            const hybridProControlButton = isHybrid && !window.currentDeviceReadOnly ? `
                 <button onclick="openHybridProControlModal('${deviceInfo.installationId}', '${deviceInfo.deviceId}', '${deviceInfo.gatewaySerial}')"
                         style="margin-left: 10px; padding: 5px 10px; cursor: pointer; background-color: #ff9800; color: white; border: none; border-radius: 4px;">
                     ☀️ Hybrid Pro Control
@@ -711,7 +719,7 @@
                         <div class="status-item">
                             <span class="status-label">Ventilatorringheizung</span>
                             <span class="status-value">
-                                <button id="fanRingToggle" class="toggle-btn ${kf.fanRing.value ? 'active' : ''}"
+                                <button id="fanRingToggle" class="toggle-btn ${kf.fanRing.value ? 'active' : ''}" ${window.currentDeviceReadOnly ? 'disabled' : ''}
                                     data-current="${kf.fanRing.value ? 'true' : 'false'}">
                                     ${kf.fanRing.value ? '🟢 An' : '⚪ Aus'}
                                 </button>
@@ -722,7 +730,7 @@
                         <div class="status-item">
                             <span class="status-label">Wannenheizung</span>
                             <span class="status-value">
-                                <button id="condensatePanToggle" class="toggle-btn ${kf.condensatePan.value ? 'active' : ''}"
+                                <button id="condensatePanToggle" class="toggle-btn ${kf.condensatePan.value ? 'active' : ''}" ${window.currentDeviceReadOnly ? 'disabled' : ''}
                                     data-current="${kf.condensatePan.value ? 'true' : 'false'}">
                                     ${kf.condensatePan.value ? '🟢 An' : '⚪ Aus'}
                                 </button>
@@ -762,6 +770,7 @@
         // Render heating circuit card for a specific circuit
         function renderHeatingCircuitCard(features, circuitId, deviceInfo) {
             const circuitPrefix = `heating.circuits.${circuitId}`;
+            const readOnlyAttr = window.currentDeviceReadOnly ? 'disabled' : '';
             console.log(`🔄 renderHeatingCircuitCard called for circuit ${circuitId} (prefix: ${circuitPrefix})`);
 
             // Extract circuit-specific features
@@ -954,7 +963,7 @@
                     <div class="status-item">
                         <span class="status-label">Betriebsart</span>
                         <span class="status-value">
-                            <select onchange="changeHeatingMode(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeHeatingMode(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
                 for (const mode of availableModes) {
                     const selected = mode === currentMode ? 'selected' : '';
@@ -1000,7 +1009,7 @@
                     <div class="status-item">
                         <span class="status-label">Raumtemperatur Reduziert</span>
                         <span class="status-value">
-                            <select onchange="changeRoomTemp(${circuitId}, '${reducedApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeRoomTemp(${circuitId}, '${reducedApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
                 for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(reducedProg.value) === temp ? 'selected' : '';
@@ -1018,7 +1027,7 @@
                     <div class="status-item">
                         <span class="status-label">Raumtemperatur Normal</span>
                         <span class="status-value">
-                            <select onchange="changeRoomTemp(${circuitId}, '${normalApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeRoomTemp(${circuitId}, '${normalApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
                 for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(normalProg.value) === temp ? 'selected' : '';
@@ -1036,7 +1045,7 @@
                     <div class="status-item">
                         <span class="status-label">Raumtemperatur Komfort</span>
                         <span class="status-value">
-                            <select onchange="changeRoomTemp(${circuitId}, '${comfortApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeRoomTemp(${circuitId}, '${comfortApiName}', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
                 for (let temp = 3; temp <= 37; temp++) {
                     const selected = Math.round(comfortProg.value) === temp ? 'selected' : '';
@@ -1144,7 +1153,7 @@
                     <div class="status-item">
                         <span class="status-label">Heizkurve Neigung</span>
                         <span class="status-value">
-                            <select onchange="changeHeatingCurve(${circuitId}, 'slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeHeatingCurve(${circuitId}, 'slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 ${slopeOptions.join('')}
                             </select>
                         </span>
@@ -1163,7 +1172,7 @@
                     <div class="status-item">
                         <span class="status-label">Heizkurve Niveau</span>
                         <span class="status-value">
-                            <select onchange="changeHeatingCurve(${circuitId}, 'shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeHeatingCurve(${circuitId}, 'shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 ${shiftOptions.join('')}
                             </select>
                         </span>
@@ -1177,7 +1186,7 @@
                     <div class="status-item">
                         <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
                         <span class="status-value">
-                            <select onchange="changeSupplyTempMax(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} onchange="changeSupplyTempMax(${circuitId}, this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                 `;
                 for (let i = 10; i <= 90; i++) {
                     const selected = Math.round(supplyTempMax.value) === i ? 'selected' : '';
@@ -1209,6 +1218,7 @@
         }
 
         function renderHotWater(kf, scheduleHtml = '') {
+            const readOnlyAttr = window.currentDeviceReadOnly ? 'disabled' : '';
             if (!kf.dhwTemp && !kf.dhwTarget && !kf.dhwStatus) return '';
 
             // Map API modes to user-friendly labels and vice versa
@@ -1235,7 +1245,7 @@
             <div class="status-item">
                 <span class="status-label">Betriebsart</span>
                 <span class="status-value">
-                    <select id="dhwModeSelect" onchange="changeDhwMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                    <select ${readOnlyAttr} id="dhwModeSelect" onchange="changeDhwMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         <option value="efficient" ${currentApiMode === 'efficient' ? 'selected' : ''}>Eco</option>
                         <option value="efficientWithMinComfort" ${currentApiMode === 'efficientWithMinComfort' ? 'selected' : ''}>Komfort</option>
                         <option value="balanced" ${currentApiMode === 'balanced' ? 'selected' : ''}>Balanced</option>
@@ -1260,7 +1270,7 @@
             <div class="status-item">
                 <span class="status-label">Soll-Temperatur</span>
                 <span class="status-value">
-                    <select id="dhwTargetSelect" onchange="changeDhwTemperature(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                    <select ${readOnlyAttr} id="dhwTargetSelect" onchange="changeDhwTemperature(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         ${Array.from({length: 51}, (_, i) => i + 10).map(temp => `
                             <option value="${temp}" ${Math.round(kf.dhwTarget.value) === temp ? 'selected' : ''}>${temp}°C</option>
                         `).join('')}
@@ -1272,7 +1282,7 @@
             <div class="status-item">
                 <span class="status-label">Soll-Temperatur 2</span>
                 <span class="status-value">
-                    <select id="dhwTarget2Select" onchange="changeDhwTemperature2(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                    <select ${readOnlyAttr} id="dhwTarget2Select" onchange="changeDhwTemperature2(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         ${Array.from({length: 51}, (_, i) => i + 10).map(temp => `
                             <option value="${temp}" ${Math.round(kf.dhwTarget2.value) === temp ? 'selected' : ''}>${temp}°C</option>
                         `).join('')}
@@ -1284,7 +1294,7 @@
             <div class="status-item">
                 <span class="status-label">Hysterese Ein</span>
                 <span class="status-value">
-                    <select id="dhwHysteresisOnSelect" onchange="changeDhwHysteresis('on', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                    <select ${readOnlyAttr} id="dhwHysteresisOnSelect" onchange="changeDhwHysteresis('on', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         ${Array.from({length: 19}, (_, i) => 1 + (i * 0.5)).map(val => `
                             <option value="${val}" ${kf.dhwHysteresisSwitchOn.value === val ? 'selected' : ''}>${val}K</option>
                         `).join('')}
@@ -1296,7 +1306,7 @@
             <div class="status-item">
                 <span class="status-label">Hysterese Aus</span>
                 <span class="status-value">
-                    <select id="dhwHysteresisOffSelect" onchange="changeDhwHysteresis('off', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                    <select ${readOnlyAttr} id="dhwHysteresisOffSelect" onchange="changeDhwHysteresis('off', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         <option value="0" ${kf.dhwHysteresisSwitchOff.value === 0 ? 'selected' : ''}>0K</option>
                         <option value="0.5" ${kf.dhwHysteresisSwitchOff.value === 0.5 ? 'selected' : ''}>0.5K</option>
                         <option value="1" ${kf.dhwHysteresisSwitchOff.value === 1 ? 'selected' : ''}>1K</option>
@@ -1309,7 +1319,7 @@
                         ` : ''}
                     </div>
                     <div style="margin-top: 15px; padding: 0 15px 15px 15px;">
-                        <button onclick="startOneTimeCharge()" style="width: 100%; padding: 10px; background: rgba(59, 130, 246, 0.8); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                        <button ${window.currentDeviceReadOnly ? 'disabled' : ''} onclick="startOneTimeCharge()" style="width: 100%; padding: 10px; background: rgba(59, 130, 246, 0.8); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px;">
                             🔥 Einmalige Warmwassererwärmung starten
                         </button>
                     </div>
@@ -1319,6 +1329,7 @@
         }
 
         function renderHeatingCurve(kf) {
+            const readOnlyAttr = window.currentDeviceReadOnly ? 'disabled' : '';
             console.log('🔍 renderHeatingCurve called');
             console.log('heatingCurveSlope:', kf.heatingCurveSlope);
             console.log('heatingCurveShift:', kf.heatingCurveShift);
@@ -1349,7 +1360,7 @@
                     <div class="status-item">
                         <span class="status-label">Neigung</span>
                         <span class="status-value">
-                            <select id="heatingCurveSlopeSelect" onchange="changeHeatingCurve('slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} id="heatingCurveSlopeSelect" onchange="changeHeatingCurve('slope', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 ${slopeOptions.join('')}
                             </select>
                         </span>
@@ -1366,7 +1377,7 @@
                     <div class="status-item">
                         <span class="status-label">Niveau (Verschiebung)</span>
                         <span class="status-value">
-                            <select id="heatingCurveShiftSelect" onchange="changeHeatingCurve('shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} id="heatingCurveShiftSelect" onchange="changeHeatingCurve('shift', this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 ${shiftOptions.join('')}
                             </select>
                         </span>
@@ -1383,7 +1394,7 @@
                     <div class="status-item">
                         <span class="status-label">Vorlauftemperaturbegrenzung (max)</span>
                         <span class="status-value">
-                            <select id="supplyTempMaxSelect" onchange="changeSupplyTempMax(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${readOnlyAttr} id="supplyTempMaxSelect" onchange="changeSupplyTempMax(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 ${maxTempOptions.join('')}
                             </select>
                         </span>
@@ -2157,7 +2168,7 @@
                     <div class="status-item">
                         <span class="status-label">Betriebsmodus</span>
                         <span class="status-value">
-                            <select id="heatingModeSelect" onchange="changeHeatingMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                            <select ${window.currentDeviceReadOnly ? 'disabled' : ''} id="heatingModeSelect" onchange="changeHeatingMode(this.value)" style="background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                                 <option value="heating" ${currentMode === 'heating' ? 'selected' : ''}>Heizen</option>
                                 <option value="standby" ${currentMode === 'standby' ? 'selected' : ''}>Standby</option>
                                 <option value="cooling" ${currentMode === 'cooling' ? 'selected' : ''}>Kühlen</option>
