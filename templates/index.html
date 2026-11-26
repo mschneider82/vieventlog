@@ -788,7 +788,7 @@
                 'I.135': true,  // Abtauen aktiv im Regelbetrieb
                 'S.176': true,  // Wärmepumpenregelung: Abtauen angefordert
                 'S.187': true,  // Passiver Frostschutz Wärmepumpe
-                'S.427': true,  // Leistungsbegrenzung durch Netzbetreiber
+//                'S.427': true,  // Leistungsbegrenzung durch Netzbetreiber
                 'S.432': true,  // Abtauung des Lüfters aktiv
                 'S.131': true,  // Heizwasser-Durchlauferhitzer: Stufe 1 aktiv
                 'S.132': true,  // Heizwasser-Durchlauferhitzer: Stufe 2 aktiv
@@ -803,6 +803,8 @@
 
             // Blacklist: Events that should never be shown in timeline
             timelineBlacklist: [
+                'I.114',   // SmartGrid  Normalbetrieb == S.120
+                'I.115',   // SmartGrid  empfohlener Betrieb == S.121
                 'S.1',    // Anlage eingeschaltet
                 'S.217',  // Heizwasser-Durchlauferhitzer: Stufe 1 inaktiv
                 'S.218',  // Heizwasser-Durchlauferhitzer: Stufe 2 inaktiv
@@ -1315,7 +1317,9 @@ ${formatEventBody(event.body)}
                 'I.135': { label: 'Abtauen', description: 'Abtauen aktiv im Regelbetrieb', color: '#0ea5e9', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', icon: '❄️' },
                 'S.176': { label: 'Abtauen Anfr.', description: 'Wärmepumpenregelung: Abtauen angefordert', color: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)', icon: '❄️' },
                 'S.187': { label: 'Frostschutz', description: 'Passiver Frostschutz Wärmepumpe eingeschaltet', color: '#3b82f6', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '🧊' },
-                'S.427': { label: '§14a EnWG', description: 'Leistungsbegrenzung durch Netzbetreiber nach §14a EnWG', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '⚡' },
+                'S.427': { label: '§14a EnWG', description: 'Leistungsbegrenzung durch Netzbetreiber nach §14a EnWG', color: '#e11d48', gradient: 'linear-gradient(135deg, #e11d48 0%, #be123c 100%)', icon: '⚡' },
+                'S.120': { label: 'Smart Grid', description: 'Normalbetrieb', color: '#22c55e', gradient: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', icon: '⚡' },
+                'S.121': { label: 'Smart Grid', description: 'Empfohlener Betrieb', color: '#f59555', gradient: 'linear-gradient(135deg, #f59555 0%, #d97706 100%)', icon: '⚡' },
                 'S.432': { label: 'Abtauen Lüfter', description: 'Abtauung des Lüfters aktiv', color: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '💧' },
                 'S.131': { label: 'Zusatz Stufe 1', description: 'Heizwasser-Durchlauferhitzer: Stufe 1 aktiv', color: '#fb923c', gradient: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)', icon: '🔥' },
                 'S.132': { label: 'Zusatz Stufe 2', description: 'Heizwasser-Durchlauferhitzer: Stufe 2 aktiv', color: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', icon: '🔥' },
@@ -1736,6 +1740,7 @@ ${formatEventBody(event.body)}
                         installationId: event.installationId || 'Unknown',
                         events: [],
                         hasValveSpans: false,
+                        hasSmartGridSpans: false,
                         pointEvents: []  // For events without active field
                     };
                 }
@@ -1743,6 +1748,10 @@ ${formatEventBody(event.body)}
             });
 
             // Helper functions
+            const isSmartGridCode = (c) => {
+                return c && (c == 'S.427' || c == 'S.120' || c == 'S.121');
+            };
+            
             const isValveCode = (c) => {
                 return c && ((c >= 'S.112' && c <= 'S.118') || (c >= 'S.134' && c <= 'S.136'));
             };
@@ -1757,6 +1766,8 @@ ${formatEventBody(event.body)}
             Object.values(lanes).forEach(lane => {
                 lane.spans = [];
                 lane.valveSpans = [];
+                lane.smartGridSpans = [];
+                const activeSmartGridStates = {};
                 const activeStates = {};
                 const activeValveStates = {};
                 let currentValvePosition = null;
@@ -1786,6 +1797,23 @@ ${formatEventBody(event.body)}
 
                     if (!code) return;
 
+                    // Handle SmartGrid state codes separately
+                    if (isSmartGridCode(code)) {
+                        lane.hasSmartGridSpans = true;
+                        if (event.active === true) {
+                            activeSmartGridStates[code] = { startTime: eventTime, startEvent: event };
+                        } else if (event.active === false && activeSmartGridStates[code]) {
+                            lane.smartGridSpans.push({
+                                code: code,
+                                startTime: activeSmartGridStates[code].startTime,
+                                endTime: eventTime,
+                                startEvent: activeSmartGridStates[code].startEvent,
+                                endEvent: event
+                            });
+                            delete activeSmartGridStates[code];
+                        }
+                    }
+                    
                     // Handle valve position codes separately
                     if (isValveCode(code)) {
                         lane.hasValveSpans = true;
@@ -1847,7 +1875,7 @@ ${formatEventBody(event.body)}
                     }
 
                     // Process main state events (non-valve codes)
-                    if (!isValveCode(code)) {
+                    if (!isValveCode(code) && !isSmartGridCode(code)) {
                         if (event.active === true) {
                             activeStates[code] = {
                                 startTime: eventTime,
@@ -1894,6 +1922,18 @@ ${formatEventBody(event.body)}
                         ongoing: true
                     });
                 });
+
+                Object.entries(activeSmartGridStates).forEach(([code, state]) => {
+                    lane.smartGridSpans.push({
+                        code: code,
+                        startTime: state.startTime,
+                        endTime: new Date().toISOString(),
+                        startEvent: state.startEvent,
+                        endEvent: null,
+                        ongoing: true
+                    });
+                });
+                
             });
 
             // Group lanes by installation
@@ -1959,6 +1999,12 @@ ${formatEventBody(event.body)}
                         valveCategoryIndex = categoryIndex;
                         categoryIndex++;
                     }
+                    let smartGridCategoryIndex = null;
+                    if (lane.hasSmartGridSpans) {
+                        categories.push(`Smart Grid`);
+                        smartGridCategoryIndex = categoryIndex;
+                        categoryIndex++;
+                    }
 
                     // Device name only (location is already in the installation header)
                     categories.push(lane.name);
@@ -2007,6 +2053,30 @@ ${formatEventBody(event.body)}
                             timelineData.push({
                                 name: eventTypes[span.code]?.label || span.code,
                                 value: [valveCategoryIndex, startTime.getTime(), endTime.getTime(), duration],
+                                itemStyle: { normal: { color: eventTypes[span.code]?.color || '#64748b' } },
+                                code: span.code,
+                                description: eventTypes[span.code]?.description || span.code,
+                                icon: eventTypes[span.code]?.icon || '•',
+                                ongoing: span.ongoing
+                            });
+                        });
+                    }
+
+                    // Add SmartGrid spans
+                    if (smartGridCategoryIndex !== null) {
+                        lane.smartGridSpans.forEach(span => {
+                            // Skip blacklisted events
+                            if (globalFilters.timelineBlacklist && globalFilters.timelineBlacklist.includes(span.code)) return;
+                            // Skip filtered events
+                            if (globalFilters.timelineTypes[span.code] === false) return;
+
+                            const startTime = new Date(span.startTime);
+                            const endTime = new Date(span.endTime);
+                            const duration = (endTime - startTime) / 1000 / 60;
+
+                            timelineData.push({
+                                name: eventTypes[span.code]?.label || span.code,
+                                value: [smartGridCategoryIndex, startTime.getTime(), endTime.getTime(), duration],
                                 itemStyle: { normal: { color: eventTypes[span.code]?.color || '#64748b' } },
                                 code: span.code,
                                 description: eventTypes[span.code]?.description || span.code,
